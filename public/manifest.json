@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Remanga Reader Enhancer",
+  "description": "Adds fullscreen, clean reading toggles, and popup suppression for the ReManga reader.",
+  "version": "0.1.0",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://remanga.org/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
+
