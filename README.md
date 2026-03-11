@@ -14,6 +14,8 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT">
 </p>
 
+> **💡 Совет:** для лучшего опыта используйте вместе с [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh?hl=en) — он уберёт рекламу, а ReManga Plus сделает интерфейс читалки идеально чистым.
+
 ---
 
 ## Что делает
