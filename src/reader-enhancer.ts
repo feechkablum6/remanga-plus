@@ -643,6 +643,59 @@ const findBuyChapterBanner = (): HTMLElement | null => {
   return actionsBlock.closest<HTMLElement>("div.h-screen") ?? actionsBlock;
 };
 
+const BUY_CHAPTER_PLACEHOLDER_KEY = "buy-chapter-placeholder";
+
+const syncBuyChapterBanner = (
+  banner: HTMLElement | null,
+  hidden: boolean,
+): void => {
+  const existingPlaceholder = document.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="${BUY_CHAPTER_PLACEHOLDER_KEY}"]`,
+  );
+
+  if (!banner) {
+    existingPlaceholder?.remove();
+    return;
+  }
+
+  if (!hidden) {
+    existingPlaceholder?.remove();
+    Array.from(banner.children).forEach((child) => {
+      if (child instanceof HTMLElement && !child.hasAttribute(CONTROL_ATTRIBUTE)) {
+        child.removeAttribute(HIDDEN_ATTRIBUTE);
+      }
+    });
+    return;
+  }
+
+  Array.from(banner.children).forEach((child) => {
+    if (child instanceof HTMLElement && !child.hasAttribute(CONTROL_ATTRIBUTE)) {
+      markHidden(child, true);
+    }
+  });
+
+  if (!existingPlaceholder) {
+    const placeholder = document.createElement("div");
+    placeholder.setAttribute(CONTROL_ATTRIBUTE, BUY_CHAPTER_PLACEHOLDER_KEY);
+    placeholder.style.cssText = [
+      "display: flex",
+      "align-items: center",
+      "justify-content: center",
+      "width: 100%",
+      "height: 100%",
+      "color: rgba(255, 255, 255, 0.4)",
+      "font-size: 15px",
+      "font-weight: 500",
+      "letter-spacing: 0.01em",
+      "text-align: center",
+      "padding: 24px",
+      "user-select: none",
+    ].join("; ");
+    placeholder.textContent = "Глава будет загружена из внешнего источника";
+    banner.appendChild(placeholder);
+  }
+};
+
 const findCommentsVisibilityBlocks = (root: ParentNode = document): HTMLElement[] => {
   const blocks = new Set<HTMLElement>();
 
@@ -1957,7 +2010,7 @@ const applyVisibilitySettings = (
   });
 
   const buyChapterBanner = findBuyChapterBanner();
-  markHidden(buyChapterBanner, settings.hideBuyChapterBanner);
+  syncBuyChapterBanner(buyChapterBanner, settings.hideBuyChapterBanner);
 
   Object.entries(TOOLBAR_ICON_NAMES).forEach(([key]) => {
     const toolbarKey = key as ToolbarButtonKey;
