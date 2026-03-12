@@ -61,3 +61,21 @@ test("mergeSettings merges partial settings menu item overrides", () => {
     notes: false,
   });
 });
+
+test("defaults hideBuyChapterBanner to false", () => {
+  assert.equal(DEFAULT_SETTINGS.hideBuyChapterBanner, false);
+});
+
+test("cloneSettings preserves hideBuyChapterBanner", () => {
+  const modified = { ...cloneSettings(DEFAULT_SETTINGS), hideBuyChapterBanner: true };
+  const cloned = cloneSettings(modified);
+  assert.equal(cloned.hideBuyChapterBanner, true);
+});
+
+test("mergeSettings merges hideBuyChapterBanner", () => {
+  const merged = mergeSettings({ hideBuyChapterBanner: true });
+  assert.equal(merged.hideBuyChapterBanner, true);
+
+  const mergedDefault = mergeSettings({});
+  assert.equal(mergedDefault.hideBuyChapterBanner, false);
+});

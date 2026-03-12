@@ -23,6 +23,7 @@ export type ReaderEnhancerSettings = {
   isAdditionalSettingsExpanded: boolean;
   enhanceSettingsMenu: boolean;
   hideCommentsSection: boolean;
+  hideBuyChapterBanner: boolean;
   hideToolbarButtons: Record<ToolbarButtonKey, boolean>;
   hideSettingsMenuItems: Record<SettingsMenuItemKey, boolean>;
   hidePopups: Record<PopupSettingKey, boolean>;
@@ -53,6 +54,7 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
   isAdditionalSettingsExpanded: true,
   enhanceSettingsMenu: false,
   hideCommentsSection: false,
+  hideBuyChapterBanner: false,
   hideToolbarButtons: {
     list: false,
     comments: false,
@@ -81,6 +83,7 @@ export const cloneSettings = (
   isAdditionalSettingsExpanded: settings.isAdditionalSettingsExpanded,
   enhanceSettingsMenu: settings.enhanceSettingsMenu,
   hideCommentsSection: settings.hideCommentsSection,
+  hideBuyChapterBanner: settings.hideBuyChapterBanner,
   hideToolbarButtons: { ...settings.hideToolbarButtons },
   hideSettingsMenuItems: { ...settings.hideSettingsMenuItems },
   hidePopups: { ...settings.hidePopups },
@@ -106,6 +109,8 @@ export const mergeSettings = (
     partialSettings?.enhanceSettingsMenu ?? DEFAULT_SETTINGS.enhanceSettingsMenu,
   hideCommentsSection:
     partialSettings?.hideCommentsSection ?? DEFAULT_SETTINGS.hideCommentsSection,
+  hideBuyChapterBanner:
+    partialSettings?.hideBuyChapterBanner ?? DEFAULT_SETTINGS.hideBuyChapterBanner,
   hideToolbarButtons: {
     ...DEFAULT_SETTINGS.hideToolbarButtons,
     ...partialSettings?.hideToolbarButtons,

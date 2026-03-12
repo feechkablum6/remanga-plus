@@ -163,6 +163,14 @@ const primaryToggleDefinitions: ToggleDefinition[] = [
     },
   },
   {
+    id: "hide-buy-chapter-banner",
+    label: "Скрывать плашку покупки главы",
+    value: (settings) => settings.hideBuyChapterBanner,
+    toggle: (settings) => {
+      settings.hideBuyChapterBanner = !settings.hideBuyChapterBanner;
+    },
+  },
+  {
     id: "hide-popup-hints",
     label: "Авто-скрывать подсказки",
     value: (settings) => settings.hidePopups.hints,
@@ -623,6 +631,17 @@ const findSettingsPanel = (): HTMLElement | null =>
     const text = normalizeText(node.textContent);
     return text.includes("настройки читалки");
   }) ?? null;
+
+const findBuyChapterBanner = (): HTMLElement | null => {
+  const actionsBlock = document.querySelector<HTMLElement>(
+    '[data-sentry-component="BuyChapterActions"]',
+  );
+  if (!actionsBlock) {
+    return null;
+  }
+
+  return actionsBlock.closest<HTMLElement>("div.h-screen") ?? actionsBlock;
+};
 
 const findCommentsVisibilityBlocks = (root: ParentNode = document): HTMLElement[] => {
   const blocks = new Set<HTMLElement>();
@@ -1936,6 +1955,9 @@ const applyVisibilitySettings = (
   readerDom.adBlocks.forEach((block) => {
     markHidden(block, settings.hideCommentsSection);
   });
+
+  const buyChapterBanner = findBuyChapterBanner();
+  markHidden(buyChapterBanner, settings.hideBuyChapterBanner);
 
   Object.entries(TOOLBAR_ICON_NAMES).forEach(([key]) => {
     const toolbarKey = key as ToolbarButtonKey;
