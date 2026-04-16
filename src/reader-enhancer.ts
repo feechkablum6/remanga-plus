@@ -3400,7 +3400,22 @@ const syncRightRailGroups = (railContainer: HTMLElement | null): void => {
       (button) => !isMarkedHidden(button),
     );
 
-    markHidden(child, !hasVisibleButton);
+    if (!hasVisibleButton) {
+      markHidden(child, true);
+      return;
+    }
+
+    // Respect an explicit hide applied by finalize/syncMotion code paths:
+    // when a wrapper is marked with MOTION_TARGET_HIDDEN_ATTRIBUTE="true"
+    // (e.g. the minimized settings group), the inner button stays unmarked
+    // but the wrapper must remain hidden. Without this guard, the heuristic
+    // above would revive the wrapper and the original button would appear
+    // alongside the peek button.
+    if (child.getAttribute(MOTION_TARGET_HIDDEN_ATTRIBUTE) === "true") {
+      return;
+    }
+
+    markHidden(child, false);
   });
 };
 
