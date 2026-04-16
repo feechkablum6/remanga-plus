@@ -3,7 +3,22 @@
   "name": "Remanga Reader Enhancer",
   "description": "Adds fullscreen, clean reading toggles, and popup suppression for the ReManga reader.",
   "version": "0.1.0",
-  "permissions": ["storage"],
+  "permissions": ["storage", "nativeMessaging"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "http://127.0.0.1:3000/*",
+    "http://127.0.0.1:3001/*",
+    "http://127.0.0.1:3002/*",
+    "http://127.0.0.1:3003/*",
+    "http://127.0.0.1:3004/*",
+    "http://127.0.0.1:3005/*",
+    "http://127.0.0.1:3006/*",
+    "http://127.0.0.1:3007/*",
+    "http://127.0.0.1:3008/*",
+    "http://127.0.0.1:3009/*"
+  ],
   "content_scripts": [
     {
       "matches": ["https://remanga.org/*"],
@@ -12,4 +27,3 @@
     }
   ]
 }
-

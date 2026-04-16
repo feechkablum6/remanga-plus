@@ -12,5 +12,5 @@
     "allowSyntheticDefaultImports": true,
     "types": ["chrome", "node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "vite.config.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vite.config.ts", "vite.background.config.ts"]
 }

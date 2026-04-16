@@ -1,0 +1,68 @@
+import Fastify from "fastify";
+import {
+  DEFAULT_PROVIDER_PRIORITY,
+  DEFAULT_TITLE_OVERRIDES,
+  type TitleOverride,
+} from "./config.js";
+import { FileCache } from "./cache/file-cache.js";
+import { MangabuffProvider } from "./providers/mangabuff.js";
+import { ProviderRegistry } from "./providers/registry.js";
+import { registerChapterResolveRoute } from "./routes/chapters.js";
+import { registerImagesRoute } from "./routes/images.js";
+
+export interface AppConfig {
+  cacheDir: string;
+  port?: number;
+  host?: string;
+  fetchImpl?: typeof fetch;
+  providerPriority?: string[];
+  titleOverrides?: Record<string, TitleOverride>;
+}
+
+export function buildApp(config: AppConfig) {
+  const app = Fastify({ logger: false });
+
+  app.addHook("onSend", async (request, reply, payload) => {
+    if (request.url.startsWith("/api/")) {
+      reply.header("Access-Control-Allow-Origin", "*");
+      reply.header("Access-Control-Allow-Headers", "Content-Type");
+      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      reply.header("Access-Control-Allow-Private-Network", "true");
+    }
+
+    return payload;
+  });
+
+  app.options("/api/*", async (_request, reply) => {
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Headers", "Content-Type");
+    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    reply.header("Access-Control-Allow-Private-Network", "true");
+    return reply.code(204).send();
+  });
+
+  // Image ref map for proxying (maps proxyKey -> { provider, imageRef })
+  const imageMap = new Map<string, { provider: string; imageRef: string }>();
+
+  // Setup providers
+  const registry = new ProviderRegistry();
+  registry.register(new MangabuffProvider(config.fetchImpl));
+
+  // Setup cache
+  const cache = new FileCache(config.cacheDir);
+
+  // Register routes
+  registerChapterResolveRoute(
+    app,
+    registry,
+    imageMap,
+    config.providerPriority ?? DEFAULT_PROVIDER_PRIORITY,
+    config.titleOverrides ?? DEFAULT_TITLE_OVERRIDES,
+  );
+  registerImagesRoute(app, registry, cache, imageMap);
+
+  // Health check
+  app.get("/health", async () => ({ status: "ok" }));
+
+  return app;
+}

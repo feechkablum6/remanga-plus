@@ -13,11 +13,14 @@ test("observes settings drawer attribute changes so the rail can return without 
   assert.ok(observerCall, "expected MutationObserver.observe() call in src/content.ts");
 
   const observerOptions = observerCall[1];
+  const attributeFilterMatch = observerOptions.match(/attributeFilter:\s*\[([^\]]+)\]/);
 
   assert.match(observerOptions, /attributes:\s*true/);
-  assert.match(observerOptions, /attributeFilter:\s*\[/);
+  assert.ok(attributeFilterMatch, "expected attributeFilter array in MutationObserver options");
 
-  ["class", "style", "data-state", "aria-hidden"].forEach((attributeName) => {
-    assert.match(observerOptions, new RegExp(`["']${attributeName}["']`));
+  const attributeFilter = attributeFilterMatch[1];
+
+  ["class", "style", "data-state", "aria-hidden", "aria-checked", "aria-valuenow"].forEach((attributeName) => {
+    assert.match(attributeFilter, new RegExp(`["']${attributeName}["']`));
   });
 });

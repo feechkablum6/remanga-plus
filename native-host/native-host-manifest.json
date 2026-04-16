@@ -1,0 +1,7 @@
+{
+  "name": "org.remanga.parser_host",
+  "description": "Autostarts the local parser-server for ReManga Premium Free",
+  "path": "__HOST_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__EXTENSION_ID__/"]
+}

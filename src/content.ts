@@ -11,6 +11,7 @@ import {
   watchSettings,
   type ReaderEnhancerSettings,
 } from "./settings";
+import { ENSURE_PARSER_SERVER_MESSAGE_TYPE } from "./parser-server";
 import { shouldScheduleSettledRefresh } from "./settings-panel-transition";
 
 declare global {
@@ -78,12 +79,31 @@ async function bootstrap(): Promise<void> {
     [120, 280].forEach(scheduleSettledRefresh);
   };
 
+  const requestSettingsPanelSettledRefresh = () => {
+    clearSettledRefreshes();
+    [120, 280].forEach(scheduleSettledRefresh);
+  };
+
   const commitSettings = (
     updater: (settings: ReaderEnhancerSettings) => ReaderEnhancerSettings,
   ) => {
     currentSettings = updater(cloneSettings(currentSettings));
     void saveSettings(currentSettings);
+    requestParserServerWarmup(currentSettings);
     requestRefresh();
+  };
+
+  const requestParserServerWarmup = (settings: ReaderEnhancerSettings) => {
+    if (!settings.premiumFree || typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      { type: ENSURE_PARSER_SERVER_MESSAGE_TYPE },
+      () => {
+        void chrome.runtime?.lastError;
+      },
+    );
   };
 
   window.addEventListener("popstate", requestRefresh);
@@ -137,8 +157,13 @@ async function bootstrap(): Promise<void> {
       });
     });
 
-    if (mutations.some(shouldRequestSettingsPanelRefreshForMutation)) {
+    if (mutations.some(shouldRequestImmediateSettingsPanelRefreshForMutation)) {
       requestSettingsPanelRefresh();
+      return;
+    }
+
+    if (mutations.some(shouldRequestSettledSettingsPanelRefreshForMutation)) {
+      requestSettingsPanelSettledRefresh();
       return;
     }
 
@@ -152,14 +177,23 @@ async function bootstrap(): Promise<void> {
     subtree: true,
     // ReManga closes the reader settings drawer by toggling panel classes.
     attributes: true,
-    attributeFilter: ["class", "style", "data-state", "aria-hidden"],
+    attributeFilter: [
+      "class",
+      "style",
+      "data-state",
+      "aria-hidden",
+      "aria-checked",
+      "aria-valuenow",
+    ],
   });
 
   watchSettings((nextSettings) => {
     currentSettings = nextSettings;
+    requestParserServerWarmup(currentSettings);
     requestRefresh();
   });
 
+  requestParserServerWarmup(currentSettings);
   requestRefresh();
 }
 
@@ -171,8 +205,10 @@ function shouldRefreshForMutation(mutation: MutationRecord): boolean {
   );
 }
 
-function shouldRequestSettingsPanelRefreshForMutation(mutation: MutationRecord): boolean {
-  if (shouldRequestSettledRefreshForMutation(mutation)) {
+function shouldRequestImmediateSettingsPanelRefreshForMutation(
+  mutation: MutationRecord,
+): boolean {
+  if (isSettingsPanelControlMutation(mutation)) {
     return true;
   }
 
@@ -186,18 +222,47 @@ function shouldRequestSettingsPanelRefreshForMutation(mutation: MutationRecord):
   );
 }
 
-function shouldRequestSettledRefreshForMutation(mutation: MutationRecord): boolean {
+function shouldRequestSettledSettingsPanelRefreshForMutation(
+  mutation: MutationRecord,
+): boolean {
   const target = mutation.target;
   if (!(target instanceof Element)) {
     return false;
   }
 
+  const settingsPanel = target.closest("div.bg-background-content");
+
   return shouldScheduleSettledRefresh({
     mutationType: mutation.type,
     attributeName: mutation.attributeName,
-    targetMatchesSettingsPanel: target.matches("div.bg-background-content"),
-    targetText: target.textContent,
+    targetMatchesSettingsPanel: isSettingsPanelNode(settingsPanel ?? target),
+    targetText: settingsPanel?.textContent ?? target.textContent,
   });
+}
+
+function isSettingsPanelControlMutation(mutation: MutationRecord): boolean {
+  if (mutation.type !== "attributes") {
+    return false;
+  }
+
+  const target = mutation.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  if (target.closest(`[${CONTROL_ATTRIBUTE}]`)) {
+    return false;
+  }
+
+  if (
+    mutation.attributeName !== "aria-checked" &&
+    mutation.attributeName !== "aria-valuenow"
+  ) {
+    return false;
+  }
+
+  const settingsPanel = target.closest("div.bg-background-content");
+  return settingsPanel instanceof Element && isSettingsPanelNode(settingsPanel);
 }
 
 function containsSettingsPanelNode(node: Node | null): boolean {

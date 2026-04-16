@@ -4,13 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
-    "check": "tsc --noEmit",
-    "dev": "vite build --watch"
+    "build": "vite build && vite build --config vite.background.config.ts",
+    "check": "tsc --noEmit && tsc -p native-host/tsconfig.json --noEmit",
+    "dev": "vite build --watch",
+    "native:build": "tsc -p native-host/tsconfig.json",
+    "native:install": "tsx native-host/install-macos.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.31",
     "@types/node": "^24.3.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.2",
     "vite": "^7.1.3"
   }

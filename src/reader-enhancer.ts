@@ -5,6 +5,28 @@ import {
   type ToolbarButtonKey,
 } from "./settings";
 import {
+  buildPremiumFreeSearchUrl,
+  createPremiumFreeStreamReference,
+  createPremiumFreeCacheEntry,
+  describePremiumFreeFailure,
+  derivePremiumFreeTargetReference,
+  ensureParserServerReady,
+  extractRemangaChapterReference,
+  mapParserServerFailure,
+  pickPremiumFreeActivePage,
+  readPremiumFreeCacheEntry,
+  shouldPrefetchPremiumFreeNextChapter,
+  shouldPrefetchPremiumFreeNextChapterByViewport,
+  type PremiumFreeCacheEntry,
+  type PremiumFreeClientResolveResult,
+  type RemangaChapterReference,
+} from "./premium-free";
+import {
+  PARSER_SERVER_DEFAULT_PORT,
+  PROXY_IMAGE_MESSAGE_TYPE,
+  buildParserServerBaseUrl,
+} from "./parser-server";
+import {
   SETTINGS_MENU_ITEM_KEYS,
   SETTINGS_MENU_ITEMS,
   matchesSettingsMenuItemText,
@@ -66,6 +88,42 @@ type ToggleDefinition = {
 };
 
 type MotionMode = "slide-right" | "dissolve";
+type PremiumFreeState = "idle" | "resolving" | "rendering" | "error";
+type PremiumFreeReaderMode = "feed" | "pager";
+type PremiumFreeStreamStatus = "idle" | "loading-next" | "error" | "exhausted";
+type PremiumFreeReaderState = {
+  mode: PremiumFreeReaderMode;
+  containerWidthVar: string | null;
+  brightnessVar: string | null;
+};
+type PremiumFreeSuccessResult = Extract<PremiumFreeClientResolveResult, { status: "success" }>;
+type PremiumFreeFailureResult = Extract<PremiumFreeClientResolveResult, { status: "failure" }>;
+type PremiumFreeStreamEntry = {
+  key: string;
+  reference: RemangaChapterReference;
+  result: PremiumFreeSuccessResult;
+  chapterLabel: string;
+};
+type PremiumFreeVisiblePage = {
+  key: string;
+  pageIndex: number;
+  ratio: number;
+};
+type PremiumFreeIndicatorSnapshot = {
+  chapterLabelText: string | null;
+  pageCounterText: string | null;
+  url: string;
+};
+type PremiumFreeChapterStream = {
+  rootKey: string;
+  container: HTMLElement;
+  entries: PremiumFreeStreamEntry[];
+  status: PremiumFreeStreamStatus;
+  errorResult: PremiumFreeFailureResult | null;
+  visiblePages: Map<HTMLElement, PremiumFreeVisiblePage>;
+  indicatorSnapshot: PremiumFreeIndicatorSnapshot | null;
+  activeHistoryUrl: string | null;
+};
 
 const CONTROL_ATTRIBUTE = "data-rre-control";
 const HIDDEN_ATTRIBUTE = "data-rre-hidden";
@@ -80,6 +138,8 @@ const MOTION_TARGET_HIDDEN_ATTRIBUTE = "data-rre-motion-target-hidden";
 const SECTION_COLLAPSE_ATTRIBUTE = "data-rre-collapse-state";
 const SECTION_COLLAPSE_INITIALIZED_ATTRIBUTE = "data-rre-collapse-initialized";
 const SECTION_COLLAPSE_TARGET_ATTRIBUTE = "data-rre-collapse-target-expanded";
+const PREMIUM_FREE_BANNER_ATTRIBUTE = "data-rre-premium-free-banner";
+const PREMIUM_FREE_STATE_ATTRIBUTE = "data-rre-premium-free-state";
 
 const SLIDE_RIGHT_DURATION_MS = 220;
 const DISSOLVE_DURATION_MS = 260;
@@ -128,6 +188,31 @@ let settingsMenuOptionsExpanded = false;
 let settingsMenuOptionsExpansionTouched = false;
 const motionFinalizeHandles = new Map<HTMLElement, number>();
 const collapseFinalizeHandles = new Map<HTMLElement, number>();
+let activeParserServerPort = PARSER_SERVER_DEFAULT_PORT;
+
+const getParserServerBaseUrl = (): string =>
+  buildParserServerBaseUrl(activeParserServerPort);
+
+const premiumFreeResultCache = new Map<string, PremiumFreeCacheEntry>();
+const premiumFreePageIndex = new Map<string, number>();
+let premiumFreeActiveRequest:
+  | {
+      key: string;
+      controller: AbortController;
+    }
+  | null = null;
+let premiumFreeReaderStateSnapshot: PremiumFreeReaderState | null = null;
+let premiumFreeNextRequest:
+  | {
+      key: string;
+      controller: AbortController;
+    }
+  | null = null;
+let premiumFreeChapterStream: PremiumFreeChapterStream | null = null;
+let premiumFreeStreamPageObserver: IntersectionObserver | null = null;
+let premiumFreeStreamLoadObserver: IntersectionObserver | null = null;
+let premiumFreeViewportSyncHandle = 0;
+let premiumFreeViewportListenersAttached = false;
 
 const primaryToggleDefinitions: ToggleDefinition[] = [
   {
@@ -163,11 +248,11 @@ const primaryToggleDefinitions: ToggleDefinition[] = [
     },
   },
   {
-    id: "hide-buy-chapter-banner",
-    label: "Скрывать плашку покупки главы",
-    value: (settings) => settings.hideBuyChapterBanner,
+    id: "premium-free",
+    label: "Premium Free",
+    value: (settings) => settings.premiumFree,
     toggle: (settings) => {
-      settings.hideBuyChapterBanner = !settings.hideBuyChapterBanner;
+      settings.premiumFree = !settings.premiumFree;
     },
   },
   {
@@ -294,6 +379,8 @@ export const isReaderPage = (pathname = window.location.pathname): boolean =>
 
 export const clearEnhancerArtifacts = (): void => {
   resetTransientSubsectionState();
+  abortPremiumFreeRequest();
+  resetPremiumFreeChapterStream();
   clearFinalizeHandles(motionFinalizeHandles);
   clearFinalizeHandles(collapseFinalizeHandles);
 
@@ -329,6 +416,15 @@ export const clearEnhancerArtifacts = (): void => {
     node.style.height = "";
     node.style.minHeight = "";
     node.style.overflow = "";
+  });
+
+  document.querySelectorAll<HTMLElement>(`[${PREMIUM_FREE_BANNER_ATTRIBUTE}]`).forEach((node) => {
+    node.removeAttribute(PREMIUM_FREE_BANNER_ATTRIBUTE);
+    node.style.height = "";
+    node.style.minHeight = "";
+    node.style.display = "";
+    node.style.alignItems = "";
+    node.style.justifyContent = "";
   });
 
   const main = document.querySelector<HTMLElement>("main");
@@ -426,39 +522,30 @@ const ensureStyles = (): void => {
 
     [${CONTROL_ATTRIBUTE}="settings-peek-content"] {
       position: absolute;
-      top: 50%;
       right: 0;
       display: flex;
-      transform: translateY(-50%);
-      pointer-events: auto;
+      pointer-events: none;
     }
 
     [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
       display: inline-flex;
-      min-width: 52px;
       align-items: center;
       justify-content: center;
-      border-radius: 9999px 0 0 9999px;
-      box-shadow:
-        0 12px 28px rgba(15, 23, 42, 0.2),
-        0 2px 8px rgba(15, 23, 42, 0.12);
-      transform: translateX(calc(100% - 20px));
-      transition:
-        transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-        box-shadow 220ms ease;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
     }
 
     [${CONTROL_ATTRIBUTE}="settings-peek-zone"]:hover [${CONTROL_ATTRIBUTE}="settings-peek-button"],
     [${CONTROL_ATTRIBUTE}="settings-peek-zone"]:focus-within [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
-      transform: translateX(0);
-      box-shadow:
-        0 16px 34px rgba(15, 23, 42, 0.24),
-        0 4px 12px rgba(15, 23, 42, 0.16);
+      opacity: 1;
+      pointer-events: auto;
     }
 
     @media (hover: none) {
       [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
-        transform: translateX(calc(100% - 18px));
+        opacity: 1;
+        pointer-events: auto;
       }
     }
 
@@ -494,6 +581,227 @@ const ensureStyles = (): void => {
       opacity: 1;
       transform: translateY(0) scale(1);
       filter: blur(0);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-root"] {
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 0 40px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      color: #f8fafc;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-root"][${PREMIUM_FREE_STATE_ATTRIBUTE}="resolving"],
+    [${CONTROL_ATTRIBUTE}="premium-free-root"][${PREMIUM_FREE_STATE_ATTRIBUTE}="error"] {
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-root"][${PREMIUM_FREE_STATE_ATTRIBUTE}="rendering"] {
+      gap: 0;
+      padding-top: 0;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status"] {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: min(calc(100% - 32px), 980px);
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      border-radius: 28px;
+      background:
+        linear-gradient(160deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.74)),
+        radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 52%);
+      box-shadow:
+        0 24px 48px rgba(15, 23, 42, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(14px);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-title"] {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-copy"] {
+      max-width: 480px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: rgba(226, 232, 240, 0.82);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-link"] {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      border-radius: 9999px;
+      background: rgba(248, 250, 252, 0.12);
+      color: inherit;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background-color 160ms ease, transform 160ms ease;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-link"]:hover,
+    [${CONTROL_ATTRIBUTE}="premium-free-link"]:focus-visible {
+      background: rgba(248, 250, 252, 0.18);
+      transform: translateY(-1px);
+    }
+
+    button[${CONTROL_ATTRIBUTE}="premium-free-link"] {
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-skeleton-list"] {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: min(calc(100% - 32px), 640px);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-skeleton-line"] {
+      height: 84px;
+      border-radius: 24px;
+      background:
+        linear-gradient(110deg, rgba(148, 163, 184, 0.12) 8%, rgba(226, 232, 240, 0.22) 18%, rgba(148, 163, 184, 0.12) 33%),
+        linear-gradient(160deg, rgba(15, 23, 42, 0.74), rgba(30, 41, 59, 0.62));
+      background-size: 220% 100%, 100% 100%;
+      animation: rre-premium-skeleton 1.3s linear infinite;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 10px 24px rgba(15, 23, 42, 0.18);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-feed-reader"] {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      gap: 0;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"] {
+      display: flex;
+      width: 100%;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-stream-loader"] {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: 24px auto 32px;
+      padding: 12px 18px;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.74);
+      color: rgba(226, 232, 240, 0.88);
+      font-size: 13px;
+      line-height: 1.4;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+      backdrop-filter: blur(12px);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-stream-actions"] {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-stream-retry"] {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      border-radius: 9999px;
+      background: rgba(248, 250, 252, 0.16);
+      color: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background-color 160ms ease, transform 160ms ease;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-stream-retry"]:hover,
+    [${CONTROL_ATTRIBUTE}="premium-free-stream-retry"]:focus-visible {
+      background: rgba(248, 250, 252, 0.24);
+      transform: translateY(-1px);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-pager-reader"] {
+      position: relative;
+      display: flex;
+      min-height: 100vh;
+      width: 100%;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-page-shell"] {
+      display: flex;
+      width: 100%;
+      justify-content: center;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-clickable-area"] {
+      z-index: 40;
+      pointer-events: none;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-click-zone-prev"],
+    [${CONTROL_ATTRIBUTE}="premium-free-click-zone-center"],
+    [${CONTROL_ATTRIBUTE}="premium-free-click-zone-next"] {
+      appearance: none;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      background: transparent;
+      pointer-events: auto;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-click-zone-prev"] {
+      cursor: w-resize;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-click-zone-next"] {
+      cursor: e-resize;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-image"] {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    @keyframes rre-premium-skeleton {
+      0% {
+        background-position: 200% 0, 0 0;
+      }
+
+      100% {
+        background-position: -20% 0, 0 0;
+      }
     }
 
     [${MOTION_ATTRIBUTE}] {
@@ -643,57 +951,812 @@ const findBuyChapterBanner = (): HTMLElement | null => {
   return actionsBlock.closest<HTMLElement>("div.h-screen") ?? actionsBlock;
 };
 
-const BUY_CHAPTER_PLACEHOLDER_KEY = "buy-chapter-placeholder";
+const PREMIUM_FREE_ROOT_KEY = "premium-free-root";
+const PREMIUM_FREE_KEY_ATTRIBUTE = "data-rre-premium-free-key";
+const PREMIUM_FREE_READER_WIDTH_CLASS =
+  "reader-container-width relative m-[0_auto] h-auto max-w-(--reader-container-max-width) [filter:var(--reader-brightness)]";
+const PREMIUM_FREE_CLICKABLE_AREA_CLASS =
+  "absolute inset-0 flex reader-container-width left-1/2 size-full h-full -translate-x-1/2";
+const PREMIUM_FREE_CLICK_ZONE_CLASS = "relative z-[100] h-full w-1/3 select-none";
+const PREMIUM_FREE_SCROLL_LISTENER_OPTIONS = {
+  capture: true,
+  passive: true,
+} as const;
 
-const syncBuyChapterBanner = (
-  banner: HTMLElement | null,
-  hidden: boolean,
-): void => {
-  const existingPlaceholder = document.querySelector<HTMLElement>(
-    `[${CONTROL_ATTRIBUTE}="${BUY_CHAPTER_PLACEHOLDER_KEY}"]`,
+const mapPremiumFreeReaderMode = (
+  readerType: string | null | undefined,
+): PremiumFreeReaderMode | null => {
+  const normalized = normalizeText(readerType);
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.includes("pager") || normalized.includes("постраничная")) {
+    return "pager";
+  }
+
+  if (normalized.includes("slider") || normalized.includes("лента")) {
+    return "feed";
+  }
+
+  return null;
+};
+
+const collectPremiumFreeReaderModeFromSettingsPanel = (
+  settingsPanel: HTMLElement | null,
+): PremiumFreeReaderMode | null => {
+  if (!settingsPanel) {
+    return null;
+  }
+
+  const readerTypeGroup =
+    queryAllWithSelf<HTMLElement>(settingsPanel, '[role="radiogroup"]').find((group) => {
+      const text = normalizeText(group.textContent);
+      return text.includes("постраничная") && text.includes("лента");
+    }) ?? null;
+
+  if (!readerTypeGroup) {
+    return null;
+  }
+
+  const activeOption =
+    queryAllWithSelf<HTMLElement>(readerTypeGroup, '[role="radio"], button').find(
+      (node) => node.getAttribute("aria-checked") === "true",
+    ) ?? null;
+
+  if (!activeOption) {
+    return null;
+  }
+
+  return mapPremiumFreeReaderMode(activeOption.textContent);
+};
+
+const collectPremiumFreeDefaultReaderState = (): Partial<PremiumFreeReaderState> | null => {
+  const defaultValueScript =
+    Array.from(document.scripts).find((script) => {
+      const text = script.textContent ?? "";
+      return text.includes('"defaultValue"') && text.includes('"readerType"');
+    }) ?? null;
+
+  const defaultValueMatch = defaultValueScript?.textContent?.match(
+    /"defaultValue":"((?:\\.|[^"])*)"/,
   );
-
-  if (!banner) {
-    existingPlaceholder?.remove();
-    return;
+  if (!defaultValueMatch?.[1]) {
+    return null;
   }
 
-  if (!hidden) {
-    existingPlaceholder?.remove();
-    Array.from(banner.children).forEach((child) => {
-      if (child instanceof HTMLElement && !child.hasAttribute(CONTROL_ATTRIBUTE)) {
-        child.removeAttribute(HIDDEN_ATTRIBUTE);
-      }
+  try {
+    const decodedValue = JSON.parse(`"${defaultValueMatch[1]}"`) as string;
+    const parsedValue = JSON.parse(decodedValue) as {
+      manga?: {
+        readerType?: string;
+      };
+      common?: {
+        containerWidth?: number;
+        brightness?: number;
+      };
+    };
+
+    return {
+      mode: mapPremiumFreeReaderMode(parsedValue.manga?.readerType) ?? undefined,
+      containerWidthVar:
+        typeof parsedValue.common?.containerWidth === "number"
+          ? `${parsedValue.common.containerWidth}vw`
+          : null,
+      brightnessVar:
+        typeof parsedValue.common?.brightness === "number"
+          ? `brightness(${parsedValue.common.brightness / 100})`
+          : null,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const readPremiumFreeReaderCssVars = (
+  node: HTMLElement,
+): Pick<PremiumFreeReaderState, "containerWidthVar" | "brightnessVar"> => {
+  const computedStyle = window.getComputedStyle(node);
+  const containerWidthVar =
+    computedStyle.getPropertyValue("--reader-container-width").trim() || null;
+  const brightnessVar =
+    computedStyle.getPropertyValue("--reader-brightness").trim() || null;
+
+  return {
+    containerWidthVar,
+    brightnessVar,
+  };
+};
+
+const collectPremiumFreeReaderCssVars = (): Pick<
+  PremiumFreeReaderState,
+  "containerWidthVar" | "brightnessVar"
+> => {
+  const nativeReaderContainer =
+    Array.from(document.querySelectorAll<HTMLElement>(".reader-container-width")).find(
+      (node) => !node.closest(`[${CONTROL_ATTRIBUTE}]`),
+    ) ?? null;
+  if (nativeReaderContainer) {
+    return readPremiumFreeReaderCssVars(nativeReaderContainer);
+  }
+
+  const probeHost =
+    findBuyChapterBanner() ??
+    document.querySelector<HTMLElement>("main") ??
+    document.body;
+
+  const probe = document.createElement("div");
+  probe.className = PREMIUM_FREE_READER_WIDTH_CLASS;
+  probe.setAttribute("data-reader-vars-scope", "true");
+  probe.style.position = "absolute";
+  probe.style.pointerEvents = "none";
+  probe.style.visibility = "hidden";
+  probe.style.inset = "0";
+  probe.style.maxHeight = "0";
+  probe.style.overflow = "hidden";
+  probeHost.append(probe);
+
+  const vars = readPremiumFreeReaderCssVars(probe);
+  probe.remove();
+  return vars;
+};
+
+const collectPremiumFreeReaderState = (): PremiumFreeReaderState => {
+  const liveVars = collectPremiumFreeReaderCssVars();
+  const defaultState = collectPremiumFreeDefaultReaderState();
+  const state: PremiumFreeReaderState = {
+    mode:
+      collectPremiumFreeReaderModeFromSettingsPanel(findSettingsPanel()) ??
+      premiumFreeReaderStateSnapshot?.mode ??
+      defaultState?.mode ??
+      "feed",
+    containerWidthVar:
+      liveVars.containerWidthVar ??
+      premiumFreeReaderStateSnapshot?.containerWidthVar ??
+      defaultState?.containerWidthVar ??
+      null,
+    brightnessVar:
+      liveVars.brightnessVar ??
+      premiumFreeReaderStateSnapshot?.brightnessVar ??
+      defaultState?.brightnessVar ??
+      null,
+  };
+
+  premiumFreeReaderStateSnapshot = state;
+  return state;
+};
+
+const applyPremiumFreeReaderVars = (
+  node: HTMLElement,
+  state: PremiumFreeReaderState,
+): void => {
+  node.setAttribute("data-reader-vars-scope", "true");
+
+  if (state.containerWidthVar) {
+    node.style.setProperty("--reader-container-width", state.containerWidthVar);
+  } else {
+    node.style.removeProperty("--reader-container-width");
+  }
+
+  if (state.brightnessVar) {
+    node.style.setProperty("--reader-brightness", state.brightnessVar);
+  } else {
+    node.style.removeProperty("--reader-brightness");
+  }
+};
+
+const clampPremiumFreePageIndex = (
+  nextIndex: number,
+  totalPages: number,
+): number => {
+  if (totalPages <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.max(nextIndex, 0), totalPages - 1);
+};
+
+const imageBlobCache = new Map<string, string>();
+const pendingImageLoads = new Map<string, Promise<string | null>>();
+
+const fetchImageBlobUrl = (proxyPath: string): Promise<string | null> => {
+  const cached = imageBlobCache.get(proxyPath);
+  if (cached) return Promise.resolve(cached);
+
+  const pending = pendingImageLoads.get(proxyPath);
+  if (pending) return pending;
+
+  const promise = new Promise<string | null>((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: PROXY_IMAGE_MESSAGE_TYPE, proxyPath },
+      (response: unknown) => {
+        pendingImageLoads.delete(proxyPath);
+        if (
+          !response ||
+          typeof response !== "object" ||
+          !("data" in response) ||
+          typeof (response as { data: unknown }).data !== "string"
+        ) {
+          resolve(null);
+          return;
+        }
+        const dataUrl = (response as { data: string }).data;
+        const commaIndex = dataUrl.indexOf(",");
+        if (commaIndex === -1) {
+          resolve(null);
+          return;
+        }
+        try {
+          const mimeMatch = dataUrl.substring(0, commaIndex).match(/data:([^;]+)/);
+          const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+          const binary = atob(dataUrl.substring(commaIndex + 1));
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+          imageBlobCache.set(proxyPath, blobUrl);
+          resolve(blobUrl);
+        } catch {
+          resolve(null);
+        }
+      },
+    );
+  });
+
+  pendingImageLoads.set(proxyPath, promise);
+  return promise;
+};
+
+const createPremiumFreeImage = (
+  page: Extract<PremiumFreeClientResolveResult, { status: "success" }>["pages"][number],
+): HTMLImageElement => {
+  const image = document.createElement("img");
+  image.setAttribute(CONTROL_ATTRIBUTE, "premium-free-image");
+  image.decoding = "async";
+  image.alt = `Страница ${page.index + 1}`;
+
+  const cached = imageBlobCache.get(page.proxyUrl);
+  if (cached) {
+    image.src = cached;
+  } else {
+    void fetchImageBlobUrl(page.proxyUrl).then((blobUrl) => {
+      if (blobUrl) image.src = blobUrl;
     });
+  }
+
+  return image;
+};
+
+const createPremiumFreePageFrame = (
+  state: PremiumFreeReaderState,
+): HTMLElement => {
+  const pageFrame = document.createElement("div");
+  pageFrame.setAttribute(CONTROL_ATTRIBUTE, "premium-free-page-frame");
+  pageFrame.className = PREMIUM_FREE_READER_WIDTH_CLASS;
+  applyPremiumFreeReaderVars(pageFrame, state);
+  return pageFrame;
+};
+
+const renderPremiumFreeFeedPages = (
+  container: HTMLElement,
+  result: PremiumFreeSuccessResult,
+  state: PremiumFreeReaderState,
+  chapterKey?: string,
+): void => {
+  const reader = document.createElement("div");
+  reader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-feed-reader");
+
+  result.pages.forEach((page) => {
+    const pageShell = document.createElement("div");
+    pageShell.setAttribute(CONTROL_ATTRIBUTE, "premium-free-page-shell");
+    if (chapterKey) {
+      pageShell.dataset.rrePremiumFreeStreamKey = chapterKey;
+      pageShell.dataset.rrePremiumFreePageIndex = String(page.index);
+    }
+
+    const pageFrame = createPremiumFreePageFrame(state);
+    pageFrame.append(createPremiumFreeImage(page));
+    pageShell.append(pageFrame);
+    reader.append(pageShell);
+  });
+
+  container.replaceChildren(reader);
+};
+
+const getPremiumFreeViewportHeight = (): number =>
+  window.innerHeight || document.documentElement.clientHeight || 0;
+
+const collectPremiumFreeViewportPages = (
+  container: HTMLElement,
+): Array<{ key: string; pageIndex: number; top: number; bottom: number }> =>
+  Array.from(
+    container.querySelectorAll<HTMLElement>(
+      `[${CONTROL_ATTRIBUTE}="premium-free-page-shell"][data-rre-premium-free-stream-key]`,
+    ),
+  ).flatMap((node) => {
+    const key = node.dataset.rrePremiumFreeStreamKey;
+    const pageIndex = Number(node.dataset.rrePremiumFreePageIndex ?? "-1");
+    if (!key || Number.isNaN(pageIndex) || pageIndex < 0) {
+      return [];
+    }
+
+    const rect = node.getBoundingClientRect();
+    return [
+      {
+        key,
+        pageIndex,
+        top: rect.top,
+        bottom: rect.bottom,
+      },
+    ];
+  });
+
+const syncPremiumFreeVisibleStreamPage = (): void => {
+  const stream = premiumFreeChapterStream;
+  if (!stream) {
     return;
   }
 
-  Array.from(banner.children).forEach((child) => {
-    if (child instanceof HTMLElement && !child.hasAttribute(CONTROL_ATTRIBUTE)) {
-      markHidden(child, true);
+  let activeKey: string | null = null;
+  let activePageIndex = -1;
+  let maxRatio = -1;
+
+  Array.from(stream.visiblePages.entries()).forEach(([node, rawMeta]) => {
+    const meta = rawMeta as PremiumFreeVisiblePage;
+    if (!node.isConnected) {
+      stream.visiblePages.delete(node);
+      return;
+    }
+
+    if (meta.ratio > maxRatio) {
+      activeKey = meta.key;
+      activePageIndex = meta.pageIndex;
+      maxRatio = meta.ratio;
     }
   });
 
-  if (!existingPlaceholder) {
-    const placeholder = document.createElement("div");
-    placeholder.setAttribute(CONTROL_ATTRIBUTE, BUY_CHAPTER_PLACEHOLDER_KEY);
-    placeholder.style.cssText = [
-      "display: flex",
-      "align-items: center",
-      "justify-content: center",
-      "width: 100%",
-      "height: 100%",
-      "color: rgba(255, 255, 255, 0.4)",
-      "font-size: 15px",
-      "font-weight: 500",
-      "letter-spacing: 0.01em",
-      "text-align: center",
-      "padding: 24px",
-      "user-select: none",
-    ].join("; ");
-    placeholder.textContent = "Глава будет загружена из внешнего источника";
-    banner.appendChild(placeholder);
+  if (!activeKey || activePageIndex < 0) {
+    const activeViewportPage = pickPremiumFreeActivePage(
+      collectPremiumFreeViewportPages(stream.container),
+      getPremiumFreeViewportHeight(),
+    );
+    activeKey = activeViewportPage?.key ?? null;
+    activePageIndex = activeViewportPage?.pageIndex ?? -1;
   }
+
+  if (!activeKey || activePageIndex < 0) {
+    syncPremiumFreeReaderIndicators(null, null);
+    return;
+  }
+
+  const activeEntry =
+    stream.entries.find((entry) => entry.key === activeKey) ?? null;
+
+  syncPremiumFreeReaderIndicators(activeEntry, activePageIndex);
+
+  const lastEntryKey = stream.entries.at(-1)?.key ?? null;
+  if (
+    activeEntry &&
+    shouldPrefetchPremiumFreeNextChapter({
+      activePageIndex,
+      totalPages: activeEntry.result.totalPages,
+      isLastStreamEntry: activeEntry.key === lastEntryKey,
+      streamStatus: stream.status,
+    })
+  ) {
+    void loadPremiumFreeNextChapter();
+  }
+
+  const lastViewportPage = collectPremiumFreeViewportPages(stream.container).at(-1);
+  if (
+    shouldPrefetchPremiumFreeNextChapterByViewport({
+      distanceToViewportBottom:
+        (lastViewportPage?.bottom ?? Number.POSITIVE_INFINITY) -
+        getPremiumFreeViewportHeight(),
+      hasNextChapter: Boolean(stream.entries.at(-1)?.result.nextChapter),
+      streamStatus: stream.status,
+    })
+  ) {
+    void loadPremiumFreeNextChapter();
+  }
+};
+
+const requestPremiumFreeViewportSync = (): void => {
+  if (premiumFreeViewportSyncHandle) {
+    return;
+  }
+
+  premiumFreeViewportSyncHandle = window.requestAnimationFrame(() => {
+    premiumFreeViewportSyncHandle = 0;
+    syncPremiumFreeVisibleStreamPage();
+  });
+};
+
+const ensurePremiumFreeViewportListeners = (): void => {
+  if (premiumFreeViewportListenersAttached) {
+    return;
+  }
+
+  window.addEventListener(
+    "scroll",
+    requestPremiumFreeViewportSync,
+    PREMIUM_FREE_SCROLL_LISTENER_OPTIONS,
+  );
+  document.addEventListener(
+    "scroll",
+    requestPremiumFreeViewportSync,
+    PREMIUM_FREE_SCROLL_LISTENER_OPTIONS,
+  );
+  window.addEventListener("resize", requestPremiumFreeViewportSync, { passive: true });
+  premiumFreeViewportListenersAttached = true;
+};
+
+const disconnectPremiumFreeViewportListeners = (): void => {
+  if (premiumFreeViewportSyncHandle) {
+    window.cancelAnimationFrame(premiumFreeViewportSyncHandle);
+    premiumFreeViewportSyncHandle = 0;
+  }
+
+  if (!premiumFreeViewportListenersAttached) {
+    return;
+  }
+
+  window.removeEventListener(
+    "scroll",
+    requestPremiumFreeViewportSync,
+    PREMIUM_FREE_SCROLL_LISTENER_OPTIONS,
+  );
+  document.removeEventListener(
+    "scroll",
+    requestPremiumFreeViewportSync,
+    PREMIUM_FREE_SCROLL_LISTENER_OPTIONS,
+  );
+  window.removeEventListener("resize", requestPremiumFreeViewportSync);
+  premiumFreeViewportListenersAttached = false;
+};
+
+const observePremiumFreeStreamPages = (container: HTMLElement): void => {
+  const stream = premiumFreeChapterStream;
+  if (!stream) {
+    return;
+  }
+
+  premiumFreeStreamPageObserver?.disconnect();
+  stream.visiblePages.clear();
+  premiumFreeStreamPageObserver = new IntersectionObserver(
+    (entries) => {
+      const currentStream = premiumFreeChapterStream;
+      if (!currentStream) {
+        return;
+      }
+
+      entries.forEach((entry) => {
+        const target = entry.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        if (!entry.isIntersecting || entry.intersectionRatio <= 0) {
+          currentStream.visiblePages.delete(target);
+          return;
+        }
+
+        const key = target.dataset.rrePremiumFreeStreamKey;
+        const pageIndex = Number(target.dataset.rrePremiumFreePageIndex ?? "-1");
+        if (!key || Number.isNaN(pageIndex) || pageIndex < 0) {
+          return;
+        }
+
+        const visiblePage: PremiumFreeVisiblePage = {
+          key,
+          pageIndex,
+          ratio: entry.intersectionRatio,
+        };
+        currentStream.visiblePages.set(target, visiblePage);
+      });
+
+      syncPremiumFreeVisibleStreamPage();
+    },
+    {
+      threshold: [0.2, 0.4, 0.65],
+    },
+  );
+
+  Array.from(
+    container.querySelectorAll<HTMLElement>(
+      `[${CONTROL_ATTRIBUTE}="premium-free-page-shell"][data-rre-premium-free-stream-key]`,
+    ),
+  ).forEach((node) => {
+    premiumFreeStreamPageObserver?.observe(node);
+  });
+};
+
+const createPremiumFreeStreamLoader = (): HTMLElement => {
+  const loader = document.createElement("div");
+  loader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-loader");
+  loader.textContent = "Подгружаем следующую главу из parser-server.";
+  return loader;
+};
+
+const createPremiumFreeStreamError = (
+  failure: PremiumFreeFailureResult,
+  titleName: string,
+): HTMLElement => {
+  const description = describePremiumFreeFailure(failure, titleName);
+  const card = createPremiumFreeStatusCard(
+    description.title,
+    description.copy,
+    description.linkHref,
+    description.linkLabel,
+  );
+  const actions = document.createElement("div");
+  actions.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-actions");
+
+  const retryButton = document.createElement("button");
+  retryButton.type = "button";
+  retryButton.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-retry");
+  retryButton.textContent = "Повторить";
+  retryButton.addEventListener("click", () => {
+    if (!premiumFreeChapterStream) {
+      return;
+    }
+
+    premiumFreeChapterStream.status = "idle";
+    premiumFreeChapterStream.errorResult = null;
+    void loadPremiumFreeNextChapter();
+  });
+  actions.append(retryButton);
+
+  const banner = findBuyChapterBanner();
+  if (banner) {
+    const fallbackButton = document.createElement("button");
+    fallbackButton.type = "button";
+    fallbackButton.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-retry");
+    fallbackButton.textContent = "Показать карточку ReManga";
+    fallbackButton.addEventListener("click", () => {
+      resetPremiumFreeChapterStream();
+      restorePremiumFreeBanner(banner);
+      banner
+        .querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="${PREMIUM_FREE_ROOT_KEY}"]`)
+        ?.remove();
+    });
+    actions.append(fallbackButton);
+  }
+
+  card.append(actions);
+  return card;
+};
+
+const renderPremiumFreeFeedStream = (
+  container: HTMLElement,
+  stream: PremiumFreeChapterStream,
+  state: PremiumFreeReaderState,
+): void => {
+  const streamReader = document.createElement("div");
+  streamReader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-feed-reader");
+
+  stream.entries.forEach((entry) => {
+    const chapterSection = document.createElement("section");
+    chapterSection.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-chapter");
+    chapterSection.dataset.rrePremiumFreeStreamKey = entry.key;
+    renderPremiumFreeFeedPages(chapterSection, entry.result, state, entry.key);
+    streamReader.append(chapterSection);
+  });
+
+  const tailSection = streamReader.lastElementChild;
+  if (tailSection instanceof HTMLElement) {
+    if (stream.status === "loading-next") {
+      tailSection.append(createPremiumFreeStreamLoader());
+    } else if (stream.status === "error" && stream.errorResult) {
+      tailSection.append(
+        createPremiumFreeStreamError(
+          stream.errorResult,
+          stream.entries.at(-1)?.reference.titleName ?? "Premium Free",
+        ),
+      );
+    } else if (stream.status !== "exhausted" && stream.entries.at(-1)?.result.nextChapter) {
+      const sentinel = document.createElement("div");
+      sentinel.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-sentinel");
+      sentinel.style.width = "100%";
+      sentinel.style.height = "1px";
+      tailSection.append(sentinel);
+    }
+  }
+
+  container.replaceChildren(streamReader);
+  observePremiumFreeStreamPages(container);
+  observePremiumFreeLoadSentinel();
+  ensurePremiumFreeViewportListeners();
+  syncPremiumFreeVisibleStreamPage();
+  requestPremiumFreeViewportSync();
+};
+
+const observePremiumFreeLoadSentinel = (): void => {
+  const stream = premiumFreeChapterStream;
+  if (!stream?.container.isConnected) {
+    return;
+  }
+
+  premiumFreeStreamLoadObserver?.disconnect();
+  const sentinel = stream.container.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="premium-free-stream-sentinel"]`,
+  );
+  if (!sentinel) {
+    return;
+  }
+
+  premiumFreeStreamLoadObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void loadPremiumFreeNextChapter();
+      }
+    },
+    {
+      rootMargin: "1200px 0px 400px 0px",
+      threshold: 0,
+    },
+  );
+
+  premiumFreeStreamLoadObserver.observe(sentinel);
+};
+
+const renderPremiumFreePagerPages = (
+  container: HTMLElement,
+  result: Extract<PremiumFreeClientResolveResult, { status: "success" }>,
+  state: PremiumFreeReaderState,
+  key: string,
+): void => {
+  const reader = document.createElement("div");
+  reader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-pager-reader");
+
+  const currentPageIndex = clampPremiumFreePageIndex(
+    premiumFreePageIndex.get(key) ?? 0,
+    result.pages.length,
+  );
+  premiumFreePageIndex.set(key, currentPageIndex);
+
+  const currentPage = result.pages[currentPageIndex];
+  if (!currentPage) {
+    container.replaceChildren(reader);
+    return;
+  }
+
+  const pageShell = document.createElement("div");
+  pageShell.setAttribute(CONTROL_ATTRIBUTE, "premium-free-page-shell");
+
+  const pageFrame = createPremiumFreePageFrame(state);
+  pageFrame.append(createPremiumFreeImage(currentPage));
+  pageShell.append(pageFrame);
+  reader.append(pageShell);
+
+  const clickableArea = document.createElement("div");
+  clickableArea.setAttribute(CONTROL_ATTRIBUTE, "premium-free-clickable-area");
+  clickableArea.className = PREMIUM_FREE_CLICKABLE_AREA_CLASS;
+  applyPremiumFreeReaderVars(clickableArea, state);
+
+  const rerender = (nextIndex: number): void => {
+    premiumFreePageIndex.set(
+      key,
+      clampPremiumFreePageIndex(nextIndex, result.pages.length),
+    );
+    window.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+    renderPremiumFreePagerPages(container, result, collectPremiumFreeReaderState(), key);
+  };
+
+  const previousZone = document.createElement("button");
+  previousZone.type = "button";
+  previousZone.setAttribute(CONTROL_ATTRIBUTE, "premium-free-click-zone-prev");
+  previousZone.className = PREMIUM_FREE_CLICK_ZONE_CLASS;
+  previousZone.setAttribute("aria-label", "Предыдущая страница");
+  previousZone.addEventListener("click", () => {
+    rerender(currentPageIndex - 1);
+  });
+
+  const centerZone = document.createElement("div");
+  centerZone.setAttribute(CONTROL_ATTRIBUTE, "premium-free-click-zone-center");
+  centerZone.className = PREMIUM_FREE_CLICK_ZONE_CLASS;
+
+  const nextZone = document.createElement("button");
+  nextZone.type = "button";
+  nextZone.setAttribute(CONTROL_ATTRIBUTE, "premium-free-click-zone-next");
+  nextZone.className = PREMIUM_FREE_CLICK_ZONE_CLASS;
+  nextZone.setAttribute("aria-label", "Следующая страница");
+  nextZone.addEventListener("click", () => {
+    rerender(currentPageIndex + 1);
+  });
+
+  clickableArea.append(previousZone, centerZone, nextZone);
+  reader.append(clickableArea);
+  container.replaceChildren(reader);
+};
+
+const syncPremiumFreeBanner = (
+  banner: HTMLElement | null,
+  enabled: boolean,
+): void => {
+  const existingPlaceholder = document.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="${PREMIUM_FREE_ROOT_KEY}"]`,
+  );
+  const existingKey = existingPlaceholder?.getAttribute(PREMIUM_FREE_KEY_ATTRIBUTE);
+
+  if (!banner || !enabled) {
+    abortPremiumFreeRequest();
+    resetPremiumFreeChapterStream();
+    if (existingKey) {
+      premiumFreePageIndex.delete(existingKey);
+    }
+    restorePremiumFreeBanner(banner);
+    existingPlaceholder?.remove();
+    return;
+  }
+
+  const reference = collectPremiumFreeTargetReference(banner);
+  if (!reference) {
+    abortPremiumFreeRequest();
+    resetPremiumFreeChapterStream();
+    if (existingKey) {
+      premiumFreePageIndex.delete(existingKey);
+    }
+    restorePremiumFreeBanner(banner);
+    existingPlaceholder?.remove();
+    return;
+  }
+
+  const key = createPremiumFreeKey(reference);
+  const container = ensurePremiumFreeContainer(banner);
+  if (existingKey && existingKey !== key) {
+    premiumFreePageIndex.delete(existingKey);
+    resetPremiumFreeChapterStream();
+  }
+  container.setAttribute(PREMIUM_FREE_KEY_ATTRIBUTE, key);
+
+  if (premiumFreeActiveRequest && premiumFreeActiveRequest.key !== key) {
+    abortPremiumFreeRequest();
+  }
+
+  const cacheEntry = premiumFreeResultCache.get(key);
+  const cachedResult = cacheEntry ? readPremiumFreeCacheEntry(cacheEntry) : null;
+  if (!cachedResult) {
+    if (cacheEntry) {
+      premiumFreeResultCache.delete(key);
+    }
+
+    renderPremiumFreeState(container, "resolving", {
+      title: "Premium Free",
+      copy: "Запускаем parser-server, ищем подходящий источник и подготавливаем главу к чтению.",
+    });
+
+    if (!premiumFreeActiveRequest || premiumFreeActiveRequest.key !== key) {
+      const controller = new AbortController();
+      premiumFreeActiveRequest = { key, controller };
+      void requestPremiumFreeChapter(reference, key, controller);
+    }
+
+    return;
+  }
+
+  if (cachedResult.status === "failure") {
+    renderPremiumFreeError(container, cachedResult, reference.titleName);
+    if (cachedResult.reason === "resolver_unavailable") {
+      appendPremiumFreeRetryButton(container, () => {
+        premiumFreeResultCache.delete(key);
+        renderPremiumFreeState(container, "resolving", {
+          title: "Premium Free",
+          copy: "Перезапускаем parser-server...",
+        });
+        const controller = new AbortController();
+        premiumFreeActiveRequest = { key, controller };
+        void requestPremiumFreeChapter(reference, key, controller);
+      });
+    }
+    return;
+  }
+
+  renderPremiumFreePages(container, cachedResult, key, reference);
 };
 
 const findCommentsVisibilityBlocks = (root: ParentNode = document): HTMLElement[] => {
@@ -1053,7 +2116,6 @@ const syncSettingsPeekZone = (
     content.append(button);
   }
 
-  button.replaceChildren(createSettingsIcon(settingsButton));
   button.onclick = () => {
     openHiddenSettingsButton(settingsButton, settingsGroup ?? settingsButton);
     button.blur();
@@ -1062,6 +2124,20 @@ const syncSettingsPeekZone = (
   const railRect = railContainer.getBoundingClientRect();
   zone.style.top = `${Math.max(0, railRect.top)}px`;
   zone.style.height = `${Math.max(railRect.height, 0)}px`;
+
+  const settingsTarget = settingsGroup ?? settingsButton;
+  const settingsRect = settingsTarget.getBoundingClientRect();
+  if (settingsRect.height > 0) {
+    content.style.top = `${settingsRect.top - railRect.top}px`;
+  } else {
+    const fullscreenBtn = document.querySelector<HTMLElement>(
+      `[${CONTROL_ATTRIBUTE}="fullscreen-main"]`,
+    );
+    if (fullscreenBtn) {
+      const fsRect = fullscreenBtn.getBoundingClientRect();
+      content.style.top = `${fsRect.bottom - railRect.top + 8}px`;
+    }
+  }
 
   if (!existingZone) {
     document.body.append(zone);
@@ -1077,21 +2153,17 @@ const openHiddenSettingsButton = (
     return;
   }
 
-  const wasHidden = isMarkedHidden(settingsMotionTarget);
-  const previousVisibility = settingsMotionTarget.style.visibility;
-  const previousPointerEvents = settingsMotionTarget.style.pointerEvents;
-
   settingsMotionTarget.style.visibility = "hidden";
   settingsMotionTarget.style.pointerEvents = "none";
   markHidden(settingsMotionTarget, false);
   forceReflow(settingsMotionTarget);
   settingsButton.click();
 
-  requestAnimationFrame(() => {
-    settingsMotionTarget.style.visibility = previousVisibility;
-    settingsMotionTarget.style.pointerEvents = previousPointerEvents;
-    markHidden(settingsMotionTarget, wasHidden);
-  });
+  // Clean up inline overrides so the motion animation triggered by
+  // applyVisibilitySettings is visible. The motion CSS (enter-from/hidden)
+  // keeps the element visually hidden until the animation starts.
+  settingsMotionTarget.style.visibility = "";
+  settingsMotionTarget.style.pointerEvents = "";
 };
 
 const syncSettingsPanel = (
@@ -2010,7 +3082,7 @@ const applyVisibilitySettings = (
   });
 
   const buyChapterBanner = findBuyChapterBanner();
-  syncBuyChapterBanner(buyChapterBanner, settings.hideBuyChapterBanner);
+  syncPremiumFreeBanner(buyChapterBanner, settings.premiumFree);
 
   Object.entries(TOOLBAR_ICON_NAMES).forEach(([key]) => {
     const toolbarKey = key as ToolbarButtonKey;
@@ -2034,15 +3106,25 @@ const applyVisibilitySettings = (
     mode: "slide-right",
     onSettled: syncRightRailVisibilityState,
   });
+  // The peek zone is the single entry point whenever minimize mode is on —
+  // hide the original button regardless of whether the settings panel is
+  // currently open, so the two never overlap on screen.
   const hideSettingsButton = applyRightRailPreset && settings.minimizeSettingsButton;
   if (!hideSettingsButton) {
     revealRightRailMotionContext(settingsMotionTarget);
   }
-  syncMotionVisibility(settingsMotionTarget, {
-    hidden: hideSettingsButton,
-    mode: "slide-right",
-    onSettled: syncRightRailVisibilityState,
-  });
+  if (applyRightRailPreset && settings.minimizeSettingsButton && settingsMotionTarget) {
+    // In minimize mode, finalize instantly — the peek zone provides the
+    // animated entry point. Switching between peek and original button
+    // must be seamless without slide animations on the original.
+    finalizeMotionVisibility(settingsMotionTarget, hideSettingsButton, syncRightRailVisibilityState);
+  } else {
+    syncMotionVisibility(settingsMotionTarget, {
+      hidden: hideSettingsButton,
+      mode: "slide-right",
+      onSettled: syncRightRailVisibilityState,
+    });
+  }
 
   if (readerDom.main) {
     readerDom.main.style.paddingTop = settings.hideHeader ? "0px" : "";
@@ -2667,3 +3749,548 @@ const containsAny = (text: string, keywords: string[]): boolean =>
 
 const normalizeText = (value: string | null | undefined): string =>
   (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+
+const abortPremiumFreeRequest = (): void => {
+  premiumFreeActiveRequest?.controller.abort();
+  premiumFreeActiveRequest = null;
+  premiumFreeNextRequest?.controller.abort();
+  premiumFreeNextRequest = null;
+};
+
+const createPremiumFreeKey = (reference: RemangaChapterReference): string =>
+  [reference.titleDir, reference.tome ?? "untomed", reference.chapter].join(":");
+
+const formatPremiumFreeChapterLabel = (
+  tome: number | undefined,
+  chapter: string,
+): string => (typeof tome === "number" ? `${tome} - ${chapter}` : chapter);
+
+const findPremiumFreeChapterLabelControl = (): HTMLElement | null =>
+  Array.from(document.querySelectorAll<HTMLElement>("button, a"))
+    .find((node) => /^\d+\s*-\s*[\d.]+$/.test(node.textContent?.trim() ?? "")) ?? null;
+
+const findPremiumFreeNextChapterHref = (): string | null => {
+  const chapterLabelControl = findPremiumFreeChapterLabelControl();
+  const navigationRow = chapterLabelControl?.parentElement;
+  if (!navigationRow) {
+    return null;
+  }
+
+  const chapterLinks = Array.from(navigationRow.querySelectorAll<HTMLAnchorElement>('a[href*="/manga/"]'))
+    .filter((link) => !link.href.includes("/main"));
+
+  return chapterLinks.at(-1)?.href ?? null;
+};
+
+const hasNativePremiumFreeReaderPages = (): boolean =>
+  Array.from(document.querySelectorAll<HTMLElement>(".reader-container-width")).some(
+    (node) =>
+      !node.closest(`[${CONTROL_ATTRIBUTE}]`) &&
+      !node.closest('[data-sentry-component="BuyChapterActions"]'),
+  );
+
+const collectPremiumFreeReference = (): RemangaChapterReference | null =>
+  extractRemangaChapterReference({
+    href: window.location.href,
+    canonicalHref:
+      document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href ?? null,
+    documentTitle: document.title,
+    descriptionContent:
+      document
+        .querySelector<HTMLMetaElement>('meta[name="description"]')
+        ?.getAttribute("content") ?? null,
+    headerTitle:
+      Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/main"]'))
+        .map((node) => node.textContent?.trim() ?? "")
+        .find(Boolean) ?? null,
+    headerChapterLabel:
+      Array.from(document.querySelectorAll<HTMLElement>("button, a"))
+        .map((node) => node.textContent?.trim() ?? "")
+        .find((text) => /^\d+\s*-\s*[\d.]+$/.test(text)) ?? null,
+  });
+
+const collectPremiumFreeTargetReference = (
+  banner: HTMLElement | null,
+): RemangaChapterReference | null =>
+  derivePremiumFreeTargetReference({
+    currentReference: collectPremiumFreeReference(),
+    hasNativeReaderPages: hasNativePremiumFreeReaderPages(),
+    bannerText: banner?.textContent ?? null,
+    nextChapterHref: findPremiumFreeNextChapterHref(),
+  });
+
+const createPremiumFreeStreamEntry = (
+  reference: RemangaChapterReference,
+  result: PremiumFreeSuccessResult,
+): PremiumFreeStreamEntry => ({
+  key: createPremiumFreeKey(reference),
+  reference,
+  result,
+  chapterLabel: formatPremiumFreeChapterLabel(
+    result.matchedChapter.volume,
+    result.matchedChapter.chapter,
+  ),
+});
+
+const capturePremiumFreeReaderIndicators = (): PremiumFreeIndicatorSnapshot => ({
+  chapterLabelText: findPremiumFreeChapterLabelControl()?.textContent?.trim() ?? null,
+  pageCounterText: getReaderDom().pageCounterButton?.textContent?.trim() ?? null,
+  url: window.location.href,
+});
+
+const restorePremiumFreeReaderIndicators = (): void => {
+  const stream = premiumFreeChapterStream;
+  if (!stream?.indicatorSnapshot) {
+    return;
+  }
+
+  const chapterLabelControl = findPremiumFreeChapterLabelControl();
+  if (chapterLabelControl && stream.indicatorSnapshot.chapterLabelText) {
+    chapterLabelControl.textContent = stream.indicatorSnapshot.chapterLabelText;
+  }
+
+  const pageCounterButton = getReaderDom().pageCounterButton;
+  if (pageCounterButton && stream.indicatorSnapshot.pageCounterText) {
+    pageCounterButton.textContent = stream.indicatorSnapshot.pageCounterText;
+  }
+
+  if (stream.activeHistoryUrl && stream.indicatorSnapshot.url !== window.location.href) {
+    history.replaceState(history.state, "", stream.indicatorSnapshot.url);
+  }
+
+  stream.activeHistoryUrl = null;
+};
+
+const syncPremiumFreeReaderIndicators = (
+  entry: PremiumFreeStreamEntry | null,
+  pageIndex: number | null,
+): void => {
+  const stream = premiumFreeChapterStream;
+  if (!stream) {
+    return;
+  }
+
+  if (!entry || pageIndex === null) {
+    restorePremiumFreeReaderIndicators();
+    return;
+  }
+
+  stream.indicatorSnapshot ??= capturePremiumFreeReaderIndicators();
+
+  const chapterLabelControl = findPremiumFreeChapterLabelControl();
+  if (chapterLabelControl) {
+    chapterLabelControl.textContent = entry.chapterLabel;
+  }
+
+  const pageCounterButton = getReaderDom().pageCounterButton;
+  if (pageCounterButton) {
+    pageCounterButton.textContent = `${pageIndex + 1}/${entry.result.totalPages}`;
+  }
+
+  if (entry.reference.chapterId) {
+    if (stream.activeHistoryUrl) {
+      history.replaceState(history.state, "", stream.indicatorSnapshot.url);
+      stream.activeHistoryUrl = null;
+    }
+
+    return;
+  }
+
+  const nextUrl = new URL(stream.indicatorSnapshot.url);
+  nextUrl.hash = `rre-chapter=${encodeURIComponent(entry.chapterLabel)}`;
+  const nextHref = nextUrl.toString();
+  if (nextHref !== window.location.href) {
+    history.replaceState(history.state, "", nextHref);
+  }
+  stream.activeHistoryUrl = nextHref;
+};
+
+const disconnectPremiumFreeStreamObservers = (): void => {
+  premiumFreeStreamPageObserver?.disconnect();
+  premiumFreeStreamPageObserver = null;
+  premiumFreeStreamLoadObserver?.disconnect();
+  premiumFreeStreamLoadObserver = null;
+  disconnectPremiumFreeViewportListeners();
+};
+
+const resetPremiumFreeChapterStream = (): void => {
+  disconnectPremiumFreeStreamObservers();
+  restorePremiumFreeReaderIndicators();
+  premiumFreeChapterStream?.visiblePages.clear();
+  premiumFreeChapterStream = null;
+};
+
+const ensurePremiumFreeChapterStream = (
+  container: HTMLElement,
+  key: string,
+  reference: RemangaChapterReference,
+  result: PremiumFreeSuccessResult,
+): PremiumFreeChapterStream => {
+  if (!premiumFreeChapterStream || premiumFreeChapterStream.rootKey !== key) {
+    resetPremiumFreeChapterStream();
+    premiumFreeChapterStream = {
+      rootKey: key,
+      container,
+      entries: [createPremiumFreeStreamEntry(reference, result)],
+      status: "idle",
+      errorResult: null,
+      visiblePages: new Map<HTMLElement, PremiumFreeVisiblePage>(),
+      indicatorSnapshot: null,
+      activeHistoryUrl: null,
+    };
+
+    return premiumFreeChapterStream;
+  }
+
+  premiumFreeChapterStream.container = container;
+  premiumFreeChapterStream.entries[0] = createPremiumFreeStreamEntry(reference, result);
+  premiumFreeChapterStream.errorResult = null;
+  premiumFreeChapterStream.status =
+    premiumFreeChapterStream.status === "exhausted" && result.nextChapter ? "idle" : premiumFreeChapterStream.status;
+  return premiumFreeChapterStream;
+};
+
+const restorePremiumFreeBanner = (banner: HTMLElement | null): void => {
+  if (!banner) {
+    return;
+  }
+
+  banner.removeAttribute(PREMIUM_FREE_BANNER_ATTRIBUTE);
+  banner.style.height = "";
+  banner.style.minHeight = "";
+  banner.style.display = "";
+  banner.style.alignItems = "";
+  banner.style.justifyContent = "";
+
+  Array.from(banner.children).forEach((child) => {
+    if (child instanceof HTMLElement && !child.hasAttribute(CONTROL_ATTRIBUTE)) {
+      child.removeAttribute(HIDDEN_ATTRIBUTE);
+    }
+  });
+};
+
+const ensurePremiumFreeContainer = (banner: HTMLElement): HTMLElement => {
+  banner.setAttribute(PREMIUM_FREE_BANNER_ATTRIBUTE, "true");
+  banner.style.height = "auto";
+  banner.style.minHeight = "100vh";
+  banner.style.display = "block";
+
+  Array.from(banner.children).forEach((child) => {
+    if (child instanceof HTMLElement && child.getAttribute(CONTROL_ATTRIBUTE) !== PREMIUM_FREE_ROOT_KEY) {
+      markHidden(child, true);
+    }
+  });
+
+  const existing = banner.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="${PREMIUM_FREE_ROOT_KEY}"]`,
+  );
+  if (existing) {
+    return existing;
+  }
+
+  const root = document.createElement("div");
+  root.setAttribute(CONTROL_ATTRIBUTE, PREMIUM_FREE_ROOT_KEY);
+  root.setAttribute(PREMIUM_FREE_STATE_ATTRIBUTE, "idle");
+  banner.append(root);
+  return root;
+};
+
+const createPremiumFreeStatusCard = (
+  title: string,
+  copy: string,
+  linkHref?: string,
+  linkLabel?: string,
+): HTMLElement => {
+  const card = document.createElement("div");
+  card.setAttribute(CONTROL_ATTRIBUTE, "premium-free-status");
+
+  const titleNode = document.createElement("div");
+  titleNode.setAttribute(CONTROL_ATTRIBUTE, "premium-free-title");
+  titleNode.textContent = title;
+  card.append(titleNode);
+
+  const copyNode = document.createElement("div");
+  copyNode.setAttribute(CONTROL_ATTRIBUTE, "premium-free-copy");
+  copyNode.textContent = copy;
+  card.append(copyNode);
+
+  if (linkHref && linkLabel) {
+    const link = document.createElement("a");
+    link.setAttribute(CONTROL_ATTRIBUTE, "premium-free-link");
+    link.href = linkHref;
+    link.target = "_blank";
+    link.rel = "noreferrer noopener";
+    link.textContent = linkLabel;
+    card.append(link);
+  }
+
+  return card;
+};
+
+const renderPremiumFreeState = (
+  container: HTMLElement,
+  state: PremiumFreeState,
+  options: {
+    title: string;
+    copy: string;
+    linkHref?: string;
+    linkLabel?: string;
+  },
+): void => {
+  container.setAttribute(PREMIUM_FREE_STATE_ATTRIBUTE, state);
+  container.replaceChildren(
+    createPremiumFreeStatusCard(
+      options.title,
+      options.copy,
+      options.linkHref,
+      options.linkLabel,
+    ),
+  );
+
+  if (state !== "resolving") {
+    return;
+  }
+
+  const skeletonList = document.createElement("div");
+  skeletonList.setAttribute(CONTROL_ATTRIBUTE, "premium-free-skeleton-list");
+  [96, 84, 132, 108, 88].forEach((height) => {
+    const line = document.createElement("div");
+    line.setAttribute(CONTROL_ATTRIBUTE, "premium-free-skeleton-line");
+    line.style.height = `${height}px`;
+    skeletonList.append(line);
+  });
+  container.append(skeletonList);
+};
+
+const renderPremiumFreePages = (
+  container: HTMLElement,
+  result: PremiumFreeSuccessResult,
+  key: string,
+  reference: RemangaChapterReference,
+): void => {
+  container.setAttribute(PREMIUM_FREE_STATE_ATTRIBUTE, "rendering");
+  const readerState = collectPremiumFreeReaderState();
+
+  if (readerState.mode === "pager") {
+    resetPremiumFreeChapterStream();
+    renderPremiumFreePagerPages(container, result, readerState, key);
+    return;
+  }
+
+  const stream = ensurePremiumFreeChapterStream(container, key, reference, result);
+  renderPremiumFreeFeedStream(container, stream, readerState);
+};
+
+const renderPremiumFreeError = (
+  container: HTMLElement,
+  result: Extract<PremiumFreeClientResolveResult, { status: "failure" }>,
+  titleName: string,
+): void => {
+  renderPremiumFreeState(
+    container,
+    "error",
+    describePremiumFreeFailure(result, titleName),
+  );
+};
+
+const appendPremiumFreeRetryButton = (
+  container: HTMLElement,
+  onClick: () => void,
+): void => {
+  const card = container.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="premium-free-status"]`,
+  );
+  if (!card) {
+    return;
+  }
+
+  const button = document.createElement("button");
+  button.setAttribute(CONTROL_ATTRIBUTE, "premium-free-link");
+  button.textContent = "Запустить парсер";
+  button.addEventListener("click", onClick, { once: true });
+  card.append(button);
+};
+
+const resolvePremiumFreeChapterResult = async (
+  reference: RemangaChapterReference,
+  controller: AbortController,
+): Promise<PremiumFreeClientResolveResult> => {
+  let result: PremiumFreeClientResolveResult;
+
+  try {
+    const parserServerStatus = await ensureParserServerReady();
+    if (parserServerStatus.status === "ready" && typeof parserServerStatus.port === "number") {
+      activeParserServerPort = parserServerStatus.port;
+    }
+    const parserServerFailure = mapParserServerFailure(parserServerStatus);
+    if (parserServerFailure) {
+      result = {
+        ...parserServerFailure,
+        manualUrl: buildPremiumFreeSearchUrl(reference.titleName),
+      };
+    } else {
+      const response = await fetch(`${getParserServerBaseUrl()}/api/chapters/resolve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ remanga: reference }),
+        signal: controller.signal,
+      });
+
+      const payload = (await response.json()) as PremiumFreeClientResolveResult;
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        !("status" in payload) ||
+        (payload.status !== "success" && payload.status !== "failure")
+      ) {
+        throw new Error("Unexpected premium-free response");
+      }
+
+      result = payload;
+    }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw error;
+    }
+
+    result = {
+      status: "failure",
+      reason: "resolver_unavailable",
+      provider: "mangabuff",
+      manualUrl: buildPremiumFreeSearchUrl(reference.titleName),
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  premiumFreeResultCache.set(
+    createPremiumFreeKey(reference),
+    createPremiumFreeCacheEntry(result),
+  );
+
+  return result;
+};
+
+const loadPremiumFreeNextChapter = async (): Promise<void> => {
+  const stream = premiumFreeChapterStream;
+  if (!stream || !stream.container.isConnected || stream.status === "loading-next") {
+    return;
+  }
+
+  const lastEntry = stream.entries.at(-1);
+  if (!lastEntry?.result.nextChapter) {
+    stream.status = "exhausted";
+    renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+    return;
+  }
+
+  const nextReference = createPremiumFreeStreamReference(
+    lastEntry.reference,
+    lastEntry.result.nextChapter,
+  );
+  const nextKey = createPremiumFreeKey(nextReference);
+  if (stream.entries.some((entry) => entry.key === nextKey)) {
+    stream.status = "exhausted";
+    renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+    return;
+  }
+
+  const cacheEntry = premiumFreeResultCache.get(nextKey);
+  const cachedResult = cacheEntry ? readPremiumFreeCacheEntry(cacheEntry) : null;
+  if (cachedResult) {
+    if (cachedResult.status === "failure") {
+      stream.status = "error";
+      stream.errorResult = cachedResult;
+    } else {
+      stream.entries.push(createPremiumFreeStreamEntry(nextReference, cachedResult));
+      stream.status = cachedResult.nextChapter ? "idle" : "exhausted";
+      stream.errorResult = null;
+    }
+
+    renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+    return;
+  }
+
+  stream.status = "loading-next";
+  stream.errorResult = null;
+  renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+
+  premiumFreeNextRequest?.controller.abort();
+  const controller = new AbortController();
+  premiumFreeNextRequest = {
+    key: nextKey,
+    controller,
+  };
+
+  let result: PremiumFreeClientResolveResult;
+  try {
+    result = await resolvePremiumFreeChapterResult(nextReference, controller);
+  } catch {
+    if (controller.signal.aborted) {
+      return;
+    }
+
+    throw new Error("Unexpected premium-free next-chapter abort state");
+  } finally {
+    if (premiumFreeNextRequest?.key === nextKey) {
+      premiumFreeNextRequest = null;
+    }
+  }
+
+  if (
+    controller.signal.aborted ||
+    !premiumFreeChapterStream ||
+    premiumFreeChapterStream.rootKey !== stream.rootKey ||
+    !stream.container.isConnected
+  ) {
+    return;
+  }
+
+  if (result.status === "failure") {
+    stream.status = "error";
+    stream.errorResult = result;
+    renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+    return;
+  }
+
+  stream.entries.push(createPremiumFreeStreamEntry(nextReference, result));
+  stream.status = result.nextChapter ? "idle" : "exhausted";
+  stream.errorResult = null;
+  renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+};
+
+const requestPremiumFreeChapter = async (
+  reference: RemangaChapterReference,
+  key: string,
+  controller: AbortController,
+): Promise<void> => {
+  try {
+    await resolvePremiumFreeChapterResult(reference, controller);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return;
+    }
+    throw error;
+  }
+
+  if (controller.signal.aborted) {
+    return;
+  }
+
+  if (premiumFreeActiveRequest?.key === key) {
+    premiumFreeActiveRequest = null;
+  }
+
+  const banner = findBuyChapterBanner();
+  if (!banner) {
+    return;
+  }
+
+  const currentReference = collectPremiumFreeTargetReference(banner);
+  if (!currentReference || createPremiumFreeKey(currentReference) !== key) {
+    return;
+  }
+
+  syncPremiumFreeBanner(banner, true);
+};
