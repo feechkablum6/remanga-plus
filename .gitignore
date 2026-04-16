@@ -4,3 +4,6 @@ dist/
 AGENTS.md
 docs/
 *.map
+.env
+.env.*
+.DS_Store
