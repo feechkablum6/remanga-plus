@@ -58,6 +58,7 @@ ReManga Plus встраивается в страницу читалки и до
 | **Скрытие правой панели** | Гибкое скрытие — каждая кнопка управляется отдельным переключателем |
 | **Скрытие счётчика страниц** | Убирает индикатор текущей страницы |
 | **Скрытие комментариев** | Убирает блок комментариев под главой |
+| **Premium Free** | Подменяет locked/premium-экран native-like reader-слоем, повторяет настройки ReManga и в режиме `Лента` может продолжать paid/missing главы parser-backed chapter stream-ом |
 | **Минимизация настроек** | Сворачивает кнопку настроек в полоску у правого края — hover раскрывает обратно |
 
 ### Кнопки правой панели
@@ -115,6 +116,35 @@ npm run build
 
 Расширение автоматически активируется на страницах `remanga.org`.
 
+### Native Host для Premium Free
+
+`Premium Free` в текущей версии использует macOS Native Messaging host. После одноразовой установки он сам поднимает `parser-server` при открытии `remanga.org`, если включён переключатель `Premium Free`. В `Лента` режиме это позволяет не только открыть текущую платную главу, но и автоматически подгружать следующие parser-главы на paid/missing границах, сохраняя нативные индикаторы главы и страниц.
+
+1. Загрузи unpacked-расширение и скопируй его **ID** со страницы `chrome://extensions`
+2. Выполни:
+
+```bash
+npm run native:install -- --extension-id <chrome-extension-id>
+```
+
+Инсталлер:
+- при необходимости установит зависимости `parser-server`
+- соберёт `parser-server`
+- соберёт `native-host`
+- зарегистрирует Native Messaging manifest в `~/Library/Application Support/Google/Chrome/NativeMessagingHosts`
+
+После этого `parser-server` будет автоматически стартовать через background service worker + native host. Если порт 3000 занят, native host автоматически найдёт свободный порт в диапазоне 3000–3009.
+
+### Ручной запуск parser-server
+
+Для отладки можно по-прежнему запускать backend вручную:
+
+```bash
+cd parser-server
+npm install
+npm run dev
+```
+
 ---
 
 ## Разработка
@@ -128,20 +158,37 @@ npm run build
 
 # Сборка с авто-пересборкой при изменениях
 npm run dev
+
+# Проверка parser-server
+cd parser-server && npm run check
+
+# Тесты parser-server
+cd parser-server && npm test
+
+# Сборка native host
+npm run native:build
+
+# Установка native host
+npm run native:install -- --extension-id <chrome-extension-id>
 ```
 
 ### Структура проекта
 
 ```
 src/
+├── background.ts               # MV3 service worker, healthcheck и Native Messaging bridge
 ├── content.ts                  # Точка входа, наблюдатели DOM и маршрутов
 ├── reader-enhancer.ts          # Основная логика UI-мутаций
+├── premium-free.ts             # Контракт Premium Free, metadata extraction и client config
+├── parser-server.ts            # Общие константы и message contract для parser-server startup
 ├── settings.ts                 # Контракт chrome.storage.sync
 ├── settings-menu-items.ts      # Описание пунктов нативного меню
 ├── settings-panel-transition.ts # Обработка переходов панели настроек
 ├── popup-dismissal.ts          # Селекторы и эвристики для автозакрытия попапов
 └── rail-overlay-state.ts       # Состояние оверлея правой панели
 
+parser-server/                  # Backend-резолвер внешних глав и proxy изображений
+native-host/                    # macOS Native Messaging launcher для автозапуска parser-server
 tests/                          # Юнит-тесты
 public/
 └── manifest.json               # MV3 манифест расширения
