@@ -19,7 +19,6 @@ export type ReaderEnhancerSettings = {
   hideRightRail: boolean;
   hidePageCounter: boolean;
   hideRailFullscreenButton: boolean;
-  minimizeSettingsButton: boolean;
   isAdditionalSettingsExpanded: boolean;
   enhanceSettingsMenu: boolean;
   hideCommentsSection: boolean;
@@ -51,7 +50,6 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
   hideRightRail: false,
   hidePageCounter: false,
   hideRailFullscreenButton: false,
-  minimizeSettingsButton: false,
   isAdditionalSettingsExpanded: true,
   enhanceSettingsMenu: false,
   hideCommentsSection: false,
@@ -80,7 +78,6 @@ export const cloneSettings = (
   hideRightRail: settings.hideRightRail,
   hidePageCounter: settings.hidePageCounter,
   hideRailFullscreenButton: settings.hideRailFullscreenButton,
-  minimizeSettingsButton: settings.minimizeSettingsButton,
   isAdditionalSettingsExpanded: settings.isAdditionalSettingsExpanded,
   enhanceSettingsMenu: settings.enhanceSettingsMenu,
   hideCommentsSection: settings.hideCommentsSection,
@@ -100,9 +97,6 @@ export const mergeSettings = (
   hideRailFullscreenButton:
     partialSettings?.hideRailFullscreenButton ??
     DEFAULT_SETTINGS.hideRailFullscreenButton,
-  minimizeSettingsButton:
-    partialSettings?.minimizeSettingsButton ??
-    DEFAULT_SETTINGS.minimizeSettingsButton,
   isAdditionalSettingsExpanded:
     partialSettings?.isAdditionalSettingsExpanded ??
     DEFAULT_SETTINGS.isAdditionalSettingsExpanded,

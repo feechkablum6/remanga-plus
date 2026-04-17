@@ -37,7 +37,6 @@ import {
   POPUP_SELECTORS,
   isLikelyCornerCloseButton,
 } from "./popup-dismissal";
-import { getRailOverlayState } from "./rail-overlay-state";
 
 type CommitSettings = (
   updater: (current: ReaderEnhancerSettings) => ReaderEnhancerSettings,
@@ -181,7 +180,6 @@ const INACTIVE_FULLSCREEN_CLASSES = [
 ];
 
 let fullscreenListenerAttached = false;
-let lastSyncedSettings: ReaderEnhancerSettings | null = null;
 let stylesInstalled = false;
 let rightRailOptionsExpanded = false;
 let rightRailOptionsExpansionTouched = false;
@@ -356,14 +354,6 @@ const rightRailToggleDefinitions: ToggleDefinition[] = [
       settings.hideRailFullscreenButton = !settings.hideRailFullscreenButton;
     },
   },
-  {
-    id: "minimize-settings-button",
-    label: "Минимизировать кнопку настроек",
-    value: (settings) => settings.minimizeSettingsButton,
-    toggle: (settings) => {
-      settings.minimizeSettingsButton = !settings.minimizeSettingsButton;
-    },
-  },
 ];
 
 const settingsMenuToggleDefinitions: ToggleDefinition[] = SETTINGS_MENU_ITEM_KEYS.map((key) => ({
@@ -452,16 +442,12 @@ export const syncReaderEnhancer = ({
   settings,
   commitSettings,
 }: SyncOptions): void => {
-  lastSyncedSettings = settings;
   ensureStyles();
   ensureFullscreenListener();
 
   const readerDom = getReaderDom();
   if (!readerDom.railContainer || !readerDom.settingsButton || !readerDom.settingsGroup) {
     resetTransientSubsectionState();
-    document
-      .querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="settings-peek-zone"]`)
-      ?.remove();
     return;
   }
 
@@ -472,7 +458,6 @@ export const syncReaderEnhancer = ({
   syncMainFullscreenButton(readerDom);
   syncSettingsPanel(readerDom, settings, commitSettings);
   applyVisibilitySettings(readerDom, settings);
-  syncSettingsPeekZone(readerDom, settings);
   syncFullscreenButtonStates();
   dismissPopups(settings);
 };
@@ -510,50 +495,6 @@ const ensureStyles = (): void => {
   styleTag.textContent = `
     [${HIDDEN_ATTRIBUTE}="true"] {
       display: none !important;
-    }
-
-    [${CONTROL_ATTRIBUTE}="settings-peek-zone"] {
-      position: fixed;
-      z-index: 1001;
-      top: 0;
-      right: 0;
-      width: 72px;
-      pointer-events: none;
-      overflow: visible;
-    }
-
-    [${CONTROL_ATTRIBUTE}="settings-peek-content"] {
-      position: absolute;
-      right: 0;
-      display: flex;
-      align-items: flex-start;
-      justify-content: flex-end;
-      pointer-events: auto;
-    }
-
-    [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
-      position: absolute;
-      top: 0;
-      right: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 180ms ease;
-    }
-
-    [${CONTROL_ATTRIBUTE}="settings-peek-content"]:hover [${CONTROL_ATTRIBUTE}="settings-peek-button"],
-    [${CONTROL_ATTRIBUTE}="settings-peek-content"]:focus-within [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    @media (hover: none) {
-      [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
-        opacity: 1;
-        pointer-events: auto;
-      }
     }
 
     [${EMPTY_RAIL_ATTRIBUTE}="true"] {
@@ -875,10 +816,6 @@ const ensureStyles = (): void => {
     }
 
     @media (prefers-reduced-motion: reduce) {
-      [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
-        transition-duration: 1ms !important;
-      }
-
       [${CONTROL_ATTRIBUTE}="settings-rows"],
       [${MOTION_ATTRIBUTE}] {
         transition-duration: 1ms !important;
@@ -897,20 +834,6 @@ const ensureFullscreenListener = (): void => {
 
   document.addEventListener("fullscreenchange", () => {
     syncFullscreenButtonStates();
-    // Entering/leaving fullscreen changes the rail and fullscreen-button
-    // geometry, so recompute the peek zone layout; otherwise the peek
-    // button stays anchored to stale coordinates and can overlap the
-    // fullscreen button.
-    if (lastSyncedSettings) {
-      const readerDom = getReaderDom();
-      if (
-        readerDom.railContainer &&
-        readerDom.settingsButton &&
-        readerDom.settingsGroup
-      ) {
-        syncSettingsPeekZone(readerDom, lastSyncedSettings);
-      }
-    }
   });
 
   fullscreenListenerAttached = true;
@@ -2091,108 +2014,6 @@ const syncMainFullscreenButton = (readerDom: ReaderDom): void => {
   settingsGroup.before(fullscreenButton);
 };
 
-const syncSettingsPeekZone = (
-  readerDom: ReaderDom,
-  settings: ReaderEnhancerSettings,
-): void => {
-  const { railContainer, settingsButton, settingsGroup, settingsPanel } = readerDom;
-  const existingZone = document.querySelector<HTMLElement>(
-    `[${CONTROL_ATTRIBUTE}="settings-peek-zone"]`,
-  );
-
-  const overlayState = getRailOverlayState({
-    isSettingsPanelOpen: Boolean(settingsPanel),
-    hideRightRail: settings.hideRightRail,
-    minimizeSettingsButton: settings.minimizeSettingsButton,
-    hasRailContainer: Boolean(railContainer),
-    hasSettingsButton: Boolean(settingsButton),
-  });
-
-  if (!overlayState.showSettingsPeekZone || !railContainer || !settingsButton) {
-    existingZone?.remove();
-    return;
-  }
-
-  const zone = existingZone ?? document.createElement("div");
-  zone.setAttribute(CONTROL_ATTRIBUTE, "settings-peek-zone");
-
-  let content = zone.querySelector<HTMLElement>(
-    `[${CONTROL_ATTRIBUTE}="settings-peek-content"]`,
-  );
-  if (!content) {
-    content = document.createElement("div");
-    content.setAttribute(CONTROL_ATTRIBUTE, "settings-peek-content");
-    zone.append(content);
-  }
-
-  let button = content.querySelector<HTMLButtonElement>(
-    `[${CONTROL_ATTRIBUTE}="settings-peek-button"]`,
-  );
-  if (!button) {
-    button = cloneToolbarButton(settingsButton, "settings-peek-button", {
-      transparent: false,
-    });
-    button.setAttribute("aria-label", "Настройки читалки");
-    button.title = "Настройки читалки";
-    content.append(button);
-  }
-
-  button.onclick = () => {
-    openHiddenSettingsButton(settingsButton, settingsGroup ?? settingsButton);
-    button.blur();
-  };
-
-  const railRect = railContainer.getBoundingClientRect();
-  const zoneHeight = Math.max(railRect.height, 0);
-  zone.style.top = `${Math.max(0, railRect.top)}px`;
-  zone.style.height = `${zoneHeight}px`;
-
-  // Content must be a large hover target so users can reveal the peek button
-  // without aiming for its exact pixels, but it must NOT overlap the
-  // fullscreen button — otherwise content (pointer-events: auto) would steal
-  // clicks intended for fullscreen. So we anchor content to the area below
-  // fullscreen whenever fullscreen is visible; the button itself stays at
-  // the top of that area, right where the original settings button was.
-  const fullscreenBtn = document.querySelector<HTMLElement>(
-    `[${CONTROL_ATTRIBUTE}="fullscreen-main"]`,
-  );
-  const fsRect = fullscreenBtn?.getBoundingClientRect();
-  const fsVisible = fsRect !== undefined && fsRect.height > 0;
-
-  const contentTop = fsVisible
-    ? Math.max(0, fsRect.bottom - railRect.top + 8)
-    : 0;
-  content.style.top = `${contentTop}px`;
-  content.style.height = `${Math.max(0, zoneHeight - contentTop)}px`;
-  content.style.width = "100%";
-
-  if (!existingZone) {
-    document.body.append(zone);
-  }
-};
-
-const openHiddenSettingsButton = (
-  settingsButton: HTMLButtonElement,
-  settingsMotionTarget: HTMLElement | null,
-): void => {
-  if (!settingsMotionTarget || !isMarkedHidden(settingsMotionTarget)) {
-    settingsButton.click();
-    return;
-  }
-
-  settingsMotionTarget.style.visibility = "hidden";
-  settingsMotionTarget.style.pointerEvents = "none";
-  markHidden(settingsMotionTarget, false);
-  forceReflow(settingsMotionTarget);
-  settingsButton.click();
-
-  // Clean up inline overrides so the motion animation triggered by
-  // applyVisibilitySettings is visible. The motion CSS (enter-from/hidden)
-  // keeps the element visually hidden until the animation starts.
-  settingsMotionTarget.style.visibility = "";
-  settingsMotionTarget.style.pointerEvents = "";
-};
-
 const syncSettingsPanel = (
   readerDom: ReaderDom,
   settings: ReaderEnhancerSettings,
@@ -3079,13 +2900,6 @@ const applyVisibilitySettings = (
 ): void => {
   const applyRightRailPreset = settings.hideRightRail;
   const settingsMotionTarget = readerDom.settingsGroup ?? readerDom.settingsButton;
-  const overlayState = getRailOverlayState({
-    isSettingsPanelOpen: Boolean(readerDom.settingsPanel),
-    hideRightRail: settings.hideRightRail,
-    minimizeSettingsButton: settings.minimizeSettingsButton,
-    hasRailContainer: Boolean(readerDom.railContainer),
-    hasSettingsButton: Boolean(readerDom.settingsButton),
-  });
   const mainFullscreenButton = document.querySelector<HTMLButtonElement>(
     `[${CONTROL_ATTRIBUTE}="fullscreen-main"]`,
   );
@@ -3095,7 +2909,7 @@ const applyVisibilitySettings = (
   }
 
   markHidden(readerDom.header, settings.hideHeader);
-  markHidden(readerDom.railContainer, overlayState.hideRailContainer);
+  markHidden(readerDom.railContainer, false);
   syncMotionVisibility(readerDom.pageCounterButton, {
     hidden: hidePageCounter,
     mode: "slide-right",
@@ -3133,25 +2947,12 @@ const applyVisibilitySettings = (
     mode: "slide-right",
     onSettled: syncRightRailVisibilityState,
   });
-  // The peek zone is the single entry point whenever minimize mode is on —
-  // hide the original button regardless of whether the settings panel is
-  // currently open, so the two never overlap on screen.
-  const hideSettingsButton = applyRightRailPreset && settings.minimizeSettingsButton;
-  if (!hideSettingsButton) {
-    revealRightRailMotionContext(settingsMotionTarget);
-  }
-  if (applyRightRailPreset && settings.minimizeSettingsButton && settingsMotionTarget) {
-    // In minimize mode, finalize instantly — the peek zone provides the
-    // animated entry point. Switching between peek and original button
-    // must be seamless without slide animations on the original.
-    finalizeMotionVisibility(settingsMotionTarget, hideSettingsButton, syncRightRailVisibilityState);
-  } else {
-    syncMotionVisibility(settingsMotionTarget, {
-      hidden: hideSettingsButton,
-      mode: "slide-right",
-      onSettled: syncRightRailVisibilityState,
-    });
-  }
+  revealRightRailMotionContext(settingsMotionTarget);
+  syncMotionVisibility(settingsMotionTarget, {
+    hidden: false,
+    mode: "slide-right",
+    onSettled: syncRightRailVisibilityState,
+  });
 
   if (readerDom.main) {
     readerDom.main.style.paddingTop = settings.hideHeader ? "0px" : "";

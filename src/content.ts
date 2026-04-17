@@ -124,8 +124,7 @@ async function bootstrap(): Promise<void> {
 
       const opensReaderSettings =
         Boolean(button.querySelector('svg[data-sentry-element="Settings"]')) ||
-        button.matches(`[${CONTROL_ATTRIBUTE}="settings-recovery"]`) ||
-        button.matches(`[${CONTROL_ATTRIBUTE}="settings-peek-button"]`);
+        button.matches(`[${CONTROL_ATTRIBUTE}="settings-recovery"]`);
 
       if (!opensReaderSettings) {
         return;
