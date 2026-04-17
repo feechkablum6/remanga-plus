@@ -1,23 +1,41 @@
 #!/usr/bin/env node
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { resolveChromeHostDirs } from "./chrome-host-dirs.js";
 import { resolveExtensionIds } from "./extension-id.js";
 import { rewriteShebangInterpreter } from "./shebang.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const nativeHostDirectory = currentDirectory;
 const repositoryRoot = path.resolve(currentDirectory, "..");
-const chromeNativeHostDirectory = path.join(
-  os.homedir(),
-  "Library/Application Support/Google/Chrome/NativeMessagingHosts",
-);
 const nativeHostName = "org.remanga.parser_host";
+
+const directoryExists = (candidate: string): boolean => {
+  try {
+    return statSync(candidate).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+const chromeNativeHostDirectories = (() => {
+  const detected = resolveChromeHostDirs(os.homedir(), directoryExists);
+  if (detected.length > 0) {
+    return detected;
+  }
+  return [
+    path.join(
+      os.homedir(),
+      "Library/Application Support/Google/Chrome/NativeMessagingHosts",
+    ),
+  ];
+})();
 const defaultManifestPath = path.join(repositoryRoot, "public/manifest.json");
 
 const printHelp = (): void => {
@@ -120,30 +138,32 @@ const buildParserServer = (): void => {
   run("npm", ["run", "build"], path.join(repositoryRoot, "parser-server"));
 };
 
-const installManifest = (hostPath: string): string => {
-  mkdirSync(chromeNativeHostDirectory, { recursive: true });
+const installManifest = (hostPath: string): string[] => {
   const templatePath = path.join(nativeHostDirectory, "native-host-manifest.json");
-  const manifestOutputPath = path.join(
-    chromeNativeHostDirectory,
-    `${nativeHostName}.json`,
-  );
-
   const template = JSON.parse(readFileSync(templatePath, "utf8")) as Record<
     string,
     unknown
   >;
   template.path = hostPath;
   template.allowed_origins = extensionIds.map((id) => `chrome-extension://${id}/`);
+  const serialized = `${JSON.stringify(template, null, 2)}\n`;
 
-  writeFileSync(manifestOutputPath, `${JSON.stringify(template, null, 2)}\n`);
-  return manifestOutputPath;
+  const outputPaths: string[] = [];
+  for (const directory of chromeNativeHostDirectories) {
+    mkdirSync(directory, { recursive: true });
+    const manifestOutputPath = path.join(directory, `${nativeHostName}.json`);
+    writeFileSync(manifestOutputPath, serialized);
+    outputPaths.push(manifestOutputPath);
+  }
+  return outputPaths;
 };
 
 buildParserServer();
 const builtHostPath = buildNativeHost();
-const manifestPath = installManifest(builtHostPath);
+const manifestPaths = installManifest(builtHostPath);
 
 console.log(`Native host installed.
 Extension ids: ${extensionIds.join(", ")}
 Host executable: ${builtHostPath}
-Chrome manifest: ${manifestPath}`);
+Chrome manifests:
+  ${manifestPaths.join("\n  ")}`);
