@@ -39,7 +39,7 @@ test("peek button is fully hidden by default — no protruding slice on the edge
 
 test("peek button reveals via opacity on edge-zone hover or focus", () => {
   const hoverRuleMatch = readerEnhancerSource.match(
-    /\[\$\{CONTROL_ATTRIBUTE\}="settings-peek-zone"\]:hover \[\$\{CONTROL_ATTRIBUTE\}="settings-peek-button"\],\s*\[\$\{CONTROL_ATTRIBUTE\}="settings-peek-zone"\]:focus-within \[\$\{CONTROL_ATTRIBUTE\}="settings-peek-button"\]\s*\{([^}]+)\}/,
+    /\[\$\{CONTROL_ATTRIBUTE\}="settings-peek-content"\]:hover \[\$\{CONTROL_ATTRIBUTE\}="settings-peek-button"\],\s*\[\$\{CONTROL_ATTRIBUTE\}="settings-peek-content"\]:focus-within \[\$\{CONTROL_ATTRIBUTE\}="settings-peek-button"\]\s*\{([^}]+)\}/,
   );
   assert.ok(hoverRuleMatch, "hover/focus reveal rule must exist");
   const body = hoverRuleMatch[1];

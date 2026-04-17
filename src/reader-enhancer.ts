@@ -516,7 +516,7 @@ const ensureStyles = (): void => {
       top: 0;
       right: 0;
       width: 72px;
-      pointer-events: auto;
+      pointer-events: none;
       overflow: visible;
     }
 
@@ -524,7 +524,7 @@ const ensureStyles = (): void => {
       position: absolute;
       right: 0;
       display: flex;
-      pointer-events: none;
+      pointer-events: auto;
     }
 
     [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
@@ -536,8 +536,8 @@ const ensureStyles = (): void => {
       transition: opacity 180ms ease;
     }
 
-    [${CONTROL_ATTRIBUTE}="settings-peek-zone"]:hover [${CONTROL_ATTRIBUTE}="settings-peek-button"],
-    [${CONTROL_ATTRIBUTE}="settings-peek-zone"]:focus-within [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
+    [${CONTROL_ATTRIBUTE}="settings-peek-content"]:hover [${CONTROL_ATTRIBUTE}="settings-peek-button"],
+    [${CONTROL_ATTRIBUTE}="settings-peek-content"]:focus-within [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
       opacity: 1;
       pointer-events: auto;
     }
