@@ -7,7 +7,7 @@ import process from "node:process";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { computeExtensionIdFromKey } from "./extension-id.js";
+import { resolveExtensionIds } from "./extension-id.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const nativeHostDirectory = currentDirectory;
@@ -26,7 +26,8 @@ const printHelp = (): void => {
   npm run native:install -- --from-manifest <path>
 
 Options:
-  --extension-id <id>     Explicit Chrome extension id for allowed_origins
+  --extension-id <id>     Extra Chrome extension id to allow in addition to the derived one
+                          (can be passed multiple times)
   --from-manifest <path>  Derive the id from the manifest "key" (default: public/manifest.json)
   --help                  Show this help
 `);
@@ -41,25 +42,29 @@ const getArgumentValue = (flag: string): string | null => {
   return process.argv[index + 1] ?? null;
 };
 
-const readManifestKey = (manifestPath: string): string => {
-  const raw = readFileSync(manifestPath, "utf8");
-  const parsed = JSON.parse(raw) as { key?: unknown };
-  if (typeof parsed.key !== "string" || parsed.key.length === 0) {
-    throw new Error(
-      `Manifest ${manifestPath} does not contain a "key" field required for a deterministic extension id.`,
-    );
+const collectArgumentValues = (flag: string): string[] => {
+  const values: string[] = [];
+  for (let index = 0; index < process.argv.length; index += 1) {
+    if (process.argv[index] === flag && index + 1 < process.argv.length) {
+      values.push(process.argv[index + 1]);
+    }
   }
-  return parsed.key;
+  return values;
 };
 
-const resolveExtensionId = (): string => {
-  const explicit = getArgumentValue("--extension-id");
-  if (explicit) {
-    return explicit;
-  }
+const readManifestKey = (manifestPath: string): string | null => {
+  const raw = readFileSync(manifestPath, "utf8");
+  const parsed = JSON.parse(raw) as { key?: unknown };
+  return typeof parsed.key === "string" && parsed.key.length > 0
+    ? parsed.key
+    : null;
+};
 
+const resolveInstallerIds = (): string[] => {
   const manifestPath = getArgumentValue("--from-manifest") ?? defaultManifestPath;
-  return computeExtensionIdFromKey(readManifestKey(manifestPath));
+  const manifestKey = existsSync(manifestPath) ? readManifestKey(manifestPath) : null;
+  const explicitIds = collectArgumentValues("--extension-id");
+  return resolveExtensionIds(manifestKey, explicitIds);
 };
 
 if (process.argv.includes("--help")) {
@@ -72,9 +77,9 @@ if (process.platform !== "darwin") {
   process.exit(1);
 }
 
-let extensionId: string;
+let extensionIds: string[];
 try {
-  extensionId = resolveExtensionId();
+  extensionIds = resolveInstallerIds();
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   printHelp();
@@ -117,11 +122,14 @@ const installManifest = (hostPath: string): string => {
     `${nativeHostName}.json`,
   );
 
-  const manifest = readFileSync(templatePath, "utf8")
-    .replace(/__HOST_PATH__/g, hostPath)
-    .replace(/__EXTENSION_ID__/g, extensionId);
+  const template = JSON.parse(readFileSync(templatePath, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  template.path = hostPath;
+  template.allowed_origins = extensionIds.map((id) => `chrome-extension://${id}/`);
 
-  writeFileSync(manifestOutputPath, manifest);
+  writeFileSync(manifestOutputPath, `${JSON.stringify(template, null, 2)}\n`);
   return manifestOutputPath;
 };
 
@@ -130,6 +138,6 @@ const builtHostPath = buildNativeHost();
 const manifestPath = installManifest(builtHostPath);
 
 console.log(`Native host installed.
-Extension id: ${extensionId}
+Extension ids: ${extensionIds.join(", ")}
 Host executable: ${builtHostPath}
 Chrome manifest: ${manifestPath}`);
