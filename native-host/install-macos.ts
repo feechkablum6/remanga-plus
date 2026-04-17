@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { resolveExtensionIds } from "./extension-id.js";
+import { rewriteShebangInterpreter } from "./shebang.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const nativeHostDirectory = currentDirectory;
@@ -96,6 +97,11 @@ const run = (command: string, args: string[], cwd = repositoryRoot): void => {
 const buildNativeHost = (): string => {
   run("npx", ["tsc", "-p", "native-host/tsconfig.json"]);
   const builtHostPath = path.join(nativeHostDirectory, "dist/host.js");
+  const patched = rewriteShebangInterpreter(
+    readFileSync(builtHostPath, "utf8"),
+    process.execPath,
+  );
+  writeFileSync(builtHostPath, patched);
   chmodSync(builtHostPath, 0o755);
   return builtHostPath;
 };
