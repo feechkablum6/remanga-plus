@@ -91,4 +91,5 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 
 ## Anti-Patterns
 
-- [2026-04-17] Фичу «минимизация кнопки настроек» (peek-zone с клонированной кнопкой у правого края, проявляющейся по hover) пришлось полностью вырезать: серия попыток починить hover vs. click поверх Full Screen кнопки раз за разом ломала одно, чиня другое (`pointer-events` zone → content, расширение hover-area, абсолютное позиционирование клона, `fullscreenchange`-ресинк и т.д.). → Если сложная визуальная фича требует столько itераций и нестабильно работает в fullscreen vs. обычном режиме — выкидывать целиком, не накапливать workaround'ы. При возврате: рассмотреть другой подход (например, кнопку-trigger в существующем header'е) вместо overlay'я поверх rail'а.
+- DO NOT возвращать `minimizeSettingsButton`, `settings-peek-zone` или `openHiddenSettingsButton`.
+- DO NOT клонировать rail-кнопки в fixed-position hover-triggered overlay поверх читалки.
