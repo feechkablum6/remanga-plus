@@ -181,6 +181,7 @@ const INACTIVE_FULLSCREEN_CLASSES = [
 ];
 
 let fullscreenListenerAttached = false;
+let lastSyncedSettings: ReaderEnhancerSettings | null = null;
 let stylesInstalled = false;
 let rightRailOptionsExpanded = false;
 let rightRailOptionsExpansionTouched = false;
@@ -451,6 +452,7 @@ export const syncReaderEnhancer = ({
   settings,
   commitSettings,
 }: SyncOptions): void => {
+  lastSyncedSettings = settings;
   ensureStyles();
   ensureFullscreenListener();
 
@@ -530,6 +532,9 @@ const ensureStyles = (): void => {
     }
 
     [${CONTROL_ATTRIBUTE}="settings-peek-button"] {
+      position: absolute;
+      top: 0;
+      right: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -892,6 +897,20 @@ const ensureFullscreenListener = (): void => {
 
   document.addEventListener("fullscreenchange", () => {
     syncFullscreenButtonStates();
+    // Entering/leaving fullscreen changes the rail and fullscreen-button
+    // geometry, so recompute the peek zone layout; otherwise the peek
+    // button stays anchored to stale coordinates and can overlap the
+    // fullscreen button.
+    if (lastSyncedSettings) {
+      const readerDom = getReaderDom();
+      if (
+        readerDom.railContainer &&
+        readerDom.settingsButton &&
+        readerDom.settingsGroup
+      ) {
+        syncSettingsPeekZone(readerDom, lastSyncedSettings);
+      }
+    }
   });
 
   fullscreenListenerAttached = true;
