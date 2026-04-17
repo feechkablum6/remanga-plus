@@ -524,6 +524,8 @@ const ensureStyles = (): void => {
       position: absolute;
       right: 0;
       display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
       pointer-events: auto;
     }
 
@@ -2122,22 +2124,28 @@ const syncSettingsPeekZone = (
   };
 
   const railRect = railContainer.getBoundingClientRect();
+  const zoneHeight = Math.max(railRect.height, 0);
   zone.style.top = `${Math.max(0, railRect.top)}px`;
-  zone.style.height = `${Math.max(railRect.height, 0)}px`;
+  zone.style.height = `${zoneHeight}px`;
 
-  const settingsTarget = settingsGroup ?? settingsButton;
-  const settingsRect = settingsTarget.getBoundingClientRect();
-  if (settingsRect.height > 0) {
-    content.style.top = `${settingsRect.top - railRect.top}px`;
-  } else {
-    const fullscreenBtn = document.querySelector<HTMLElement>(
-      `[${CONTROL_ATTRIBUTE}="fullscreen-main"]`,
-    );
-    if (fullscreenBtn) {
-      const fsRect = fullscreenBtn.getBoundingClientRect();
-      content.style.top = `${fsRect.bottom - railRect.top + 8}px`;
-    }
-  }
+  // Content must be a large hover target so users can reveal the peek button
+  // without aiming for its exact pixels, but it must NOT overlap the
+  // fullscreen button — otherwise content (pointer-events: auto) would steal
+  // clicks intended for fullscreen. So we anchor content to the area below
+  // fullscreen whenever fullscreen is visible; the button itself stays at
+  // the top of that area, right where the original settings button was.
+  const fullscreenBtn = document.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="fullscreen-main"]`,
+  );
+  const fsRect = fullscreenBtn?.getBoundingClientRect();
+  const fsVisible = fsRect !== undefined && fsRect.height > 0;
+
+  const contentTop = fsVisible
+    ? Math.max(0, fsRect.bottom - railRect.top + 8)
+    : 0;
+  content.style.top = `${contentTop}px`;
+  content.style.height = `${Math.max(0, zoneHeight - contentTop)}px`;
+  content.style.width = "100%";
 
   if (!existingZone) {
     document.body.append(zone);
