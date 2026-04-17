@@ -13,6 +13,7 @@ import {
   ensureParserServerReady,
   extractRemangaChapterReference,
   mapParserServerFailure,
+  markRemangaChapterAsViewed,
   pickPremiumFreeActivePage,
   readPremiumFreeCacheEntry,
   shouldPrefetchPremiumFreeNextChapter,
@@ -212,6 +213,32 @@ let premiumFreeStreamPageObserver: IntersectionObserver | null = null;
 let premiumFreeStreamLoadObserver: IntersectionObserver | null = null;
 let premiumFreeViewportSyncHandle = 0;
 let premiumFreeViewportListenersAttached = false;
+const premiumFreeMarkedViewedChapterIds = new Set<number>();
+
+const syncPremiumFreeChapterAsViewed = (chapterId: number | undefined): void => {
+  if (typeof chapterId !== "number" || !Number.isInteger(chapterId) || chapterId <= 0) {
+    return;
+  }
+
+  if (premiumFreeMarkedViewedChapterIds.has(chapterId)) {
+    return;
+  }
+
+  if (typeof document === "undefined" || typeof fetch !== "function") {
+    return;
+  }
+
+  premiumFreeMarkedViewedChapterIds.add(chapterId);
+  void markRemangaChapterAsViewed({
+    chapterId,
+    cookie: document.cookie,
+    fetchImpl: fetch.bind(globalThis),
+  }).then((marked) => {
+    if (!marked) {
+      premiumFreeMarkedViewedChapterIds.delete(chapterId);
+    }
+  });
+};
 
 const primaryToggleDefinitions: ToggleDefinition[] = [
   {
@@ -3912,6 +3939,7 @@ const renderPremiumFreePages = (
   reference: RemangaChapterReference,
 ): void => {
   container.setAttribute(PREMIUM_FREE_STATE_ATTRIBUTE, "rendering");
+  syncPremiumFreeChapterAsViewed(reference.chapterId);
   const readerState = collectPremiumFreeReaderState();
 
   if (readerState.mode === "pager") {

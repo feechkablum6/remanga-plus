@@ -74,7 +74,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 |------|------|
 | `settings.ts` | Контракт `chrome.storage.sync` — defaults, merge, clone |
 | `reader-enhancer.ts` | Все UI-мутации читалки |
-| `premium-free.ts` | Premium Free client: metadata extraction, config, response shapes |
+| `premium-free.ts` | Premium Free client: metadata extraction, response shapes, remanga read-state sync (`markRemangaChapterAsViewed` → `POST /api/activity/views/`) |
 | `parser-server.ts` | Shared constants: URLs, message types, host names |
 | `popup-dismissal.ts` | Селекторы и эвристики автозакрытия попапов |
 

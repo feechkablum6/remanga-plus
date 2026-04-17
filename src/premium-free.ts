@@ -498,3 +498,100 @@ export const shouldPrefetchPremiumFreeNextChapterByViewport = (
 
   return distanceToViewportBottom <= PREMIUM_FREE_VIEWPORT_PREFETCH_DISTANCE_PX;
 };
+
+export const REMANGA_MARK_VIEWED_URL =
+  "https://api.remanga.org/api/activity/views/";
+
+export type MarkChapterViewedRequest = {
+  url: string;
+  method: "POST";
+  headers: {
+    Authorization: string;
+    "Content-Type": "application/json";
+  };
+  body: string;
+  credentials: "omit";
+};
+
+export const readRemangaAuthToken = (cookie: string): string | null => {
+  if (!cookie) {
+    return null;
+  }
+
+  for (const part of cookie.split(";")) {
+    const [rawKey, ...rest] = part.split("=");
+    if (rawKey?.trim() !== "token") {
+      continue;
+    }
+
+    const rawValue = rest.join("=").trim();
+    if (!rawValue) {
+      return null;
+    }
+
+    try {
+      return decodeURIComponent(rawValue);
+    } catch {
+      return rawValue;
+    }
+  }
+
+  return null;
+};
+
+export const buildMarkChapterViewedRequest = (
+  chapterId: number,
+  token: string,
+): MarkChapterViewedRequest | null => {
+  if (!Number.isInteger(chapterId) || chapterId <= 0) {
+    return null;
+  }
+
+  if (!token) {
+    return null;
+  }
+
+  return {
+    url: REMANGA_MARK_VIEWED_URL,
+    method: "POST",
+    headers: {
+      Authorization: `bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ chapter: chapterId }),
+    credentials: "omit",
+  };
+};
+
+export type MarkRemangaChapterAsViewedOptions = {
+  chapterId: number;
+  cookie: string;
+  fetchImpl: typeof fetch;
+};
+
+export const markRemangaChapterAsViewed = async (
+  options: MarkRemangaChapterAsViewedOptions,
+): Promise<boolean> => {
+  const token = readRemangaAuthToken(options.cookie);
+  if (!token) {
+    return false;
+  }
+
+  const request = buildMarkChapterViewedRequest(options.chapterId, token);
+  if (!request) {
+    return false;
+  }
+
+  try {
+    const response = await options.fetchImpl(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      credentials: request.credentials,
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
