@@ -7,6 +7,8 @@ import process from "node:process";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { computeExtensionIdFromKey } from "./extension-id.js";
+
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const nativeHostDirectory = currentDirectory;
 const repositoryRoot = path.resolve(currentDirectory, "..");
@@ -15,14 +17,18 @@ const chromeNativeHostDirectory = path.join(
   "Library/Application Support/Google/Chrome/NativeMessagingHosts",
 );
 const nativeHostName = "org.remanga.parser_host";
+const defaultManifestPath = path.join(repositoryRoot, "public/manifest.json");
 
 const printHelp = (): void => {
   console.log(`Usage:
+  npm run native:install
   npm run native:install -- --extension-id <chrome-extension-id>
+  npm run native:install -- --from-manifest <path>
 
 Options:
-  --extension-id <id>   Required Chrome extension id used in allowed_origins
-  --help                Show this help
+  --extension-id <id>     Explicit Chrome extension id for allowed_origins
+  --from-manifest <path>  Derive the id from the manifest "key" (default: public/manifest.json)
+  --help                  Show this help
 `);
 };
 
@@ -35,7 +41,26 @@ const getArgumentValue = (flag: string): string | null => {
   return process.argv[index + 1] ?? null;
 };
 
-const extensionId = getArgumentValue("--extension-id");
+const readManifestKey = (manifestPath: string): string => {
+  const raw = readFileSync(manifestPath, "utf8");
+  const parsed = JSON.parse(raw) as { key?: unknown };
+  if (typeof parsed.key !== "string" || parsed.key.length === 0) {
+    throw new Error(
+      `Manifest ${manifestPath} does not contain a "key" field required for a deterministic extension id.`,
+    );
+  }
+  return parsed.key;
+};
+
+const resolveExtensionId = (): string => {
+  const explicit = getArgumentValue("--extension-id");
+  if (explicit) {
+    return explicit;
+  }
+
+  const manifestPath = getArgumentValue("--from-manifest") ?? defaultManifestPath;
+  return computeExtensionIdFromKey(readManifestKey(manifestPath));
+};
 
 if (process.argv.includes("--help")) {
   printHelp();
@@ -47,8 +72,11 @@ if (process.platform !== "darwin") {
   process.exit(1);
 }
 
-if (!extensionId) {
-  console.error("Missing required --extension-id <id>.");
+let extensionId: string;
+try {
+  extensionId = resolveExtensionId();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
   printHelp();
   process.exit(1);
 }

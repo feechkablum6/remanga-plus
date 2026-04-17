@@ -21,8 +21,8 @@ npm run dev
 # Сборка native host
 npm run native:build
 
-# Установка native host (macOS)
-npm run native:install -- --extension-id <chrome-extension-id>
+# Установка native host (macOS) — ID берётся из "key" в public/manifest.json
+npm run native:install
 
 # Parser-server
 cd parser-server && npm install
@@ -93,3 +93,4 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 
 - DO NOT возвращать `minimizeSettingsButton`, `settings-peek-zone` или `openHiddenSettingsButton`.
 - DO NOT клонировать rail-кнопки в fixed-position hover-triggered overlay поверх читалки.
+- DO NOT удалять поле `"key"` из `public/manifest.json` или `dist/manifest.json`.
