@@ -84,3 +84,30 @@ test("mergeSettings migrates legacy hideBuyChapterBanner to premiumFree", () => 
   const merged = mergeSettings({ hideBuyChapterBanner: true });
   assert.equal(merged.premiumFree, true);
 });
+
+test("DEFAULT_SETTINGS exposes prefetch and progress toggles enabled by default", () => {
+  assert.equal(DEFAULT_SETTINGS.prefetchNextChapter, true);
+  assert.equal(DEFAULT_SETTINGS.showPremiumFreeProgress, true);
+});
+
+test("mergeSettings preserves new toggles when partial input omits them", () => {
+  const merged = mergeSettings({ hideHeader: true });
+  assert.equal(merged.prefetchNextChapter, true);
+  assert.equal(merged.showPremiumFreeProgress, true);
+});
+
+test("mergeSettings respects explicit false for new toggles", () => {
+  const merged = mergeSettings({
+    prefetchNextChapter: false,
+    showPremiumFreeProgress: false,
+  });
+  assert.equal(merged.prefetchNextChapter, false);
+  assert.equal(merged.showPremiumFreeProgress, false);
+});
+
+test("cloneSettings copies new toggles", () => {
+  const settings = mergeSettings({ prefetchNextChapter: false });
+  const copy = cloneSettings(settings);
+  assert.equal(copy.prefetchNextChapter, false);
+  assert.equal(copy.showPremiumFreeProgress, true);
+});
