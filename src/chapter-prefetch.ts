@@ -81,3 +81,79 @@ export const prewarmChapter = async (chapterId: number): Promise<void> => {
     /* silent — prefetch is best-effort */
   }
 };
+
+const REMANGA_BRANCH_LIST_URL = (branchId: number): string =>
+  `https://api.remanga.org/api/titles/chapters/?branch_id=${branchId}`;
+
+let prewarmedChapterIds = new Set<number>();
+let activeTitleDir: string | null = null;
+
+export const resetPrefetchDedup = (): void => {
+  prewarmedChapterIds = new Set();
+  activeTitleDir = null;
+};
+
+const fetchChapterMeta = async (
+  chapterId: number,
+): Promise<{ branch_id?: number } | null> => {
+  try {
+    const res = await fetch(REMANGA_CHAPTER_URL(chapterId), {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { content?: { branch_id?: number } };
+    return body.content ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const fetchBranchChapters = async (
+  branchId: number,
+): Promise<BranchChapter[]> => {
+  try {
+    const res = await fetch(REMANGA_BRANCH_LIST_URL(branchId), {
+      credentials: "include",
+    });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { content?: unknown };
+    if (!Array.isArray(body.content)) return [];
+    return body.content.flatMap((item) => {
+      if (
+        item &&
+        typeof item === "object" &&
+        "id" in item &&
+        "index" in item &&
+        typeof (item as { id: unknown }).id === "number" &&
+        typeof (item as { index: unknown }).index === "number"
+      ) {
+        return [{ id: (item as { id: number }).id, index: (item as { index: number }).index }];
+      }
+      return [];
+    });
+  } catch {
+    return [];
+  }
+};
+
+export const prefetchNextChapter = async (
+  titleDir: string,
+  currentChapterId: number,
+): Promise<void> => {
+  if (activeTitleDir !== null && activeTitleDir !== titleDir) {
+    resetPrefetchDedup();
+  }
+  activeTitleDir = titleDir;
+
+  if (prewarmedChapterIds.has(currentChapterId)) return;
+  prewarmedChapterIds.add(currentChapterId);
+
+  const meta = await fetchChapterMeta(currentChapterId);
+  if (!meta || typeof meta.branch_id !== "number") return;
+
+  const list = await fetchBranchChapters(meta.branch_id);
+  const nextId = findNextChapterId(list, currentChapterId);
+  if (nextId === null) return;
+
+  await prewarmChapter(nextId);
+};

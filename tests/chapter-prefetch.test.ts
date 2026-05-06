@@ -161,3 +161,98 @@ test("prewarmChapter is silent on network failure", async () => {
 
   await assert.doesNotReject(prewarmChapter(99));
 });
+
+import { prefetchNextChapter, resetPrefetchDedup } from "../src/chapter-prefetch.js";
+
+test("prefetchNextChapter looks up branch, finds next, and prewarms it", async () => {
+  resetPrefetchDedup();
+  const head = installDomStub();
+  const calls = installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/1915807/": {
+      content: { id: 1915807, branch_id: 48218, is_paid: false, pages: [] },
+    },
+    "https://api.remanga.org/api/titles/chapters/?branch_id=48218": {
+      content: [
+        { id: 1915807, index: 149 },
+        { id: 1915808, index: 150 },
+      ],
+    },
+    "https://api.remanga.org/api/titles/chapters/1915808/": {
+      content: {
+        is_paid: false,
+        pages: [[{ link: "https://img.reimg.org/n.webp" }]],
+      },
+    },
+  });
+
+  await prefetchNextChapter("some-title", 1915807);
+
+  // 3 fetches: current chapter, branch list, next chapter
+  assert.equal(calls.length, 3);
+  // 1 image preload (from next chapter)
+  const preloads = head.children.filter((n) => n.rel === "preload");
+  assert.equal(preloads.length, 1);
+});
+
+test("prefetchNextChapter dedups repeated calls for the same chapterId", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  const calls = installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/100/": {
+      content: { branch_id: 1, is_paid: false, pages: [] },
+    },
+    "https://api.remanga.org/api/titles/chapters/?branch_id=1": {
+      content: [{ id: 100, index: 1 }, { id: 101, index: 2 }],
+    },
+    "https://api.remanga.org/api/titles/chapters/101/": {
+      content: { is_paid: false, pages: [] },
+    },
+  });
+
+  await prefetchNextChapter("title-a", 100);
+  await prefetchNextChapter("title-a", 100);
+
+  // dedup means only the first call fetched
+  assert.equal(calls.length, 3);
+});
+
+test("resetPrefetchDedup clears state when titleDir changes", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  const calls = installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/200/": {
+      content: { branch_id: 9, is_paid: false, pages: [] },
+    },
+    "https://api.remanga.org/api/titles/chapters/?branch_id=9": {
+      content: [{ id: 200, index: 1 }, { id: 201, index: 2 }],
+    },
+    "https://api.remanga.org/api/titles/chapters/201/": {
+      content: { is_paid: false, pages: [] },
+    },
+  });
+
+  await prefetchNextChapter("title-x", 200);
+  resetPrefetchDedup();
+  await prefetchNextChapter("title-x", 200);
+
+  // 6 fetches: 3 each call after dedup reset
+  assert.equal(calls.length, 6);
+});
+
+test("prefetchNextChapter is a no-op on the last chapter", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  const calls = installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/300/": {
+      content: { branch_id: 5, is_paid: false, pages: [] },
+    },
+    "https://api.remanga.org/api/titles/chapters/?branch_id=5": {
+      content: [{ id: 300, index: 1 }],
+    },
+  });
+
+  await prefetchNextChapter("title-y", 300);
+
+  // 2 fetches: current + branch list, no next
+  assert.equal(calls.length, 2);
+});
