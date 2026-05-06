@@ -45,6 +45,10 @@ import {
   isLikelyCornerCloseButton,
 } from "./popup-dismissal";
 import { prefetchNextChapter as prefetchRemangaNextChapter } from "./chapter-prefetch";
+import {
+  createProgressTracker,
+  type ProgressTracker,
+} from "./premium-free-progress";
 
 type CommitSettings = (
   updater: (current: ReaderEnhancerSettings) => ReaderEnhancerSettings,
@@ -190,6 +194,9 @@ const INACTIVE_FULLSCREEN_CLASSES = [
 let fullscreenListenerAttached = false;
 let stylesInstalled = false;
 let prefetchNextChapterEnabled = false;
+let progressTrackerEnabled = false;
+let activeProgressTracker: ProgressTracker | null = null;
+let activeProgressTrackerKey: string | null = null;
 let rightRailOptionsExpanded = false;
 let rightRailOptionsExpansionTouched = false;
 let settingsMenuOptionsExpanded = false;
@@ -543,6 +550,8 @@ export const syncReaderEnhancer = ({
   commitSettings,
 }: SyncOptions): void => {
   prefetchNextChapterEnabled = settings.prefetchNextChapter;
+  progressTrackerEnabled = settings.showPremiumFreeProgress;
+  ensureProgressTracker();
   ensureStyles();
   ensureFullscreenListener();
 
@@ -1258,6 +1267,8 @@ const notifyPremiumFreeImageLoad = (event: PremiumFreeImageLoadEvent): void => {
 };
 
 const imageBlobCache = new Map<string, string>();
+export const isPremiumFreeImageCached = (proxyPath: string): boolean =>
+  imageBlobCache.has(proxyPath);
 const pendingImageLoads = new Map<string, Promise<string | null>>();
 
 const fetchImageBlobUrl = (proxyPath: string): Promise<string | null> => {
@@ -1676,6 +1687,7 @@ const createPremiumFreeBranchSelector = (
     // tear down the current stream state and start fresh on the same URL.
     premiumFreeResultCache.clear();
     premiumFreeChapterStream = null;
+    teardownProgressTracker();
     window.location.reload();
   });
 
@@ -3981,6 +3993,57 @@ const resetPremiumFreeChapterStream = (): void => {
   restorePremiumFreeReaderIndicators();
   premiumFreeChapterStream?.visiblePages.clear();
   premiumFreeChapterStream = null;
+  teardownProgressTracker();
+};
+
+const teardownProgressTracker = (): void => {
+  if (activeProgressTracker) {
+    activeProgressTracker.dispose();
+    activeProgressTracker = null;
+  }
+  activeProgressTrackerKey = null;
+};
+
+const ensureProgressTracker = (): void => {
+  if (!progressTrackerEnabled) {
+    teardownProgressTracker();
+    return;
+  }
+  const stream = premiumFreeChapterStream;
+  if (!stream || stream.entries.length === 0) {
+    teardownProgressTracker();
+    return;
+  }
+  const activeEntry = stream.entries.at(-1);
+  if (!activeEntry) {
+    teardownProgressTracker();
+    return;
+  }
+  const pages = activeEntry.result.pages;
+  if (!pages || pages.length === 0) {
+    teardownProgressTracker();
+    return;
+  }
+
+  const entryKey = `${stream.rootKey}:${activeEntry.key}`;
+  if (activeProgressTracker && activeProgressTrackerKey === entryKey) {
+    return;
+  }
+  if (activeProgressTracker) {
+    activeProgressTracker.dispose();
+    activeProgressTracker = null;
+  }
+
+  const initialCompleted = pages
+    .map((p) => p.proxyUrl)
+    .filter((u) => isPremiumFreeImageCached(u));
+
+  activeProgressTracker = createProgressTracker({
+    total: pages.length,
+    subscribe: subscribePremiumFreeImageLoad,
+    initialCompleted,
+  });
+  activeProgressTrackerKey = entryKey;
 };
 
 const ensurePremiumFreeChapterStream = (
@@ -4142,6 +4205,7 @@ const renderPremiumFreePages = (
   }
 
   const stream = ensurePremiumFreeChapterStream(container, key, reference, result);
+  ensureProgressTracker();
   renderPremiumFreeFeedStream(container, stream, readerState);
 };
 
@@ -4279,6 +4343,7 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
       stream.entries.push(createPremiumFreeStreamEntry(nextReference, cachedResult));
       stream.status = cachedResult.nextChapter ? "idle" : "exhausted";
       stream.errorResult = null;
+      ensureProgressTracker();
       if (prefetchNextChapterEnabled) {
         const { titleDir, chapterId } = nextReference;
         if (typeof titleDir === "string" && typeof chapterId === "number") {
@@ -4336,6 +4401,7 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   stream.entries.push(createPremiumFreeStreamEntry(nextReference, result));
   stream.status = result.nextChapter ? "idle" : "exhausted";
   stream.errorResult = null;
+  ensureProgressTracker();
   if (prefetchNextChapterEnabled) {
     const { titleDir, chapterId } = nextReference;
     if (typeof titleDir === "string" && typeof chapterId === "number") {

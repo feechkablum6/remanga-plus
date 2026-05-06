@@ -53,10 +53,20 @@ const removeChip = (): void => {
 export const createProgressTracker = (options: {
   total: number;
   subscribe: ProgressEmitter;
+  initialCompleted?: ReadonlyArray<string>;
 }): ProgressTracker => {
   const seen = new Set<string>();
   let loaded = 0;
   const total = options.total;
+
+  if (options.initialCompleted) {
+    for (const proxyPath of options.initialCompleted) {
+      if (!seen.has(proxyPath)) {
+        seen.add(proxyPath);
+        loaded += 1;
+      }
+    }
+  }
 
   let showHandle: number | null = null;
   let hideHandle: number | null = null;

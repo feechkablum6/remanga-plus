@@ -149,3 +149,22 @@ test("dispose unsubscribes from emitter and removes chip", async () => {
   assert.equal(e.listenerCount(), 0);
   assert.equal(findChip(dom.body), undefined);
 });
+
+test("tracker seeds initial loaded count from initialCompleted", () => {
+  installDocStub();
+  const e = fakeEmitter();
+  const tracker = createProgressTracker({
+    total: 5,
+    subscribe: e.subscribe,
+    initialCompleted: ["a", "b"],
+  });
+
+  assert.equal(tracker.snapshot().loaded, 2);
+
+  // duplicates from emit should not double-count
+  e.emit("a", true);
+  e.emit("c", true);
+
+  assert.equal(tracker.snapshot().loaded, 3);
+  tracker.dispose();
+});
