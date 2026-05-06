@@ -58,3 +58,106 @@ test("findNextChapterId returns null when current is missing from list", () => {
   ];
   assert.equal(findNextChapterId(branchList, 99), null);
 });
+
+import { prewarmChapter } from "../src/chapter-prefetch.js";
+
+type FakeLink = {
+  rel: string;
+  as: string;
+  href: string;
+  crossOrigin: string;
+  setAttribute: (name: string, value: string) => void;
+  attributes: Record<string, string>;
+};
+
+const installDomStub = (): { children: FakeLink[] } => {
+  const head: { children: FakeLink[]; appendChild: (n: FakeLink) => FakeLink } = {
+    children: [],
+    appendChild(node) {
+      this.children.push(node);
+      return node;
+    },
+  };
+  const make = (): FakeLink => {
+    const node: FakeLink = {
+      rel: "",
+      as: "",
+      href: "",
+      crossOrigin: "",
+      attributes: {},
+      setAttribute(name, value) {
+        node.attributes[name] = value;
+      },
+    };
+    return node;
+  };
+  (globalThis as any).document = {
+    head,
+    createElement: (_tag: string) => make(),
+  };
+  return head;
+};
+
+const installFetchStub = (
+  responses: Record<string, unknown>,
+): string[] => {
+  const calls: string[] = [];
+  (globalThis as any).fetch = async (url: string) => {
+    calls.push(url);
+    if (responses[url]) {
+      return {
+        ok: true,
+        json: async () => responses[url],
+      };
+    }
+    return { ok: false, json: async () => ({}) };
+  };
+  return calls;
+};
+
+test("prewarmChapter fetches chapter JSON and adds <link rel=preload> for each page", async () => {
+  const head = installDomStub();
+  installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/1915808/": {
+      content: {
+        is_paid: false,
+        pages: [
+          [{ link: "https://img.reimg.org/a.webp" }],
+          [{ link: "https://img.reimg.org/b.webp" }],
+        ],
+      },
+    },
+  });
+
+  await prewarmChapter(1915808);
+
+  const preloads = head.children.filter((n) => n.rel === "preload");
+  assert.equal(preloads.length, 2);
+  assert.deepEqual(
+    preloads.map((p) => p.href).sort(),
+    ["https://img.reimg.org/a.webp", "https://img.reimg.org/b.webp"],
+  );
+});
+
+test("prewarmChapter skips image preload for is_paid chapters", async () => {
+  const head = installDomStub();
+  installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/2/": {
+      content: { is_paid: true, pages: [] },
+    },
+  });
+
+  await prewarmChapter(2);
+
+  const preloads = head.children.filter((n) => n.rel === "preload");
+  assert.equal(preloads.length, 0);
+});
+
+test("prewarmChapter is silent on network failure", async () => {
+  installDomStub();
+  (globalThis as any).fetch = async () => {
+    throw new Error("network down");
+  };
+
+  await assert.doesNotReject(prewarmChapter(99));
+});
