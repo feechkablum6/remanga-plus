@@ -362,6 +362,22 @@ const primaryToggleDefinitions: ToggleDefinition[] = [
     },
   },
   {
+    id: "prefetch-next-chapter",
+    label: "Предзагружать следующую главу",
+    value: (settings) => settings.prefetchNextChapter,
+    toggle: (settings) => {
+      settings.prefetchNextChapter = !settings.prefetchNextChapter;
+    },
+  },
+  {
+    id: "show-premium-free-progress",
+    label: "Показывать прогресс загрузки Premium Free",
+    value: (settings) => settings.showPremiumFreeProgress,
+    toggle: (settings) => {
+      settings.showPremiumFreeProgress = !settings.showPremiumFreeProgress;
+    },
+  },
+  {
     id: "hide-popup-hints",
     label: "Авто-скрывать подсказки",
     value: (settings) => settings.hidePopups.hints,
