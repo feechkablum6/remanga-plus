@@ -1233,12 +1233,39 @@ const clampPremiumFreePageIndex = (
   return Math.min(Math.max(nextIndex, 0), totalPages - 1);
 };
 
+type PremiumFreeImageLoadEvent = { proxyPath: string; success: boolean };
+type PremiumFreeImageLoadListener = (event: PremiumFreeImageLoadEvent) => void;
+
+const premiumFreeImageLoadListeners = new Set<PremiumFreeImageLoadListener>();
+
+export const subscribePremiumFreeImageLoad = (
+  listener: PremiumFreeImageLoadListener,
+): (() => void) => {
+  premiumFreeImageLoadListeners.add(listener);
+  return () => {
+    premiumFreeImageLoadListeners.delete(listener);
+  };
+};
+
+const notifyPremiumFreeImageLoad = (event: PremiumFreeImageLoadEvent): void => {
+  premiumFreeImageLoadListeners.forEach((listener) => {
+    try {
+      listener(event);
+    } catch {
+      /* swallow listener errors */
+    }
+  });
+};
+
 const imageBlobCache = new Map<string, string>();
 const pendingImageLoads = new Map<string, Promise<string | null>>();
 
 const fetchImageBlobUrl = (proxyPath: string): Promise<string | null> => {
   const cached = imageBlobCache.get(proxyPath);
-  if (cached) return Promise.resolve(cached);
+  if (cached) {
+    notifyPremiumFreeImageLoad({ proxyPath, success: true });
+    return Promise.resolve(cached);
+  }
 
   const pending = pendingImageLoads.get(proxyPath);
   if (pending) return pending;
@@ -1255,12 +1282,14 @@ const fetchImageBlobUrl = (proxyPath: string): Promise<string | null> => {
           typeof (response as { data: unknown }).data !== "string"
         ) {
           resolve(null);
+          notifyPremiumFreeImageLoad({ proxyPath, success: false });
           return;
         }
         const dataUrl = (response as { data: string }).data;
         const commaIndex = dataUrl.indexOf(",");
         if (commaIndex === -1) {
           resolve(null);
+          notifyPremiumFreeImageLoad({ proxyPath, success: false });
           return;
         }
         try {
@@ -1274,8 +1303,10 @@ const fetchImageBlobUrl = (proxyPath: string): Promise<string | null> => {
           const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
           imageBlobCache.set(proxyPath, blobUrl);
           resolve(blobUrl);
+          notifyPremiumFreeImageLoad({ proxyPath, success: true });
         } catch {
           resolve(null);
+          notifyPremiumFreeImageLoad({ proxyPath, success: false });
         }
       },
     );
