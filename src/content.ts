@@ -13,6 +13,10 @@ import {
 } from "./settings";
 import { ENSURE_PARSER_SERVER_MESSAGE_TYPE } from "./parser-server";
 import { shouldScheduleSettledRefresh } from "./settings-panel-transition";
+import {
+  prefetchNextChapter,
+  resetPrefetchDedup,
+} from "./chapter-prefetch";
 
 declare global {
   interface Window {
@@ -35,6 +39,23 @@ async function bootstrap(): Promise<void> {
   let refreshHandle = 0;
   const settledRefreshHandles = new Set<number>();
   let lastUrl = window.location.href;
+  let lastTitleDir: string | null = null;
+
+  const triggerPrefetchForCurrentUrl = () => {
+    if (!currentSettings.prefetchNextChapter) return;
+    if (!isReaderPage()) return;
+    const url = window.location.href;
+    const match = url.match(/\/manga\/([^/]+)\/(\d+)(?:[/?#]|$)/);
+    if (!match) return;
+    const titleDir = match[1];
+    const chapterId = Number(match[2]);
+    if (!Number.isInteger(chapterId) || chapterId <= 0) return;
+    if (lastTitleDir !== null && lastTitleDir !== titleDir) {
+      resetPrefetchDedup();
+    }
+    lastTitleDir = titleDir;
+    void prefetchNextChapter(titleDir, chapterId);
+  };
 
   const runRefresh = () => {
     if (!isReaderPage()) {
@@ -42,6 +63,7 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
+    triggerPrefetchForCurrentUrl();
     syncReaderEnhancer({
       settings: currentSettings,
       commitSettings,
@@ -147,6 +169,7 @@ async function bootstrap(): Promise<void> {
 
     lastUrl = window.location.href;
     requestRefresh();
+    triggerPrefetchForCurrentUrl();
   }, URL_POLL_MS);
 
   const observer = new MutationObserver((mutations) => {

@@ -5,7 +5,9 @@ import {
   type ToolbarButtonKey,
 } from "./settings";
 import {
+  PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY,
   buildPremiumFreeSearchUrl,
+  clearStalePremiumFreeBranchPreference,
   createPremiumFreeStreamReference,
   createPremiumFreeCacheEntry,
   describePremiumFreeFailure,
@@ -15,9 +17,13 @@ import {
   mapParserServerFailure,
   markRemangaChapterAsViewed,
   pickPremiumFreeActivePage,
+  readPremiumFreeBranchPreference,
   readPremiumFreeCacheEntry,
   shouldPrefetchPremiumFreeNextChapter,
   shouldPrefetchPremiumFreeNextChapterByViewport,
+  writePremiumFreeBranchPreference,
+  type PremiumFreeBranch,
+  type PremiumFreeBranchPreference,
   type PremiumFreeCacheEntry,
   type PremiumFreeClientResolveResult,
   type RemangaChapterReference,
@@ -38,6 +44,7 @@ import {
   POPUP_SELECTORS,
   isLikelyCornerCloseButton,
 } from "./popup-dismissal";
+import { prefetchNextChapter as prefetchRemangaNextChapter } from "./chapter-prefetch";
 
 type CommitSettings = (
   updater: (current: ReaderEnhancerSettings) => ReaderEnhancerSettings,
@@ -182,6 +189,7 @@ const INACTIVE_FULLSCREEN_CLASSES = [
 
 let fullscreenListenerAttached = false;
 let stylesInstalled = false;
+let prefetchNextChapterEnabled = false;
 let rightRailOptionsExpanded = false;
 let rightRailOptionsExpansionTouched = false;
 let settingsMenuOptionsExpanded = false;
@@ -195,6 +203,71 @@ const getParserServerBaseUrl = (): string =>
 
 const premiumFreeResultCache = new Map<string, PremiumFreeCacheEntry>();
 const premiumFreePageIndex = new Map<string, number>();
+/**
+ * In-memory mirror of chrome.storage.sync[PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY].
+ * Populated on boot and when the user picks a non-default branch from the
+ * translation selector UI.
+ */
+let premiumFreeBranchPrefs: Record<string, PremiumFreeBranchPreference> = {};
+
+const loadPremiumFreeBranchPrefs = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (typeof chrome === "undefined" || !chrome.storage?.sync) {
+      resolve();
+      return;
+    }
+    chrome.storage.sync.get(
+      { [PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY]: {} },
+      (stored) => {
+        const raw = (stored?.[PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY] ?? {}) as Record<
+          string,
+          PremiumFreeBranchPreference
+        >;
+        premiumFreeBranchPrefs = { ...raw };
+        resolve();
+      },
+    );
+  });
+};
+
+const persistPremiumFreeBranchPref = (
+  titleDir: string,
+  pref: PremiumFreeBranchPreference,
+): void => {
+  premiumFreeBranchPrefs = writePremiumFreeBranchPreference(
+    premiumFreeBranchPrefs,
+    titleDir,
+    pref,
+  );
+  writePremiumFreeBranchPrefsToStorage();
+};
+
+const writePremiumFreeBranchPrefsToStorage = (): void => {
+  if (typeof chrome === "undefined" || !chrome.storage?.sync) {
+    return;
+  }
+  chrome.storage.sync.set({
+    [PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY]: premiumFreeBranchPrefs,
+  });
+};
+
+const purgeStaleBranchPrefIfNeeded = (
+  titleDir: string,
+  requestedBranchId: string | null,
+  result: PremiumFreeClientResolveResult,
+): void => {
+  const next = clearStalePremiumFreeBranchPreference(
+    premiumFreeBranchPrefs,
+    titleDir,
+    requestedBranchId,
+    result,
+  );
+  if (next === premiumFreeBranchPrefs) return;
+  premiumFreeBranchPrefs = next;
+  writePremiumFreeBranchPrefsToStorage();
+};
+
+void loadPremiumFreeBranchPrefs();
 let premiumFreeActiveRequest:
   | {
       key: string;
@@ -469,6 +542,7 @@ export const syncReaderEnhancer = ({
   settings,
   commitSettings,
 }: SyncOptions): void => {
+  prefetchNextChapterEnabled = settings.prefetchNextChapter;
   ensureStyles();
   ensureFullscreenListener();
 
@@ -673,6 +747,38 @@ const ensureStyles = (): void => {
       flex-direction: column;
       align-items: center;
       gap: 0;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-branch-selector"] {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin: 12px auto 20px;
+      padding: 8px 14px;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.62);
+      color: rgba(226, 232, 240, 0.88);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    [${CONTROL_ATTRIBUTE}="premium-free-branch-label"] {
+      opacity: 0.75;
+    }
+    [${CONTROL_ATTRIBUTE}="premium-free-branch-select"] {
+      appearance: none;
+      background: rgba(30, 41, 59, 0.92);
+      color: rgba(241, 245, 249, 0.95);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 8px;
+      padding: 6px 28px 6px 10px;
+      font: inherit;
+      cursor: pointer;
+      outline: none;
+    }
+    [${CONTROL_ATTRIBUTE}="premium-free-branch-select"]:hover,
+    [${CONTROL_ATTRIBUTE}="premium-free-branch-select"]:focus-visible {
+      border-color: rgba(148, 163, 184, 0.7);
     }
 
     [${CONTROL_ATTRIBUTE}="premium-free-stream-loader"] {
@@ -1499,6 +1605,53 @@ const createPremiumFreeStreamError = (
   return card;
 };
 
+const createPremiumFreeBranchSelector = (
+  success: Extract<PremiumFreeClientResolveResult, { status: "success" }>,
+  titleDir: string,
+): HTMLElement | null => {
+  const branches = success.branches;
+  if (!branches || branches.length < 2) return null;
+
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute(CONTROL_ATTRIBUTE, "premium-free-branch-selector");
+
+  const label = document.createElement("span");
+  label.setAttribute(CONTROL_ATTRIBUTE, "premium-free-branch-label");
+  label.textContent = "Перевод:";
+  wrapper.append(label);
+
+  const select = document.createElement("select");
+  select.setAttribute(CONTROL_ATTRIBUTE, "premium-free-branch-select");
+
+  branches.forEach((branch) => {
+    const option = document.createElement("option");
+    option.value = branch.id;
+    option.textContent = `${branch.name} · ${branch.chaptersCount} гл.`;
+    if (branch.id === success.selectedBranchId) {
+      option.selected = true;
+    }
+    select.append(option);
+  });
+
+  select.addEventListener("change", () => {
+    const chosen = select.value;
+    if (!chosen || chosen === success.selectedBranchId) return;
+    persistPremiumFreeBranchPref(titleDir, {
+      provider: success.provider,
+      branchId: chosen,
+    });
+    // Clear cached results so the next resolve re-hits the server with the
+    // new forcedBranchId. window.location.reload() is the simplest way to
+    // tear down the current stream state and start fresh on the same URL.
+    premiumFreeResultCache.clear();
+    premiumFreeChapterStream = null;
+    window.location.reload();
+  });
+
+  wrapper.append(select);
+  return wrapper;
+};
+
 const renderPremiumFreeFeedStream = (
   container: HTMLElement,
   stream: PremiumFreeChapterStream,
@@ -1506,6 +1659,15 @@ const renderPremiumFreeFeedStream = (
 ): void => {
   const streamReader = document.createElement("div");
   streamReader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-feed-reader");
+
+  const firstEntry = stream.entries[0];
+  if (firstEntry) {
+    const selector = createPremiumFreeBranchSelector(
+      firstEntry.result,
+      firstEntry.reference.titleDir,
+    );
+    if (selector) streamReader.append(selector);
+  }
 
   stream.entries.forEach((entry) => {
     const chapterSection = document.createElement("section");
@@ -4000,12 +4162,20 @@ const resolvePremiumFreeChapterResult = async (
         manualUrl: buildPremiumFreeSearchUrl(reference.titleName),
       };
     } else {
+      const pref = readPremiumFreeBranchPreference(
+        premiumFreeBranchPrefs,
+        reference.titleDir,
+      );
+      const requestedBranchId = pref?.branchId ?? null;
       const response = await fetch(`${getParserServerBaseUrl()}/api/chapters/resolve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ remanga: reference }),
+        body: JSON.stringify({
+          remanga: reference,
+          ...(requestedBranchId ? { forcedBranchId: requestedBranchId } : {}),
+        }),
         signal: controller.signal,
       });
 
@@ -4020,6 +4190,7 @@ const resolvePremiumFreeChapterResult = async (
       }
 
       result = payload;
+      purgeStaleBranchPrefIfNeeded(reference.titleDir, requestedBranchId, result);
     }
   } catch (error) {
     if (controller.signal.aborted) {
@@ -4029,7 +4200,7 @@ const resolvePremiumFreeChapterResult = async (
     result = {
       status: "failure",
       reason: "resolver_unavailable",
-      provider: "mangabuff",
+      provider: "unknown",
       manualUrl: buildPremiumFreeSearchUrl(reference.titleName),
       detail: error instanceof Error ? error.message : String(error),
     };
@@ -4077,6 +4248,12 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
       stream.entries.push(createPremiumFreeStreamEntry(nextReference, cachedResult));
       stream.status = cachedResult.nextChapter ? "idle" : "exhausted";
       stream.errorResult = null;
+      if (prefetchNextChapterEnabled) {
+        const { titleDir, chapterId } = nextReference;
+        if (typeof titleDir === "string" && typeof chapterId === "number") {
+          void prefetchRemangaNextChapter(titleDir, chapterId);
+        }
+      }
     }
 
     renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
@@ -4128,6 +4305,12 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   stream.entries.push(createPremiumFreeStreamEntry(nextReference, result));
   stream.status = result.nextChapter ? "idle" : "exhausted";
   stream.errorResult = null;
+  if (prefetchNextChapterEnabled) {
+    const { titleDir, chapterId } = nextReference;
+    if (typeof titleDir === "string" && typeof chapterId === "number") {
+      void prefetchRemangaNextChapter(titleDir, chapterId);
+    }
+  }
   renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
 };
 
