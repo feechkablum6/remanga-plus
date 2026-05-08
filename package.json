@@ -1,6 +1,6 @@
 {
   "name": "remanga-reader-enhancer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "check": "tsc --noEmit && tsc -p native-host/tsconfig.json --noEmit",
     "dev": "vite build --watch",
     "native:build": "tsc -p native-host/tsconfig.json",
-    "native:install": "tsx native-host/install-macos.ts"
+    "native:install": "tsx native-host/install-macos.ts",
+    "version": "node scripts/sync-manifest-version.mjs && git add public/manifest.json"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.31",

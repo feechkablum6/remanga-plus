@@ -24,6 +24,11 @@ npm run native:build
 # Установка native host (macOS) — ID берётся из "key" в public/manifest.json
 npm run native:install
 
+# Bump версии (синхронизирует package.json и public/manifest.json)
+npm version patch    # 0.2.0 → 0.2.1
+npm version minor    # 0.2.0 → 0.3.0
+npm version major    # 0.2.0 → 1.0.0
+
 # Parser-server
 cd parser-server && npm install
 cd parser-server && npm run dev      # dev с hot reload
