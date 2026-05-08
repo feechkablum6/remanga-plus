@@ -9,7 +9,8 @@
     "dev": "vite build --watch",
     "native:build": "tsc -p native-host/tsconfig.json",
     "native:install": "tsx native-host/install-macos.ts",
-    "version": "node scripts/sync-manifest-version.mjs && git add public/manifest.json"
+    "version": "node scripts/sync-manifest-version.mjs && git add public/manifest.json",
+    "postversion": "npm run build"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.31",
