@@ -378,6 +378,14 @@ const primaryToggleDefinitions: ToggleDefinition[] = [
     },
   },
   {
+    id: "tighten-chapter-feed",
+    label: "Убрать пустоту между главами",
+    value: (settings) => settings.tightenChapterFeed,
+    toggle: (settings) => {
+      settings.tightenChapterFeed = !settings.tightenChapterFeed;
+    },
+  },
+  {
     id: "hide-popup-hints",
     label: "Авто-скрывать подсказки",
     value: (settings) => settings.hidePopups.hints,
@@ -568,6 +576,14 @@ export const syncReaderEnhancer = ({
   prefetchNextChapterEnabled = settings.prefetchNextChapter;
   progressTrackerEnabled = settings.showPremiumFreeProgress;
   ensureProgressTracker();
+  // Toggle the data-rre-tighten-chapter-feed attribute that the CSS rule in
+  // ensureStyles() reacts to. Updated every sync so changes take effect
+  // immediately, like the other module-level toggle mirrors.
+  if (settings.tightenChapterFeed) {
+    document.documentElement.setAttribute("data-rre-tighten-chapter-feed", "true");
+  } else {
+    document.documentElement.removeAttribute("data-rre-tighten-chapter-feed");
+  }
   ensureStyles();
   ensureFullscreenListener();
 
@@ -978,6 +994,14 @@ const ensureStyles = (): void => {
       [${MOTION_ATTRIBUTE}] {
         transition-duration: 1ms !important;
       }
+    }
+
+    /* Tighten the gap between chapters in feed-mode reader.
+       Remanga wraps every chapter in <div data-sentry-component="InfiniteReader">
+       with gap-8 (32px) and mb-16 (64px); we zero both when the toggle is on. */
+    html[data-rre-tighten-chapter-feed="true"] [data-sentry-component="InfiniteReader"] {
+      gap: 0 !important;
+      margin-bottom: 0 !important;
     }
   `;
 

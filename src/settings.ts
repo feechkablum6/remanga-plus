@@ -25,6 +25,7 @@ export type ReaderEnhancerSettings = {
   premiumFree: boolean;
   prefetchNextChapter: boolean;
   showPremiumFreeProgress: boolean;
+  tightenChapterFeed: boolean;
   hideToolbarButtons: Record<ToolbarButtonKey, boolean>;
   hideSettingsMenuItems: Record<SettingsMenuItemKey, boolean>;
   hidePopups: Record<PopupSettingKey, boolean>;
@@ -58,6 +59,7 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
   premiumFree: false,
   prefetchNextChapter: true,
   showPremiumFreeProgress: true,
+  tightenChapterFeed: true,
   hideToolbarButtons: {
     list: false,
     comments: false,
@@ -88,6 +90,7 @@ export const cloneSettings = (
   premiumFree: settings.premiumFree,
   prefetchNextChapter: settings.prefetchNextChapter,
   showPremiumFreeProgress: settings.showPremiumFreeProgress,
+  tightenChapterFeed: settings.tightenChapterFeed,
   hideToolbarButtons: { ...settings.hideToolbarButtons },
   hideSettingsMenuItems: { ...settings.hideSettingsMenuItems },
   hidePopups: { ...settings.hidePopups },
@@ -118,6 +121,8 @@ export const mergeSettings = (
     partialSettings?.prefetchNextChapter ?? DEFAULT_SETTINGS.prefetchNextChapter,
   showPremiumFreeProgress:
     partialSettings?.showPremiumFreeProgress ?? DEFAULT_SETTINGS.showPremiumFreeProgress,
+  tightenChapterFeed:
+    partialSettings?.tightenChapterFeed ?? DEFAULT_SETTINGS.tightenChapterFeed,
   hideToolbarButtons: {
     ...DEFAULT_SETTINGS.hideToolbarButtons,
     ...partialSettings?.hideToolbarButtons,

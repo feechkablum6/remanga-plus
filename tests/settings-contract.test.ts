@@ -111,3 +111,18 @@ test("cloneSettings copies new toggles", () => {
   assert.equal(copy.prefetchNextChapter, false);
   assert.equal(copy.showPremiumFreeProgress, true);
 });
+
+test("DEFAULT_SETTINGS exposes tightenChapterFeed enabled by default", () => {
+  assert.equal(DEFAULT_SETTINGS.tightenChapterFeed, true);
+});
+
+test("mergeSettings respects explicit false for tightenChapterFeed", () => {
+  const merged = mergeSettings({ tightenChapterFeed: false });
+  assert.equal(merged.tightenChapterFeed, false);
+});
+
+test("cloneSettings copies tightenChapterFeed", () => {
+  const settings = mergeSettings({ tightenChapterFeed: false });
+  const copy = cloneSettings(settings);
+  assert.equal(copy.tightenChapterFeed, false);
+});
