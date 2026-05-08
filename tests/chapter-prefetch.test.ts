@@ -256,3 +256,51 @@ test("prefetchNextChapter is a no-op on the last chapter", async () => {
   // 2 fetches: current + branch list, no next
   assert.equal(calls.length, 2);
 });
+
+test("prefetch fetches must NOT send credentials (api.remanga.org rejects credentialed CORS)", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  const fetchOptions: Array<RequestInit | undefined> = [];
+  (globalThis as any).fetch = async (_url: string, options?: RequestInit) => {
+    fetchOptions.push(options);
+    return {
+      ok: true,
+      json: async () => ({
+        content: { branch_id: 1, is_paid: false, pages: [] },
+      }),
+    };
+  };
+
+  await prefetchNextChapter("some-title", 1);
+
+  assert.ok(fetchOptions.length > 0, "should have called fetch at least once");
+  for (const options of fetchOptions) {
+    assert.notEqual(
+      options?.credentials,
+      "include",
+      "fetch must not include credentials — api.remanga.org rejects credentialed CORS for /api/titles/chapters/<id>/",
+    );
+  }
+});
+
+test("prewarmChapter image preload links must NOT carry crossorigin (mismatch breaks <img> cache reuse)", async () => {
+  const head = installDomStub();
+  installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/9/": {
+      content: {
+        is_paid: false,
+        pages: [[{ link: "https://img.reimg.org/x.webp" }]],
+      },
+    },
+  });
+
+  await prewarmChapter(9);
+
+  const preloads = head.children.filter((n) => n.rel === "preload");
+  assert.equal(preloads.length, 1);
+  assert.equal(
+    preloads[0].attributes.crossorigin,
+    undefined,
+    "preload link must not have crossorigin attribute — Remanga's <img> tags don't use it, mismatch defeats cache reuse",
+  );
+});

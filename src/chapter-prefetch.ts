@@ -57,7 +57,8 @@ const addImagePreload = (href: string): void => {
   link.rel = "preload";
   link.as = "image";
   link.href = href;
-  link.setAttribute("crossorigin", "anonymous");
+  // No crossorigin: Remanga's native <img> tags don't set it, and a mismatch
+  // would prevent the browser from reusing this preload from cache.
   link.setAttribute("data-rre-control", "chapter-prefetch-image");
   document.head.appendChild(link);
 };
@@ -65,9 +66,12 @@ const addImagePreload = (href: string): void => {
 export const prewarmChapter = async (chapterId: number): Promise<void> => {
   if (!Number.isInteger(chapterId) || chapterId <= 0) return;
   try {
-    const response = await fetch(REMANGA_CHAPTER_URL(chapterId), {
-      credentials: "include",
-    });
+    // No credentials: api.remanga.org/api/titles/chapters/<id>/ does not send
+    // Access-Control-Allow-Credentials, so the browser rejects credentialed
+    // CORS requests with a network error. The endpoint works for anonymous
+    // requests for free chapters, which is exactly what we need to read
+    // pages[].link for image preload.
+    const response = await fetch(REMANGA_CHAPTER_URL(chapterId));
     if (!response.ok) return;
     const body = (await response.json()) as {
       content?: { is_paid?: boolean; pages?: unknown };
@@ -97,9 +101,7 @@ const fetchChapterMeta = async (
   chapterId: number,
 ): Promise<{ branch_id?: number } | null> => {
   try {
-    const res = await fetch(REMANGA_CHAPTER_URL(chapterId), {
-      credentials: "include",
-    });
+    const res = await fetch(REMANGA_CHAPTER_URL(chapterId));
     if (!res.ok) return null;
     const body = (await res.json()) as { content?: { branch_id?: number } };
     return body.content ?? null;
@@ -112,9 +114,7 @@ const fetchBranchChapters = async (
   branchId: number,
 ): Promise<BranchChapter[]> => {
   try {
-    const res = await fetch(REMANGA_BRANCH_LIST_URL(branchId), {
-      credentials: "include",
-    });
+    const res = await fetch(REMANGA_BRANCH_LIST_URL(branchId));
     if (!res.ok) return [];
     const body = (await res.json()) as { content?: unknown };
     if (!Array.isArray(body.content)) return [];
