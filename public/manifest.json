@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Remanga Reader Enhancer",
   "description": "Adds fullscreen, clean reading toggles, and popup suppression for the ReManga reader.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA86/NH0FyolZk4ME9nkvXRmMT+64U9u89lhtlPMvfzZHGLEZoxqQ1ymVchKX6ro9hqe51QJhWrmmNI6DNW/3VlLIxzF4Cahz3Wr1X83+A6VqprurpRperJkjV6C5i7ffrsOfSBWiWwveKXuZQZmzsBwKBu7cflOkald2MLEvsq0rnN3zzmqfBnJAR2kMI9Uwj0ysDSHmnmgE9M3oWJEELEoAU9Ihh37+WmV5Q+Ca5Ggu/mMckUIQ/FvhZWexRvhzYmGmcsaMAPIwfImYhsZZkTLlkFNZQTjV6LqcLzjn6YjR6N82e22sDUFfMbFdVwk4yZc6OF+NfSfs+vEnjPl1hHwIDAQAB",
   "permissions": ["storage", "nativeMessaging"],
   "background": {

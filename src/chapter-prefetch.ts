@@ -3,6 +3,9 @@ export type BranchChapter = {
   index: number;
 };
 
+// Remanga returns the branch list paginated, 30 chapters per page.
+const BRANCH_PAGE_SIZE = 30;
+
 export const extractCurrentChapterIdFromUrl = (url: string): number | null => {
   const match = url.match(/\/manga\/[^/]+\/(\d+)(?:[/?#]|$)/);
   if (!match) return null;
@@ -10,6 +13,19 @@ export const extractCurrentChapterIdFromUrl = (url: string): number | null => {
   return Number.isInteger(id) && id > 0 ? id : null;
 };
 
+export const findChapterByIndex = (
+  chapters: ReadonlyArray<BranchChapter>,
+  targetIndex: number,
+): BranchChapter | null =>
+  chapters.find((c) => c.index === targetIndex) ?? null;
+
+export const computeBranchPageForIndex = (chapterIndex: number): number => {
+  if (!Number.isFinite(chapterIndex) || chapterIndex < 1) return 1;
+  return Math.max(1, Math.ceil(chapterIndex / BRANCH_PAGE_SIZE));
+};
+
+// Kept for backwards compatibility with the old contract; unused by the
+// orchestrator now that we look up the next chapter by `index` directly.
 export const findNextChapterId = (
   chapters: ReadonlyArray<BranchChapter>,
   currentId: number,
@@ -86,8 +102,11 @@ export const prewarmChapter = async (chapterId: number): Promise<void> => {
   }
 };
 
-const REMANGA_BRANCH_LIST_URL = (branchId: number): string =>
-  `https://api.remanga.org/api/titles/chapters/?branch_id=${branchId}`;
+// `ordering=index` is critical: the default order is reverse-chronological
+// and pages are 30-deep, so without it any chapter outside the most recent
+// 30 falls off the first page and the lookup fails.
+const REMANGA_BRANCH_LIST_URL = (branchId: number, page: number = 1): string =>
+  `https://api.remanga.org/api/titles/chapters/?branch_id=${branchId}&ordering=index&page=${page}`;
 
 let prewarmedChapterIds = new Set<number>();
 let activeTitleDir: string | null = null;
@@ -99,11 +118,13 @@ export const resetPrefetchDedup = (): void => {
 
 const fetchChapterMeta = async (
   chapterId: number,
-): Promise<{ branch_id?: number } | null> => {
+): Promise<{ branch_id?: number; index?: number } | null> => {
   try {
     const res = await fetch(REMANGA_CHAPTER_URL(chapterId));
     if (!res.ok) return null;
-    const body = (await res.json()) as { content?: { branch_id?: number } };
+    const body = (await res.json()) as {
+      content?: { branch_id?: number; index?: number };
+    };
     return body.content ?? null;
   } catch {
     return null;
@@ -112,9 +133,10 @@ const fetchChapterMeta = async (
 
 const fetchBranchChapters = async (
   branchId: number,
+  page: number = 1,
 ): Promise<BranchChapter[]> => {
   try {
-    const res = await fetch(REMANGA_BRANCH_LIST_URL(branchId));
+    const res = await fetch(REMANGA_BRANCH_LIST_URL(branchId, page));
     if (!res.ok) return [];
     const body = (await res.json()) as { content?: unknown };
     if (!Array.isArray(body.content)) return [];
@@ -149,11 +171,19 @@ export const prefetchNextChapter = async (
   prewarmedChapterIds.add(currentChapterId);
 
   const meta = await fetchChapterMeta(currentChapterId);
-  if (!meta || typeof meta.branch_id !== "number") return;
+  if (
+    !meta ||
+    typeof meta.branch_id !== "number" ||
+    typeof meta.index !== "number"
+  ) {
+    return;
+  }
 
-  const list = await fetchBranchChapters(meta.branch_id);
-  const nextId = findNextChapterId(list, currentChapterId);
-  if (nextId === null) return;
+  const nextIndex = meta.index + 1;
+  const page = computeBranchPageForIndex(nextIndex);
+  const list = await fetchBranchChapters(meta.branch_id, page);
+  const next = findChapterByIndex(list, nextIndex);
+  if (!next) return;
 
-  await prewarmChapter(nextId);
+  await prewarmChapter(next.id);
 };

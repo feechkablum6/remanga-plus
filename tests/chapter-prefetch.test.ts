@@ -164,14 +164,14 @@ test("prewarmChapter is silent on network failure", async () => {
 
 import { prefetchNextChapter, resetPrefetchDedup } from "../src/chapter-prefetch.js";
 
-test("prefetchNextChapter looks up branch, finds next, and prewarms it", async () => {
+test("prefetchNextChapter looks up branch by index ordering and prewarms next", async () => {
   resetPrefetchDedup();
   const head = installDomStub();
   const calls = installFetchStub({
     "https://api.remanga.org/api/titles/chapters/1915807/": {
-      content: { id: 1915807, branch_id: 48218, is_paid: false, pages: [] },
+      content: { id: 1915807, branch_id: 48218, index: 149, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=48218": {
+    "https://api.remanga.org/api/titles/chapters/?branch_id=48218&ordering=index&page=5": {
       content: [
         { id: 1915807, index: 149 },
         { id: 1915808, index: 150 },
@@ -187,8 +187,12 @@ test("prefetchNextChapter looks up branch, finds next, and prewarms it", async (
 
   await prefetchNextChapter("some-title", 1915807);
 
-  // 3 fetches: current chapter, branch list, next chapter
+  // 3 fetches: current chapter (meta), branch list (page 5 since index 149→150 falls into page ceil(150/30)=5), next chapter (preload)
   assert.equal(calls.length, 3);
+  assert.ok(
+    calls.some((u) => u.includes("ordering=index") && u.includes("page=5")),
+    "branch list URL must include ordering=index and the page derived from chapter index",
+  );
   // 1 image preload (from next chapter)
   const preloads = head.children.filter((n) => n.rel === "preload");
   assert.equal(preloads.length, 1);
@@ -199,9 +203,9 @@ test("prefetchNextChapter dedups repeated calls for the same chapterId", async (
   installDomStub();
   const calls = installFetchStub({
     "https://api.remanga.org/api/titles/chapters/100/": {
-      content: { branch_id: 1, is_paid: false, pages: [] },
+      content: { branch_id: 1, index: 1, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=1": {
+    "https://api.remanga.org/api/titles/chapters/?branch_id=1&ordering=index&page=1": {
       content: [{ id: 100, index: 1 }, { id: 101, index: 2 }],
     },
     "https://api.remanga.org/api/titles/chapters/101/": {
@@ -221,9 +225,9 @@ test("resetPrefetchDedup clears state when titleDir changes", async () => {
   installDomStub();
   const calls = installFetchStub({
     "https://api.remanga.org/api/titles/chapters/200/": {
-      content: { branch_id: 9, is_paid: false, pages: [] },
+      content: { branch_id: 9, index: 1, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=9": {
+    "https://api.remanga.org/api/titles/chapters/?branch_id=9&ordering=index&page=1": {
       content: [{ id: 200, index: 1 }, { id: 201, index: 2 }],
     },
     "https://api.remanga.org/api/titles/chapters/201/": {
@@ -244,9 +248,9 @@ test("prefetchNextChapter is a no-op on the last chapter", async () => {
   installDomStub();
   const calls = installFetchStub({
     "https://api.remanga.org/api/titles/chapters/300/": {
-      content: { branch_id: 5, is_paid: false, pages: [] },
+      content: { branch_id: 5, index: 1, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=5": {
+    "https://api.remanga.org/api/titles/chapters/?branch_id=5&ordering=index&page=1": {
       content: [{ id: 300, index: 1 }],
     },
   });
@@ -255,6 +259,33 @@ test("prefetchNextChapter is a no-op on the last chapter", async () => {
 
   // 2 fetches: current + branch list, no next
   assert.equal(calls.length, 2);
+});
+
+test("prefetchNextChapter computes correct page for chapter index 30 (boundary)", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  const calls = installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/500/": {
+      content: { branch_id: 7, index: 30, is_paid: false, pages: [] },
+    },
+    // index 31 lives on page 2 (ceil(31/30) = 2)
+    "https://api.remanga.org/api/titles/chapters/?branch_id=7&ordering=index&page=2": {
+      content: [{ id: 501, index: 31 }, { id: 502, index: 32 }],
+    },
+    "https://api.remanga.org/api/titles/chapters/501/": {
+      content: { is_paid: false, pages: [] },
+    },
+  });
+
+  await prefetchNextChapter("title-z", 500);
+
+  // Branch list URL must request page=2 (not page=1)
+  assert.ok(
+    calls.some((u) => u.includes("page=2")),
+    "branch list must request page=2 for chapter index 30→31",
+  );
+  // Should still find next and call prewarm
+  assert.equal(calls.length, 3);
 });
 
 test("prefetch fetches must NOT send credentials (api.remanga.org rejects credentialed CORS)", async () => {
