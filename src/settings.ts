@@ -14,6 +14,18 @@ export type ToolbarButtonKey =
 
 export type PopupSettingKey = "hints" | "giftsPromo" | "otherNonBlocking";
 
+export type HeaderButtonKey =
+  | "logo"
+  | "catalog"
+  | "tops"
+  | "forum"
+  | "ellipsis"
+  | "search"
+  | "bookmarks"
+  | "chat"
+  | "notifications"
+  | "avatar";
+
 export type ReaderEnhancerSettings = {
   hideHeader: boolean;
   hideRightRail: boolean;
@@ -29,18 +41,21 @@ export type ReaderEnhancerSettings = {
   hideToolbarButtons: Record<ToolbarButtonKey, boolean>;
   hideSettingsMenuItems: Record<SettingsMenuItemKey, boolean>;
   hidePopups: Record<PopupSettingKey, boolean>;
+  hideHeaderButtons: Record<HeaderButtonKey, boolean>;
+  hideHomeGameBanner: boolean;
 };
 
 type PartialSettings = Partial<
   Omit<
     ReaderEnhancerSettings,
-    "hideToolbarButtons" | "hidePopups" | "hideSettingsMenuItems"
+    "hideToolbarButtons" | "hidePopups" | "hideSettingsMenuItems" | "hideHeaderButtons"
   >
 > & {
   hideBuyChapterBanner?: boolean;
   hideToolbarButtons?: Partial<Record<ToolbarButtonKey, boolean>>;
   hideSettingsMenuItems?: Partial<Record<SettingsMenuItemKey, boolean>>;
   hidePopups?: Partial<Record<PopupSettingKey, boolean>>;
+  hideHeaderButtons?: Partial<Record<HeaderButtonKey, boolean>>;
 };
 
 const createDefaultSettingsMenuItems = (): Record<SettingsMenuItemKey, boolean> =>
@@ -75,6 +90,19 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
     giftsPromo: false,
     otherNonBlocking: false,
   },
+  hideHeaderButtons: {
+    logo: false,
+    catalog: false,
+    tops: false,
+    forum: false,
+    ellipsis: false,
+    search: false,
+    bookmarks: false,
+    chat: false,
+    notifications: false,
+    avatar: false,
+  },
+  hideHomeGameBanner: false,
 };
 
 export const cloneSettings = (
@@ -94,6 +122,8 @@ export const cloneSettings = (
   hideToolbarButtons: { ...settings.hideToolbarButtons },
   hideSettingsMenuItems: { ...settings.hideSettingsMenuItems },
   hidePopups: { ...settings.hidePopups },
+  hideHeaderButtons: { ...settings.hideHeaderButtons },
+  hideHomeGameBanner: settings.hideHomeGameBanner,
 });
 
 export const mergeSettings = (
@@ -135,6 +165,12 @@ export const mergeSettings = (
     ...DEFAULT_SETTINGS.hidePopups,
     ...partialSettings?.hidePopups,
   },
+  hideHeaderButtons: {
+    ...DEFAULT_SETTINGS.hideHeaderButtons,
+    ...partialSettings?.hideHeaderButtons,
+  },
+  hideHomeGameBanner:
+    partialSettings?.hideHomeGameBanner ?? DEFAULT_SETTINGS.hideHomeGameBanner,
 });
 
 const getStorageArea = (): chrome.storage.SyncStorageArea | null =>

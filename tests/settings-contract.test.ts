@@ -126,3 +126,48 @@ test("cloneSettings copies tightenChapterFeed", () => {
   const copy = cloneSettings(settings);
   assert.equal(copy.tightenChapterFeed, false);
 });
+
+test("DEFAULT_SETTINGS exposes hideHeaderButtons with all keys defaulting to false", () => {
+  assert.deepEqual(DEFAULT_SETTINGS.hideHeaderButtons, {
+    logo: false,
+    catalog: false,
+    tops: false,
+    forum: false,
+    ellipsis: false,
+    search: false,
+    bookmarks: false,
+    chat: false,
+    notifications: false,
+    avatar: false,
+  });
+});
+
+test("DEFAULT_SETTINGS exposes hideHomeGameBanner defaulting to false", () => {
+  assert.equal(DEFAULT_SETTINGS.hideHomeGameBanner, false);
+});
+
+test("mergeSettings merges partial hideHeaderButtons overrides", () => {
+  const merged = mergeSettings({
+    hideHeaderButtons: { forum: true, chat: true },
+  });
+  assert.equal(merged.hideHeaderButtons.forum, true);
+  assert.equal(merged.hideHeaderButtons.chat, true);
+  assert.equal(merged.hideHeaderButtons.logo, false);
+  assert.equal(merged.hideHeaderButtons.catalog, false);
+});
+
+test("mergeSettings respects explicit hideHomeGameBanner", () => {
+  const merged = mergeSettings({ hideHomeGameBanner: true });
+  assert.equal(merged.hideHomeGameBanner, true);
+
+  const def = mergeSettings({});
+  assert.equal(def.hideHomeGameBanner, false);
+});
+
+test("cloneSettings makes independent copy of hideHeaderButtons", () => {
+  const original = mergeSettings({ hideHeaderButtons: { forum: true } });
+  const copy = cloneSettings(original);
+  assert.equal(copy.hideHeaderButtons.forum, true);
+  copy.hideHeaderButtons.forum = false;
+  assert.equal(original.hideHeaderButtons.forum, true);
+});
