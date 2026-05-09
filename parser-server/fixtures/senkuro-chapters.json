@@ -1,0 +1,62 @@
+{
+  "data": {
+    "mangaChapters": {
+      "edges": [
+        {
+          "node": {
+            "id": "TUFOR0FfQ0hBUFRFUjoxNTYxNjIyMzA2Nzk3ODI5NTA",
+            "slug": "156162230679782950",
+            "number": "650",
+            "volume": "3",
+            "name": "Растущей раскол 2",
+            "branchId": "TUFOR0FfQlJBTkNIOjUxODE1ODA1NDA2NTAzMzA2"
+          }
+        },
+        {
+          "node": {
+            "id": "TUFOR0FfQ0hBUFRFUjoxNTQ5MzE1MjgzNTMyMDM3NTg",
+            "slug": "154931528353203758",
+            "number": "649",
+            "volume": "3",
+            "name": "Растущей раскол 1",
+            "branchId": "TUFOR0FfQlJBTkNIOjUxODE1ODA1NDA2NTAzMzA2"
+          }
+        },
+        {
+          "node": {
+            "id": "TUFOR0FfQ0hBUFRFUjoxNTM4NDg0NzU5NjI4NTI5MTI",
+            "slug": "153848475962852912",
+            "number": "648",
+            "volume": "3",
+            "name": "Игра 1",
+            "branchId": "TUFOR0FfQlJBTkNIOjUxODE1ODA1NDA2NTAzMzA2"
+          }
+        },
+        {
+          "node": {
+            "id": "TUFOR0FfQ0hBUFRFUjoxNTI1OTgwMjEzNTAxMTQ4NDg",
+            "slug": "152598021350114848",
+            "number": "647",
+            "volume": "3",
+            "name": "Битва между Главами Семей: V 4",
+            "branchId": "TUFOR0FfQlJBTkNIOjUxODE1ODA1NDA2NTAzMzA2"
+          }
+        },
+        {
+          "node": {
+            "id": "TUFOR0FfQ0hBUFRFUjoxNTE2ODI3OTI2MjU4MTcxMjA",
+            "slug": "151682792625817120",
+            "number": "646",
+            "volume": "3",
+            "name": "Битва между Главами Семей: V 3",
+            "branchId": "TUFOR0FfQlJBTkNIOjUxODE1ODA1NDA2NTAzMzA2"
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": null
+      }
+    }
+  }
+}

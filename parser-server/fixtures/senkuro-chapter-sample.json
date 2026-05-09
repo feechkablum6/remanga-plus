@@ -1,0 +1,50 @@
+{
+  "errors": [
+    {
+      "message": "Field \"pages\" of type \"MangaChapterPage\" must have a selection of subfields",
+      "locations": [
+        {
+          "line": 1,
+          "column": 120
+        }
+      ]
+    },
+    {
+      "message": "Unknown field \"frames\" on type \"MangaChapter\".",
+      "locations": [
+        {
+          "line": 1,
+          "column": 126
+        }
+      ]
+    },
+    {
+      "message": "Unknown field \"images\" on type \"MangaChapter\".",
+      "locations": [
+        {
+          "line": 1,
+          "column": 133
+        }
+      ]
+    },
+    {
+      "message": "Unknown field \"pageCount\" on type \"MangaChapter\".",
+      "locations": [
+        {
+          "line": 1,
+          "column": 140
+        }
+      ]
+    },
+    {
+      "message": "Unknown field \"publishedAt\" on type \"MangaChapter\".",
+      "locations": [
+        {
+          "line": 1,
+          "column": 150
+        }
+      ]
+    }
+  ],
+  "data": null
+}

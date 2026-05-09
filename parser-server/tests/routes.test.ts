@@ -308,6 +308,334 @@ describe('POST /api/chapters/resolve', () => {
   });
 });
 
+describe('POST /api/chapters/resolve — Senkuro fallback', () => {
+  const senkuroFixturesDir = path.resolve(process.cwd(), 'fixtures');
+  const senkuroSearch = JSON.parse(
+    fs.readFileSync(path.join(senkuroFixturesDir, 'senkuro-search.json'), 'utf8'),
+  );
+  const senkuroManga = JSON.parse(
+    fs.readFileSync(path.join(senkuroFixturesDir, 'senkuro-manga.json'), 'utf8'),
+  );
+  const senkuroChapters = JSON.parse(
+    fs.readFileSync(path.join(senkuroFixturesDir, 'senkuro-chapters.json'), 'utf8'),
+  );
+  const senkuroChapter = JSON.parse(
+    fs.readFileSync(path.join(senkuroFixturesDir, 'senkuro-chapter.json'), 'utf8'),
+  );
+
+  let app: FastifyInstance;
+  let tmpDir: string;
+  let originalFetch: typeof globalThis.fetch | undefined;
+  let senkuroCalls: number;
+  let mangabuffCalls: number;
+
+  const emptyMangabuffSearchHtml =
+    '<html><body><div class="cards"></div></body></html>';
+
+  const serveGraphql = (body: { query: string }): Response => {
+    const { query } = body;
+    if (/mangaChapters/.test(query)) {
+      return new Response(JSON.stringify(senkuroChapters), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (/\bmangaChapter\s*\(/.test(query)) {
+      return new Response(JSON.stringify(senkuroChapter), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (/\bmanga\s*\(/.test(query) && !/mangaChapter/.test(query)) {
+      return new Response(JSON.stringify(senkuroManga), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (/\bmangas\s*\(/.test(query)) {
+      return new Response(JSON.stringify(senkuroSearch), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ errors: [{ message: 'no match' }] }), {
+      status: 200,
+    });
+  };
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-fallback-'));
+    originalFetch = globalThis.fetch;
+    senkuroCalls = 0;
+    mangabuffCalls = 0;
+  });
+
+  afterEach(async () => {
+    if (app) await app.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    globalThis.fetch = originalFetch;
+  });
+
+  it('falls back from mangabuff (no_match) to senkuro and returns a senkuro success', async () => {
+    globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('mangabuff.ru')) {
+        mangabuffCalls += 1;
+        return new Response(emptyMangabuffSearchHtml, {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        });
+      }
+      if (url === 'https://api.senkuro.com/graphql') {
+        senkuroCalls += 1;
+        const body = JSON.parse(String(init?.body ?? '{}')) as { query: string };
+        return serveGraphql(body);
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof globalThis.fetch;
+
+    app = buildApp({
+      cacheDir: tmpDir,
+      host: '127.0.0.1',
+      port: 0,
+      titleOverrides: {},
+    } as never);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/chapters/resolve',
+      payload: {
+        remanga: {
+          titleDir: 'tower-of-god',
+          titleName: 'Башня Бога',
+          aliases: ['Tower of God'],
+          tome: 3,
+          chapter: '650',
+          chapterId: 99999,
+          chapterUrl: 'https://remanga.org/manga/tower-of-god/99999?page=1',
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as {
+      status: string;
+      provider: string;
+      matchedTitle: { slug: string };
+      matchedChapter: { chapter: string; volume: number };
+      manualUrl: string;
+      totalPages: number;
+    };
+    assert.equal(body.status, 'success');
+    assert.equal(body.provider, 'senkuro');
+    assert.equal(body.matchedTitle.slug, 'tower-of-god');
+    assert.equal(body.matchedChapter.chapter, '650');
+    assert.equal(body.matchedChapter.volume, 3);
+    assert.equal(body.totalPages, 8);
+    assert.ok(body.manualUrl.startsWith('https://senkuro.com/manga/tower-of-god/'));
+    assert.ok(senkuroCalls >= 3, `senkuro was called ${senkuroCalls} times`);
+    assert.ok(mangabuffCalls >= 1, 'mangabuff should have been tried first');
+  });
+
+  it('does not call senkuro when mangabuff already returned a success', async () => {
+    globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('api.senkuro.com')) {
+        senkuroCalls += 1;
+        const body = JSON.parse(String(init?.body ?? '{}')) as { query: string };
+        return serveGraphql(body);
+      }
+      if (url.startsWith('https://mangabuff.ru/search?type=manga&q=')) {
+        return new Response(searchHtml, {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        });
+      }
+      if (url === 'https://mangabuff.ru/manga/vozvrashchenie-eretika') {
+        return new Response(titleHtml, {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        });
+      }
+      if (url === 'https://mangabuff.ru/manga/vozvrashchenie-eretika/3/148') {
+        return new Response(chapterHtml, {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        });
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof globalThis.fetch;
+
+    app = buildApp({
+      cacheDir: tmpDir,
+      host: '127.0.0.1',
+      port: 0,
+      titleOverrides: {},
+    } as never);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/chapters/resolve',
+      payload: {
+        remanga: {
+          titleDir: 'the-return-of-the-immortals_',
+          titleName: 'Возвращение Еретика',
+          aliases: [
+            'The Return of the Immortals',
+            "Chronicles Of The Martial God's Return",
+          ],
+          tome: 3,
+          chapter: '148',
+          chapterId: 1910899,
+          chapterUrl:
+            'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as { provider: string };
+    assert.equal(body.provider, 'mangabuff');
+    assert.equal(senkuroCalls, 0, 'senkuro must not be called on mangabuff success');
+  });
+});
+
+describe('POST /api/chapters/resolve — InkStory fallback', () => {
+  const inkstoryFixturesDir = path.resolve(process.cwd(), 'fixtures/inkstory');
+  const inkSearch = JSON.parse(
+    fs.readFileSync(path.join(inkstoryFixturesDir, 'api-search.json'), 'utf8'),
+  );
+  const inkBook = JSON.parse(
+    fs.readFileSync(path.join(inkstoryFixturesDir, 'api-book.json'), 'utf8'),
+  );
+  const inkBranches = JSON.parse(
+    fs.readFileSync(path.join(inkstoryFixturesDir, 'api-branches.json'), 'utf8'),
+  );
+  const inkChapters = JSON.parse(
+    fs.readFileSync(path.join(inkstoryFixturesDir, 'api-chapters.json'), 'utf8'),
+  );
+  const inkChapter = JSON.parse(
+    fs.readFileSync(path.join(inkstoryFixturesDir, 'api-chapter.json'), 'utf8'),
+  );
+
+  let app: FastifyInstance;
+  let tmpDir: string;
+  let originalFetch: typeof globalThis.fetch | undefined;
+  let inkstoryCalls: number;
+
+  const emptyHtml = '<html><body><div class="cards"></div></body></html>';
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-inkstory-'));
+    originalFetch = globalThis.fetch;
+    inkstoryCalls = 0;
+  });
+
+  afterEach(async () => {
+    if (app) await app.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    globalThis.fetch = originalFetch;
+  });
+
+  it('falls through mangabuff and senkuro, then reads a chapter via InkStory API', async () => {
+    // Solo Leveling: mangabuff empty, senkuro empty, inkstory success.
+    // We use chapter #200 from api-chapter.json fixture.
+    globalThis.fetch = (async (input: string | URL) => {
+      const url = String(input);
+      if (url.includes('mangabuff.ru')) {
+        return new Response(emptyHtml, {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+        });
+      }
+      if (url === 'https://api.senkuro.com/graphql') {
+        // return empty search, nothing else matters
+        return new Response(
+          JSON.stringify({ data: { mangas: { edges: [] } } }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.startsWith('https://api.inkstory.net/')) {
+        inkstoryCalls += 1;
+        if (url.includes('/v2/books?search=')) {
+          return new Response(JSON.stringify(inkSearch), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (/\/v2\/books\/[^?]+$/.test(url)) {
+          return new Response(JSON.stringify(inkBook), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (url.includes('/v2/branches?book=')) {
+          return new Response(JSON.stringify(inkBranches), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (url.includes('/v2/chapters?bookId=')) {
+          return new Response(JSON.stringify(inkChapters), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (/\/v2\/chapters\/[a-f0-9-]+/.test(url)) {
+          return new Response(JSON.stringify(inkChapter), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof globalThis.fetch;
+
+    app = buildApp({
+      cacheDir: tmpDir,
+      host: '127.0.0.1',
+      port: 0,
+      titleOverrides: {},
+    } as never);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/chapters/resolve',
+      payload: {
+        remanga: {
+          titleDir: 'solo-leveling',
+          titleName: 'Поднятие уровня в одиночку',
+          aliases: ['Solo Leveling'],
+          // volume intentionally omitted: InkStory and remanga can number volumes
+          // differently across branches; the resolver falls back to first chapter
+          // match by number when tome is not set.
+          chapter: '200',
+          chapterId: 777777,
+          chapterUrl: 'https://remanga.org/manga/solo-leveling/777777',
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as {
+      status: string;
+      provider: string;
+      matchedTitle: { slug: string };
+      matchedChapter: { chapter: string; volume: number };
+      manualUrl: string;
+    };
+    assert.equal(body.status, 'success');
+    assert.equal(body.provider, 'inkstory');
+    assert.equal(body.matchedTitle.slug, 'solo-leveling');
+    assert.equal(body.matchedChapter.chapter, '200');
+    assert.ok(body.manualUrl.startsWith('https://inkstory.net/content/solo-leveling/'));
+    assert.ok(inkstoryCalls >= 4, `inkstory should have been called ≥4 times (search/book/branches/chapters/chapter)`);
+  });
+});
+
 describe('GET /health', () => {
   let app: FastifyInstance;
 

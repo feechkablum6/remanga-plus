@@ -1,0 +1,56 @@
+{
+  "data": {
+    "manga": {
+      "id": "TUFOR0E6NTE4MTU4MDU0MDY0Mzc3NzA",
+      "slug": "tower-of-god",
+      "status": "ONGOING",
+      "type": "MANHWA",
+      "cover": {
+        "original": {
+          "url": "https://mirai.senkuro.net/manga/51815805406437770/covers/2d224aa40a659baedcc29e4149b5c05b64201e2f_222899107394504211.jpeg",
+          "width": 700,
+          "height": 1000
+        }
+      },
+      "originalName": {
+        "lang": "EN",
+        "content": "Tower of God"
+      },
+      "titles": [
+        {
+          "lang": "EN",
+          "content": "Tower of God"
+        },
+        {
+          "lang": "RU",
+          "content": "Башня Бога"
+        },
+        {
+          "lang": "JA",
+          "content": "신의 탑"
+        }
+      ],
+      "alternativeNames": [
+        {
+          "lang": "EN",
+          "content": "Sin-ui Tap"
+        },
+        {
+          "lang": "EN",
+          "content": "Kami no Tou"
+        },
+        {
+          "lang": "KO",
+          "content": "Kami no Tou: Tower of God"
+        }
+      ],
+      "branches": [
+        {
+          "id": "TUFOR0FfQlJBTkNIOjUxODE1ODA1NDA2NTAzMzA2",
+          "lang": "RU",
+          "chapters": 651
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "Manga": {
+    "id": "scalar (ID)",
+    "slug": "scalar (String)",
+    "cover": "OK (null probably)",
+    "coverImage": "MISSING",
+    "image": "MISSING",
+    "status": "scalar (MangaStatus)",
+    "type": "scalar (MangaType)",
+    "kind": "MISSING",
+    "rating": "scalar (MangaRating)",
+    "description": "MISSING",
+    "originalName": "OK (null probably)",
+    "russianName": "MISSING",
+    "englishName": "MISSING",
+    "genres": "MISSING",
+    "tags": "MISSING",
+    "branches": "OK (null probably)",
+    "titles": "OK (null probably)",
+    "releaseYear": "MISSING",
+    "publishedAt": "MISSING",
+    "createdAt": "scalar (NaiveDateTime)",
+    "updatedAt": "scalar (NaiveDateTime)"
+  },
+  "Branch": {
+    "id": "scalar (ID)",
+    "slug": "MISSING",
+    "name": "MISSING",
+    "team": "MISSING",
+    "translator": "MISSING",
+    "chapters": "scalar (Int)",
+    "chaptersCount": "MISSING",
+    "lang": "scalar (LanguageCode)",
+    "language": "MISSING"
+  },
+  "Title": {
+    "lang": "scalar (LanguageCode)",
+    "language": "MISSING",
+    "text": "MISSING",
+    "name": "MISSING",
+    "title": "MISSING",
+    "content": "scalar (String)"
+  },
+  "Chapter": {
+    "id": "MISSING",
+    "number": "MISSING",
+    "volume": "MISSING",
+    "chapter": "MISSING",
+    "name": "MISSING",
+    "title": "MISSING",
+    "slug": "MISSING",
+    "pages": "MISSING",
+    "pageCount": "MISSING",
+    "publishedAt": "MISSING",
+    "createdAt": "MISSING",
+    "updatedAt": "MISSING",
+    "translator": "MISSING",
+    "team": "MISSING",
+    "branch": "MISSING",
+    "frames": "MISSING",
+    "images": "MISSING"
+  },
+  "mangasEdgesNodeProbe": {
+    "data": {
+      "mangas": {
+        "edges": [
+          {
+            "node": {
+              "__typename": "Manga",
+              "slug": "tower-of-god",
+              "id": "TUFOR0E6NTE4MTU4MDU0MDY0Mzc3NzA"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

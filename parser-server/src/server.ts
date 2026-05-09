@@ -5,7 +5,10 @@ import {
   type TitleOverride,
 } from "./config.js";
 import { FileCache } from "./cache/file-cache.js";
+import { HttpClient } from "./http/client.js";
+import { InkstoryProvider } from "./providers/inkstory.js";
 import { MangabuffProvider } from "./providers/mangabuff.js";
+import { SenkuroProvider } from "./providers/senkuro.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { registerChapterResolveRoute } from "./routes/chapters.js";
 import { registerImagesRoute } from "./routes/images.js";
@@ -45,8 +48,11 @@ export function buildApp(config: AppConfig) {
   const imageMap = new Map<string, { provider: string; imageRef: string }>();
 
   // Setup providers
+  const httpClient = new HttpClient({ fetchImpl: config.fetchImpl });
   const registry = new ProviderRegistry();
-  registry.register(new MangabuffProvider(config.fetchImpl));
+  registry.register(new MangabuffProvider(httpClient));
+  registry.register(new SenkuroProvider(httpClient));
+  registry.register(new InkstoryProvider(httpClient));
 
   // Setup cache
   const cache = new FileCache(config.cacheDir);

@@ -178,3 +178,205 @@ describe('resolveExternalChapter', () => {
     });
   });
 });
+
+describe('resolveExternalChapter cross-provider fallback', () => {
+  const remanga = {
+    titleDir: 'the-return-of-the-immortals_',
+    titleName: 'Возвращение Еретика',
+    aliases: [],
+    tome: 3,
+    chapter: '148',
+    chapterId: 1910899,
+    chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+  };
+
+  const makeSuccessProvider = (name: string) => ({
+    name,
+    async searchTitles() {
+      return [
+        {
+          titleId: 't-ok',
+          slug: 't-ok',
+          titleName: 'Возвращение Еретика',
+          titleUrl: `https://${name}.example/t-ok`,
+        },
+      ];
+    },
+    async getTitleDetails(titleRef: string) {
+      return {
+        titleId: titleRef,
+        slug: titleRef,
+        titleName: 'Возвращение Еретика',
+        titleUrl: `https://${name}.example/${titleRef}`,
+        aliases: [],
+        chapters: [
+          {
+            chapterId: '3-148',
+            titleId: titleRef,
+            chapter: '148',
+            volume: 3,
+            chapterUrl: `https://${name}.example/${titleRef}/3/148`,
+          },
+        ],
+      };
+    },
+    async parseChapter(chapterRef: string) {
+      return {
+        chapterId: '500061',
+        titleId: 't-ok',
+        chapter: '148',
+        volume: 3,
+        chapterUrl: chapterRef,
+        pages: [{ index: 0, imageRef: `https://${name}.example/img/1.jpg` }],
+      };
+    },
+  });
+
+  const makeNoMatchProvider = (name: string) => ({
+    name,
+    async searchTitles() {
+      return [];
+    },
+    async getTitleDetails() {
+      throw new Error(`${name}.getTitleDetails should not be reached`);
+    },
+    async parseChapter() {
+      throw new Error(`${name}.parseChapter should not be reached`);
+    },
+  });
+
+  const makeThrowingProvider = (name: string) => ({
+    name,
+    async searchTitles() {
+      throw new Error(`${name} is offline`);
+    },
+    async getTitleDetails() {
+      throw new Error(`${name}.getTitleDetails should not be reached`);
+    },
+    async parseChapter() {
+      throw new Error(`${name}.parseChapter should not be reached`);
+    },
+  });
+
+  it('skips provider_error and no_match, then returns success from the third provider', async () => {
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (
+      module as Record<string, unknown>
+    ).resolveExternalChapter as (args: unknown) => Promise<unknown>;
+
+    const providerA = makeThrowingProvider('source-a');
+    const providerB = makeNoMatchProvider('source-b');
+    const providerC = makeSuccessProvider('source-c');
+
+    const result = (await resolveExternalChapter({
+      remanga,
+      providers: [providerA, providerB, providerC],
+      providerPriority: ['source-a', 'source-b', 'source-c'],
+      titleOverrides: {},
+    })) as { status: string; provider: string };
+
+    assert.equal(result.status, 'success');
+    assert.equal(result.provider, 'source-c');
+  });
+
+  it('returns aggregated no_match failure when all providers return empty search results', async () => {
+    // Tie-breaker rationale: all providers tie on no_match. We keep the FIRST
+    // provider's failure (source-a), because its manualUrl is the search URL
+    // the user most likely wants to open — priority order already expresses
+    // "which source the user trusts most".
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (
+      module as Record<string, unknown>
+    ).resolveExternalChapter as (args: unknown) => Promise<unknown>;
+
+    const result = (await resolveExternalChapter({
+      remanga,
+      providers: [
+        makeNoMatchProvider('source-a'),
+        makeNoMatchProvider('source-b'),
+        makeNoMatchProvider('source-c'),
+      ],
+      providerPriority: ['source-a', 'source-b', 'source-c'],
+      titleOverrides: {},
+    })) as { status: string; reason: string; provider: string };
+
+    assert.equal(result.status, 'failure');
+    assert.equal(result.reason, 'no_match');
+    assert.equal(result.provider, 'source-a');
+  });
+
+  it('does not short-circuit on provider_error when a later provider can succeed', async () => {
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (
+      module as Record<string, unknown>
+    ).resolveExternalChapter as (args: unknown) => Promise<unknown>;
+
+    const result = (await resolveExternalChapter({
+      remanga,
+      providers: [makeThrowingProvider('source-a'), makeSuccessProvider('source-b')],
+      providerPriority: ['source-a', 'source-b'],
+      titleOverrides: {},
+    })) as { status: string; provider: string };
+
+    assert.equal(result.status, 'success');
+    assert.equal(result.provider, 'source-b');
+  });
+
+  it('failure carries manualUrl from the provider that produced the recorded failure', async () => {
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (
+      module as Record<string, unknown>
+    ).resolveExternalChapter as (args: unknown) => Promise<unknown>;
+
+    const providerA = {
+      ...makeThrowingProvider('source-a'),
+      manualSearchUrl(query: string) {
+        return `https://a.example/search?q=${encodeURIComponent(query)}`;
+      },
+    };
+    const providerB = {
+      ...makeNoMatchProvider('source-b'),
+      manualSearchUrl(query: string) {
+        return `https://b.example/search?q=${encodeURIComponent(query)}`;
+      },
+    };
+
+    const result = (await resolveExternalChapter({
+      remanga,
+      providers: [providerA, providerB],
+      providerPriority: ['source-a', 'source-b'],
+      titleOverrides: {},
+    })) as { status: string; reason: string; provider: string; manualUrl: string };
+
+    assert.equal(result.status, 'failure');
+    assert.equal(result.reason, 'no_match');
+    assert.equal(result.provider, 'source-b');
+    assert.equal(
+      result.manualUrl,
+      `https://b.example/search?q=${encodeURIComponent(remanga.titleName)}`,
+    );
+  });
+
+  it('falls back to a non-empty manualUrl when provider does not implement manualSearchUrl', async () => {
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (
+      module as Record<string, unknown>
+    ).resolveExternalChapter as (args: unknown) => Promise<unknown>;
+
+    const providerWithoutMethod = makeNoMatchProvider('source-legacy');
+
+    const result = (await resolveExternalChapter({
+      remanga,
+      providers: [providerWithoutMethod],
+      providerPriority: ['source-legacy'],
+      titleOverrides: {},
+    })) as { status: string; reason: string; provider: string; manualUrl: string };
+
+    assert.equal(result.status, 'failure');
+    assert.equal(result.provider, 'source-legacy');
+    assert.ok(
+      result.manualUrl && result.manualUrl.length > 0,
+      'manualUrl must be non-empty even without manualSearchUrl method',
+    );
+  });
+});

@@ -1,0 +1,108 @@
+{
+  "data": {
+    "mangaChapter": {
+      "id": "TUFOR0FfQ0hBUFRFUjoxNTYxNjIyMzA2Nzk3ODI5NTA",
+      "slug": "156162230679782950",
+      "number": "650",
+      "volume": "3",
+      "name": "Растущей раскол 2",
+      "manga": {
+        "slug": "tower-of-god"
+      },
+      "branch": {
+        "id": "TUFOR0FfQlJBTkNIOjUxODE1ODA1NDA2NTAzMzA2",
+        "lang": "RU"
+      },
+      "pages": [
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY3OTg0ODQ4Ng",
+          "number": 1,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/0d9817c9b4e6971a74bc6dc04f8289026ec83a48_167650435610472781.jpeg",
+              "width": 690,
+              "height": 23488
+            }
+          }
+        },
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY3OTkxNDAyMg",
+          "number": 2,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/5d5080c5c2bb1f7bb62c0b202338641d89522228_167650443931971917.jpeg",
+              "width": 690,
+              "height": 24168
+            }
+          }
+        },
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY3OTk3OTU1OA",
+          "number": 3,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/b4ea346ae0a9a620c2601c7e29cf9f8ca2316732_167650451313946957.jpeg",
+              "width": 690,
+              "height": 22743
+            }
+          }
+        },
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY4MDA0NTA5NA",
+          "number": 4,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/77c20fd5629c8983054ca4d80e5d597c41382074_167650459635446093.jpeg",
+              "width": 690,
+              "height": 24000
+            }
+          }
+        },
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY4MDExMDYzMA",
+          "number": 5,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/d3bf147e19c026d798b6d952ead0c4584fc3c128_167650480590188877.jpeg",
+              "width": 690,
+              "height": 18188
+            }
+          }
+        },
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY4MDE3NjE2Ng",
+          "number": 6,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/2fe54d71a87ca3ea50666664613d88e3fa6b36e0_167650490388083021.jpeg",
+              "width": 690,
+              "height": 21727
+            }
+          }
+        },
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY4MDI0MTcwMg",
+          "number": 7,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/e897ca90c0db6c2830ae87d3d5319e0860380479_167650498374037837.jpeg",
+              "width": 690,
+              "height": 18845
+            }
+          }
+        },
+        {
+          "id": "TUFOR0FfQ0hBUFRFUl9QQUdFOjE1NjE2MjIzMDY4MDMwNzIzOA",
+          "number": 8,
+          "image": {
+            "original": {
+              "url": "https://mirai.senkuro.net/manga-chapters/51815805406437770/51815805406503306/64dbc4f3d95fcbe305f2aaa33a67f5a77f0cc763_167650510336192845.jpeg",
+              "width": 690,
+              "height": 22759
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "data": {
+    "mangas": {
+      "edges": [
+        {
+          "node": {
+            "id": "TUFOR0E6NTE4MTU4MDU0MDY0Mzc3NzA",
+            "slug": "tower-of-god",
+            "status": "ONGOING",
+            "type": "MANHWA",
+            "titles": [
+              {
+                "lang": "EN",
+                "content": "Tower of God"
+              },
+              {
+                "lang": "RU",
+                "content": "Башня Бога"
+              },
+              {
+                "lang": "JA",
+                "content": "신의 탑"
+              }
+            ],
+            "originalName": {
+              "__typename": "I18nTitle"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "character": "https://static.inuko.me/book/4fe5dc17-e2d0-417c-8224-034a7c6bdb44/character-animation/44e486ce-630a-4d3f-9f80-349313fd8bb9.png",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+  "animation": [
+    {
+      "source": "https://static.inuko.me/book/4fe5dc17-e2d0-417c-8224-034a7c6bdb44/character-animation/8f1d4b3d-f380-4fd6-9182-472a072ac1ab.webm",
+      "type": "video/webm"
+    },
+    {
+      "source": "https://static.inuko.me/book/4fe5dc17-e2d0-417c-8224-034a7c6bdb44/character-animation/1247ee3d-32a8-4406-bdfa-e5b1b432875f.mov",
+      "type": "video/quicktime"
+    }
+  ]
+}

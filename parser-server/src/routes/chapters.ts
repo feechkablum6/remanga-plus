@@ -6,6 +6,7 @@ import type { RemangaChapterReference } from "../providers/provider.interface.js
 
 interface ResolveBody {
   remanga?: RemangaChapterReference;
+  forcedBranchId?: string;
 }
 
 const getStatusCode = (reason: string): number => {
@@ -36,11 +37,17 @@ export function registerChapterResolveRoute(
       return reply.code(400).send({ error: "Missing required field: remanga" });
     }
 
+    const forcedBranchId =
+      typeof request.body?.forcedBranchId === "string" && request.body.forcedBranchId.length > 0
+        ? request.body.forcedBranchId
+        : undefined;
+
     const result = await resolveExternalChapter({
       remanga,
       providers: registry.getAll(),
       providerPriority,
       titleOverrides,
+      ...(forcedBranchId ? { forcedBranchId } : {}),
     });
 
     if (result.status === "failure") {
@@ -67,6 +74,8 @@ export function registerChapterResolveRoute(
         index: page.index,
         proxyUrl: `/api/images/${result.provider}:${result.matchedChapter.chapterId}:${page.index}`,
       })),
+      ...(result.branches ? { branches: result.branches } : {}),
+      ...(result.selectedBranchId ? { selectedBranchId: result.selectedBranchId } : {}),
     });
   });
 }

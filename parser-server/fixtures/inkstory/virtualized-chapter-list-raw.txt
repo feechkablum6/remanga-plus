@@ -1,0 +1,1 @@
+{"defaultBranchId":[0],"isWebtoon":[0,true],"contentNotices":[1,[]],"slot":[0,"chapters"],"bookId":[0,"4fe5dc17-e2d0-417c-8224-034a7c6bdb44"],"type":[0,"COMIC"]}

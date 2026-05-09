@@ -36,6 +36,12 @@ export interface SourceChapterReference {
   chapterUrl: string;
 }
 
+export interface SourceTitleBranch {
+  id: string;
+  name: string;
+  chaptersCount: number;
+}
+
 export interface SourceTitleDetails {
   titleId: string;
   slug: string;
@@ -43,6 +49,23 @@ export interface SourceTitleDetails {
   titleUrl: string;
   aliases: string[];
   chapters: SourceChapterReference[];
+  /**
+   * All readable translation branches available for this title, if the source
+   * supports multiple (e.g. InkStory). Undefined when the source has no such
+   * concept (Mangabuff, Senkuro-single-branch). Callers MAY render a UI picker
+   * when `branches.length > 1`.
+   */
+  branches?: SourceTitleBranch[];
+  /**
+   * The id of the branch whose chapters are listed in `chapters`. Only
+   * meaningful when `branches` is non-empty.
+   */
+  selectedBranchId?: string;
+}
+
+export interface TitleDetailsOptions {
+  /** If set, the provider MUST use this branch id instead of its default pick. */
+  forcedBranchId?: string;
 }
 
 export interface ExternalChapterPage {
@@ -83,6 +106,8 @@ export interface ExternalResolveSuccess {
   } | null;
   totalPages: number;
   pages: ExternalChapterPage[];
+  branches?: SourceTitleBranch[];
+  selectedBranchId?: string;
 }
 
 export interface ExternalResolveFailure {
@@ -98,14 +123,15 @@ export interface SourceProvider {
   name: string;
   canHandle?(url: string): boolean;
   searchTitles?(query: string): Promise<SourceTitleSearchResult[]>;
-  getTitleDetails?(titleRef: string): Promise<SourceTitleDetails>;
+  getTitleDetails?(titleRef: string, options?: TitleDetailsOptions): Promise<SourceTitleDetails>;
+  manualSearchUrl?(query: string): string;
   parseChapter(chapterRef: string): Promise<Chapter | ExternalChapterParseResult>;
   fetchImage(imageRef: string): Promise<Buffer>;
 }
 
 export interface ExternalSourceProvider extends SourceProvider {
   searchTitles(query: string): Promise<SourceTitleSearchResult[]>;
-  getTitleDetails(titleRef: string): Promise<SourceTitleDetails>;
+  getTitleDetails(titleRef: string, options?: TitleDetailsOptions): Promise<SourceTitleDetails>;
   parseChapter(chapterRef: string): Promise<ExternalChapterParseResult>;
 }
 

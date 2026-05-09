@@ -1,0 +1,12 @@
+{
+  "id": "scalar(ID)",
+  "slug": "scalar(String)",
+  "number": "scalar(String)",
+  "volume": "scalar(String)",
+  "name": "scalar(String)",
+  "pages": "OK {\"mangaChapters\":{\"edges\":[{\"node\":{\"pages\":[{\"__typename\":\"MangaChapterPage\"},{\"__typename\":\"MangaChapterPage\"},{\"__typename\":\"MangaChapterPage\"},{\"__typename\":\"MangaChapterPage\"},{\"__typename\":\"Mang",
+  "createdAt": "scalar(NaiveDateTime)",
+  "updatedAt": "scalar(NaiveDateTime)",
+  "branch": "OK {\"mangaChapters\":{\"edges\":[{\"node\":{\"branch\":{\"__typename\":\"MangaBranch\"}}}]}}",
+  "branchId": "scalar(ID)"
+}

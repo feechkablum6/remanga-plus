@@ -1,0 +1,338 @@
+{
+  "err-field-foo": {
+    "query": "{ foo }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown field \"foo\" on type \"Query\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-manga-no-args": {
+    "query": "{ manga { __typename } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Field \"manga\" argument \"slug\" of type \"Query\" is required but not provided",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-mangas-fields": {
+    "query": "{ mangas { __typename } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "You must provide a `first` or `last` value to properly paginate the connection.",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ],
+          "path": [
+            "mangas"
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-manga-id-field": {
+    "query": "{ manga(slug: \"x\") { id } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "manga": null
+      }
+    }
+  },
+  "err-manga-typename": {
+    "query": "{ manga(slug: \"x\") { __typename } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "manga": null
+      }
+    }
+  },
+  "err-mangas-edges": {
+    "query": "{ mangas { edges { __typename } } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "You must provide a `first` or `last` value to properly paginate the connection.",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ],
+          "path": [
+            "mangas"
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-mangas-nodes": {
+    "query": "{ mangas { nodes { __typename } } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown field \"nodes\" on type \"MangaConnection\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 12
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-mangas-pageInfo": {
+    "query": "{ mangas { pageInfo { __typename } } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "You must provide a `first` or `last` value to properly paginate the connection.",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ],
+          "path": [
+            "mangas"
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-mangas-search-arg": {
+    "query": "{ mangas(search: \"tower\") { __typename } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "You must provide a `first` or `last` value to properly paginate the connection.",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ],
+          "path": [
+            "mangas"
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-mangas-query-arg": {
+    "query": "{ mangas(query: \"tower\") { __typename } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown argument \"query\" on field \"mangas\" of type \"Query\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 10
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-mangas-title-arg": {
+    "query": "{ mangas(title: \"tower\") { __typename } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown argument \"title\" on field \"mangas\" of type \"Query\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 10
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-chapters-field": {
+    "query": "{ chapters { __typename } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown field \"chapters\" on type \"Query\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-chapterPages-field": {
+    "query": "{ chapterPages { __typename } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown field \"chapterPages\" on type \"Query\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 3
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-chapter-manga": {
+    "query": "{ manga(slug: \"x\") { chapters { __typename } } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Field \"chapters\" must not have a selection since type \"Int\" has no subfields",
+          "locations": [
+            {
+              "line": 1,
+              "column": 22
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-chapter-branches": {
+    "query": "{ manga(slug: \"x\") { branches { __typename } } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "manga": null
+      }
+    }
+  },
+  "err-manga-altNames": {
+    "query": "{ manga(slug: \"x\") { altNames { __typename } } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown field \"altNames\" on type \"Manga\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 22
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-manga-titles": {
+    "query": "{ manga(slug: \"x\") { titles { __typename } } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "manga": null
+      }
+    }
+  },
+  "err-manga-names": {
+    "query": "{ manga(slug: \"x\") { names { __typename } } }",
+    "status": 200,
+    "json": {
+      "errors": [
+        {
+          "message": "Unknown field \"names\" on type \"Manga\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 22
+            }
+          ]
+        }
+      ],
+      "data": null
+    }
+  },
+  "err-Manga-type": {
+    "query": "{ __type(name: \"Manga\") { name fields { name } } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "__type": null
+      }
+    }
+  },
+  "err-MangaConnection-type": {
+    "query": "{ __type(name: \"MangaConnection\") { name fields { name } } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "__type": null
+      }
+    }
+  },
+  "err-Chapter-type": {
+    "query": "{ __type(name: \"Chapter\") { name fields { name } } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "__type": null
+      }
+    }
+  },
+  "err-Query-type": {
+    "query": "{ __type(name: \"Query\") { name fields { name args { name } } } }",
+    "status": 200,
+    "json": {
+      "data": {
+        "__type": null
+      }
+    }
+  }
+}

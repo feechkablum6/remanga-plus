@@ -1,3 +1,4 @@
+import { HttpClient } from "../http/client.js";
 import type {
   ExternalChapterParseResult,
   ExternalSourceProvider,
@@ -6,6 +7,15 @@ import type {
 } from "./provider.interface.js";
 
 const MANGABUFF_BASE_URL = "https://mangabuff.ru";
+
+const isHttpClient = (value: unknown): value is HttpClient =>
+  value instanceof HttpClient;
+
+const coerceHttpClient = (value: typeof fetch | HttpClient | undefined): HttpClient => {
+  if (!value) return new HttpClient();
+  if (isHttpClient(value)) return value;
+  return new HttpClient({ fetchImpl: value });
+};
 
 const decodeHtmlEntities = (value: string): string =>
   value
@@ -128,16 +138,23 @@ export function extractMangabuffChapterPages(
 
 export class MangabuffProvider implements ExternalSourceProvider {
   name = "mangabuff";
+  private readonly http: HttpClient;
+  private readonly baseUrl: string;
 
   constructor(
-    private readonly fetchImpl: typeof fetch = fetch,
-    private readonly baseUrl: string = MANGABUFF_BASE_URL,
-  ) {}
+    httpOrFetch: typeof fetch | HttpClient = fetch,
+    baseUrl: string = MANGABUFF_BASE_URL,
+  ) {
+    this.http = coerceHttpClient(httpOrFetch);
+    this.baseUrl = baseUrl;
+  }
+
+  manualSearchUrl(query: string): string {
+    return `${this.baseUrl}/search?type=manga&q=${encodeURIComponent(query)}`;
+  }
 
   async searchTitles(query: string): Promise<SourceTitleSearchResult[]> {
-    const response = await this.fetchHtml(
-      `${this.baseUrl}/search?type=manga&q=${encodeURIComponent(query)}`,
-    );
+    const response = await this.fetchHtml(this.manualSearchUrl(query));
     return extractMangabuffSearchResults(response);
   }
 
@@ -158,7 +175,7 @@ export class MangabuffProvider implements ExternalSourceProvider {
   }
 
   async fetchImage(imageRef: string): Promise<Buffer> {
-    const response = await this.fetchImpl(imageRef);
+    const response = await this.http.request(imageRef);
     if (!response.ok) {
       throw new Error(`Mangabuff image fetch failed: ${response.status}`);
     }
@@ -167,7 +184,7 @@ export class MangabuffProvider implements ExternalSourceProvider {
   }
 
   private async fetchHtml(url: string): Promise<string> {
-    const response = await this.fetchImpl(url);
+    const response = await this.http.request(url);
     if (!response.ok) {
       throw new Error(`Mangabuff request failed: ${response.status}`);
     }

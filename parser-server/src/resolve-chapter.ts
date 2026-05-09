@@ -15,6 +15,13 @@ export interface ResolveExternalChapterArgs {
   providers: readonly SourceProvider[];
   providerPriority: readonly string[];
   titleOverrides: Record<string, TitleOverride>;
+  /**
+   * Optional: force the provider's branch pick to this branch id. Only applies
+   * to the matched provider; ignored by providers that don't have a branch
+   * concept. Clients persist this per-title when the user picks a non-default
+   * translation team.
+   */
+  forcedBranchId?: string;
 }
 
 const normalize = (value: string): string =>
@@ -116,6 +123,8 @@ const createSuccessResult = (
       : null,
     totalPages: parsedChapter.pages.length,
     pages: parsedChapter.pages,
+    ...(details.branches ? { branches: details.branches } : {}),
+    ...(details.selectedBranchId ? { selectedBranchId: details.selectedBranchId } : {}),
   };
 };
 
@@ -130,11 +139,35 @@ const createFailureResult = (
   manualUrl,
 });
 
+// Higher rank = more informative failure. chapter_not_found means we found
+// the title but the requested chapter is missing (most actionable), no_match
+// means we couldn't confirm the title at all, provider_error is the least
+// specific (upstream transport failure).
+const failureRank = (reason: ExternalResolveFailure["reason"]): number => {
+  if (reason === "chapter_not_found") return 2;
+  if (reason === "no_match") return 1;
+  return 0;
+};
+
+const resolveManualSearchUrl = (
+  provider: SourceProvider,
+  query: string,
+): string => provider.manualSearchUrl?.(query) ?? buildSearchUrl(query);
+
 export async function resolveExternalChapter(
   args: ResolveExternalChapterArgs,
 ): Promise<ExternalResolveResult> {
-  const { remanga, providers, providerPriority, titleOverrides } = args;
-  const searchUrl = buildSearchUrl(remanga.titleName);
+  const { remanga, providers, providerPriority, titleOverrides, forcedBranchId } = args;
+
+  let bestFailure: ExternalResolveFailure | null = null;
+  const recordFailure = (failure: ExternalResolveFailure): void => {
+    if (
+      !bestFailure ||
+      failureRank(failure.reason) > failureRank(bestFailure.reason)
+    ) {
+      bestFailure = failure;
+    }
+  };
 
   for (const providerName of providerPriority) {
     const provider = providers.find((candidate) => candidate.name === providerName);
@@ -142,13 +175,18 @@ export async function resolveExternalChapter(
       continue;
     }
 
+    const providerSearchUrl = resolveManualSearchUrl(provider, remanga.titleName);
+
     try {
       const override = titleOverrides[remanga.titleDir];
       if (override?.provider === provider.name) {
-        const details = await provider.getTitleDetails(override.titleId);
+        const details = await provider.getTitleDetails(override.titleId, { forcedBranchId });
         const chapterMatch = resolveChapterMatch(details, remanga);
         if (!chapterMatch) {
-          return createFailureResult("chapter_not_found", provider.name, details.titleUrl);
+          recordFailure(
+            createFailureResult("chapter_not_found", provider.name, details.titleUrl),
+          );
+          continue;
         }
 
         const parsedChapter = await provider.parseChapter(chapterMatch.chapterUrl);
@@ -156,8 +194,8 @@ export async function resolveExternalChapter(
       }
 
       const candidateRefs = new Set<string>();
-      const exactMatches: SourceTitleDetails[] = [];
       let exactTitleWithoutChapter: SourceTitleDetails | null = null;
+      let ambiguous = false;
 
       const queries = unique([
         remanga.titleName,
@@ -165,7 +203,10 @@ export async function resolveExternalChapter(
         buildNormalizedDirQuery(remanga.titleDir),
       ]);
 
-      for (const query of queries) {
+      let successFromSearch: ExternalResolveSuccess | null = null;
+      let exactMatchCount = 0;
+
+      searchLoop: for (const query of queries) {
         const searchResults = await provider.searchTitles(query);
 
         for (const result of searchResults) {
@@ -177,7 +218,7 @@ export async function resolveExternalChapter(
           candidateRefs.add(titleRef);
           let details: SourceTitleDetails;
           try {
-            details = await provider.getTitleDetails(titleRef);
+            details = await provider.getTitleDetails(titleRef, { forcedBranchId });
           } catch {
             continue;
           }
@@ -192,30 +233,51 @@ export async function resolveExternalChapter(
             continue;
           }
 
-          exactMatches.push(details);
-
-          if (exactMatches.length > 1) {
-            return createFailureResult("no_match", provider.name, searchUrl);
+          exactMatchCount += 1;
+          if (exactMatchCount > 1) {
+            ambiguous = true;
+            break searchLoop;
           }
 
           const parsedChapter = await provider.parseChapter(chapterMatch.chapterUrl);
-          return createSuccessResult(provider.name, details, parsedChapter);
+          successFromSearch = createSuccessResult(provider.name, details, parsedChapter);
+          break searchLoop;
         }
       }
 
-      if (exactTitleWithoutChapter) {
-        return createFailureResult(
-          "chapter_not_found",
-          provider.name,
-          exactTitleWithoutChapter.titleUrl,
-        );
+      if (ambiguous) {
+        recordFailure(createFailureResult("no_match", provider.name, providerSearchUrl));
+        continue;
       }
 
-      return createFailureResult("no_match", provider.name, searchUrl);
+      if (successFromSearch) {
+        return successFromSearch;
+      }
+
+      if (exactTitleWithoutChapter) {
+        recordFailure(
+          createFailureResult(
+            "chapter_not_found",
+            provider.name,
+            exactTitleWithoutChapter.titleUrl,
+          ),
+        );
+        continue;
+      }
+
+      recordFailure(createFailureResult("no_match", provider.name, providerSearchUrl));
     } catch {
-      return createFailureResult("provider_error", provider.name, searchUrl);
+      recordFailure(createFailureResult("provider_error", provider.name, providerSearchUrl));
     }
   }
 
-  return createFailureResult("provider_error", "unknown", searchUrl);
+  if (bestFailure) {
+    return bestFailure;
+  }
+
+  return createFailureResult(
+    "provider_error",
+    "unknown",
+    buildSearchUrl(remanga.titleName),
+  );
 }

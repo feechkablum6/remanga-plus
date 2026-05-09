@@ -1,0 +1,1506 @@
+{
+  "authorizationRequired": false,
+  "contentNotices": [],
+  "initialChapter": {
+    "id": "aa4beb3a-46bc-468c-9d8d-926d39db2ea3",
+    "name": "Экстра 2",
+    "title": null,
+    "number": 181,
+    "volume": 3,
+    "likesCount": 321,
+    "commentsCount": 4,
+    "moderationStatus": "APPROVED",
+    "content": null,
+    "pages": [
+      {
+        "id": "652b6929-50b3-4a22-bdf1-ad54bf72abc9",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/bc51d097-b59a-sf07-9411-621f31d55dfd.jpeg",
+        "index": 0,
+        "commentsCount": 1,
+        "height": 19587,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.983298Z"
+      },
+      {
+        "id": "8f645283-640f-41b7-b02f-417dd989894f",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/66ef8323-703d-s025-b985-5f38fc28e3e3.jpeg",
+        "index": 1,
+        "commentsCount": 0,
+        "height": 15957,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.889008Z"
+      },
+      {
+        "id": "790f4a98-555a-48d4-a99e-decd972ecc5f",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/b787fb35-bb6a-sef6-8899-3af13bfc8c1c.jpeg",
+        "index": 2,
+        "commentsCount": 0,
+        "height": 16198,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.969265Z"
+      },
+      {
+        "id": "8242e856-2520-4bb4-ae4c-c94f8af0737b",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/47d4ed2d-cda7-s109-b46c-34aad2179ddf.jpeg",
+        "index": 3,
+        "commentsCount": 0,
+        "height": 15596,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.970330Z"
+      },
+      {
+        "id": "7d829bb3-7822-4ed8-b5fd-df04d7ff11ef",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/4094ea13-168c-s6af-9306-10845c4c30b7.jpeg",
+        "index": 4,
+        "commentsCount": 0,
+        "height": 17856,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.969980Z"
+      },
+      {
+        "id": "f79b893d-9370-4f6b-b938-098786a38d60",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/8e2f18e6-432d-s1e4-be20-cd38ce00451c.jpeg",
+        "index": 5,
+        "commentsCount": 0,
+        "height": 17806,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.893402Z"
+      },
+      {
+        "id": "a5091b15-0faf-4bab-8916-ecfbb8336788",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/c8eaf13c-4798-s69d-8e33-0722c58aaff6.jpeg",
+        "index": 6,
+        "commentsCount": 0,
+        "height": 18531,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.970095Z"
+      },
+      {
+        "id": "3344a7ad-79a5-4f48-b100-9b0f4ca5eacc",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/806a7332-8a21-se88-8eed-83734de5e2a3.jpeg",
+        "index": 7,
+        "commentsCount": 0,
+        "height": 18757,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.889061Z"
+      },
+      {
+        "id": "981e85ab-128e-43ae-b50f-83b2d722c204",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/913d8266-e100-sc49-8172-2886e7c982f7.jpeg",
+        "index": 8,
+        "commentsCount": 1,
+        "height": 16637,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.969786Z"
+      },
+      {
+        "id": "94743c29-765d-4888-bb14-05a166f9b8d2",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/9f0297c6-b612-sa2c-aba3-79b19fb15ef0.jpeg",
+        "index": 9,
+        "commentsCount": 0,
+        "height": 9568,
+        "width": 800,
+        "createdAt": "2024-03-13T16:48:22.883529Z"
+      },
+      {
+        "id": "00f0b2ca-43aa-4089-b75d-81142c4b4098",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/3520aaf4-337c-sf32-9051-1c7811619e21.jpeg",
+        "index": 10,
+        "commentsCount": 0,
+        "height": 1700,
+        "width": 1200,
+        "createdAt": "2024-03-13T16:48:22.880176Z"
+      },
+      {
+        "id": "555a8e53-4866-44af-816c-d5708b915829",
+        "image": "https://static.inuko.me/chapters/aa4beb3a-46bc-468c-9d8d-926d39db2ea3/e8de49b5-8498-sd48-aeb1-55d96e383b0d.jpeg",
+        "index": 11,
+        "commentsCount": 0,
+        "height": 1503,
+        "width": 1200,
+        "createdAt": "2024-03-13T16:48:22.893388Z"
+      }
+    ],
+    "donut": false,
+    "corrupted": false,
+    "createdById": "86dd774d-2c47-496a-bbc1-05d70951925e",
+    "branchId": "d71550c4-be1a-4d4c-b99a-51aa8e32e704",
+    "bookId": "4fe5dc17-e2d0-417c-8224-034a7c6bdb44",
+    "publishers": [
+      {
+        "id": "f181ac11-d53c-49cd-add3-54b4f7ffaa0f",
+        "kind": "TRANSLATOR",
+        "slug": "dead-inside-team",
+        "name": "Dead Inside Team",
+        "altNames": [
+          {
+            "language": "RU",
+            "name": "Рфлай маньхуа project"
+          },
+          {
+            "language": "RU",
+            "name": "DIT | Глобальный набор"
+          },
+          {
+            "language": "RU",
+            "name": "https://discord.gg/dead-inside-team"
+          },
+          {
+            "language": "RU",
+            "name": "DIT | Летний набор | Ищем темщиков 💀"
+          },
+          {
+            "language": "RU",
+            "name": "Dead Inside Team | Eclipse"
+          },
+          {
+            "language": "RU",
+            "name": "DIT | Все главы на бусти открыты до 05.01.2225!"
+          },
+          {
+            "language": "ru",
+            "name": "Peace death"
+          },
+          {
+            "language": "ru",
+            "name": "ɯɐǝʇ ǝpısuı pɐǝp"
+          },
+          {
+            "language": "ru",
+            "name": "Insidium Plus"
+          }
+        ],
+        "poster": "https://static.inuko.me/publisher/f181ac11-d53c-49cd-add3-54b4f7ffaa0f/poster/c9aa904b-dc4b-4dee-852d-916e9de35e3d.png",
+        "background": null,
+        "trusted": false,
+        "donationsEnabled": false,
+        "vkGroupId": 188525842,
+        "vkGroupName": "Dead Inside Team | Перевод манги",
+        "tonAddress": null,
+        "createdAt": "2022-03-20T13:16:44.102Z",
+        "updatedAt": "2025-04-21T04:36:31.884661Z"
+      }
+    ],
+    "createdAt": "2024-03-13T16:48:22.829267Z",
+    "expiredAt": "1970-01-01T00:00:00Z",
+    "updatedAt": "2024-07-31T18:02:26.692Z"
+  },
+  "adNetwork": "yandex",
+  "related": [
+    {
+      "id": "e2c721cb-7ba5-4074-a960-2536c9c4cb70",
+      "slug": "player",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/e2c721cb-7ba5-4074-a960-2536c9c4cb70/poster/e6c9fd50-33d3-4238-aaaf-55212001a518.jpeg",
+      "background": null,
+      "backgroundColor": "#4c5c92",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Player (OH Hyeon-Jun)",
+        "ru": "Игрок",
+        "original": "플레이어"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "プレイヤー"
+        },
+        {
+          "language": "EN",
+          "name": "網漫玩家"
+        },
+        {
+          "language": "EN",
+          "name": "被迫成为玩家"
+        },
+        {
+          "language": "EN",
+          "name": "플레이어"
+        },
+        {
+          "language": "ru",
+          "name": "Peulleieo"
+        }
+      ],
+      "country": "KOREA",
+      "year": 2020,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 685958,
+      "likesCount": 38244,
+      "bookmarksCount": 4874,
+      "ratingVotesCount": 147,
+      "averageRating": 9.653061,
+      "chaptersCount": 255,
+      "createdAt": "2022-03-20T13:16:18.832Z",
+      "updatedAt": "2025-09-18T15:45:21.877726Z"
+    },
+    {
+      "id": "0ecd56d7-6afe-4446-911f-318af2185de6",
+      "slug": "lucky-me-i-secretly-cultivated-for-1000-years",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/0ecd56d7-6afe-4446-911f-318af2185de6/cover/130147d5-ab7b-409a-ba3b-34970e27d7e5.jpeg",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Lucky Me: I Secretly Cultivated for 1,000 Years",
+        "ru": "Первоклассная удача",
+        "original": "顶级气运，悄悄修炼千年"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Top Tier Providence"
+        },
+        {
+          "language": "RU",
+          "name": "Высшая удача, спокойно культивируемая в течение тысяч лет"
+        },
+        {
+          "language": "EN",
+          "name": "Top Tier Providence, Secretly Cultivate for a Thousand Years"
+        },
+        {
+          "language": "RU",
+          "name": "Первоклассная удача, спокойная практика на протяжении 1000 лет"
+        },
+        {
+          "language": "ZH",
+          "name": "顶级气运，悄悄修炼千年"
+        },
+        {
+          "language": "EN",
+          "name": "Dingji Qiyun, Qiaoqiao Xiulian Qiannian"
+        },
+        {
+          "language": "EN",
+          "name": "Top Tier Providence: Secretly Cultivate for a Thousand Years"
+        },
+        {
+          "language": "EN",
+          "name": "Top-Notch Fate, Secretly Practicing Asceticism in Millenniums"
+        },
+        {
+          "language": "JA",
+          "name": "修業マニアはゲームマスター？"
+        },
+        {
+          "language": "EN",
+          "name": "Top luck, quietly cultivated for thousands of years"
+        },
+        {
+          "language": "KO",
+          "name": "초초수련천년"
+        },
+        {
+          "language": "ZH",
+          "name": "悄悄修炼千年"
+        },
+        {
+          "language": "ES",
+          "name": "Providencia de Primer Nivel: Cultiva en Silencio Durante Miles de Años"
+        },
+        {
+          "language": "EN",
+          "name": "Lucky Me: I Secretly Cultivated for 1,000 Years"
+        },
+        {
+          "language": "EN",
+          "name": "Dǐngjí Qìyùn, Qiāoqiāo Xiūliàn Qiānnián"
+        },
+        {
+          "language": "EN",
+          "name": "Top Tier Providence- Secretly Cultivate for a Thousand Years"
+        },
+        {
+          "language": "PT",
+          "name": "Providência de Alto Nível"
+        },
+        {
+          "language": "EN",
+          "name": "Top Tier Providence - Secretly Cultivate for a Thousand Years"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2022,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 574197,
+      "likesCount": 27798,
+      "bookmarksCount": 4375,
+      "ratingVotesCount": 112,
+      "averageRating": 9.089286,
+      "chaptersCount": 260,
+      "createdAt": "2025-01-02T15:22:23.550530Z",
+      "updatedAt": "2025-09-18T15:45:27.604203Z"
+    },
+    {
+      "id": "a51449fc-39cc-4457-ae42-255d33140f0c",
+      "slug": "one-piece",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/a51449fc-39cc-4457-ae42-255d33140f0c/poster/a22856bd-8e44-4625-bf00-0032879f446c.jpeg",
+      "background": "https://static.inuko.me/book/a51449fc-39cc-4457-ae42-255d33140f0c/background/6e4cf10c-5d9a-43dc-8efc-95360734d982.jpeg",
+      "backgroundColor": "#745b0c",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "UNSAFE",
+      "name": {
+        "en": "One Piece",
+        "ru": "Ван Пис",
+        "original": "ワンピース"
+      },
+      "altNames": [
+        {
+          "language": "RU",
+          "name": "Большой Куш"
+        }
+      ],
+      "country": "JAPAN",
+      "year": 1997,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 395857,
+      "likesCount": 10578,
+      "bookmarksCount": 3372,
+      "ratingVotesCount": 82,
+      "averageRating": 9.378049,
+      "chaptersCount": 1201,
+      "createdAt": "2022-11-04T14:11:01.115Z",
+      "updatedAt": "2025-09-18T15:45:34.161834Z"
+    },
+    {
+      "id": "1cbce27d-442a-4d29-be84-c262ac5708ec",
+      "slug": "the-overpowered-newbie",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/the-overpowered-newbie/poster/9a637fb9-a9dc-4566-ac77-a7e90f1b2bf4.jpeg",
+      "background": null,
+      "backgroundColor": "#82687f",
+      "featuredCharacter": "https://static.inuko.me/book/1cbce27d-442a-4d29-be84-c262ac5708ec/character/c0191a0c-9944-4027-b435-1e5503271b5f.png",
+      "featuredCharacterPreview": "https://static.inuko.me/book/1cbce27d-442a-4d29-be84-c262ac5708ec/character-preview/ce2da65f-2927-4b28-b10e-2c30ee75dc0b.png",
+      "featuredCharacterBackground": "https://static.inuko.me/book/1cbce27d-442a-4d29-be84-c262ac5708ec/character-background/c113fe46-881f-4b6e-ac08-be762d8adc21.jpeg",
+      "featuredCharacterAnimation": [],
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "UNSAFE",
+      "name": {
+        "en": "The Overpowered Newbie",
+        "ru": "Слишком сильный новичок",
+        "original": "뉴비가 너무 강함"
+      },
+      "altNames": [
+        {
+          "language": "RU",
+          "name": "Этот нуб уж очень сильный"
+        },
+        {
+          "language": "EN",
+          "name": "The Newbie is Too Strong"
+        }
+      ],
+      "country": "KOREA",
+      "year": 2022,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 778999,
+      "likesCount": 42342,
+      "bookmarksCount": 4320,
+      "ratingVotesCount": 217,
+      "averageRating": 9.548388,
+      "chaptersCount": 162,
+      "createdAt": "2024-01-13T12:40:59.652Z",
+      "updatedAt": "2025-11-06T01:15:52.403713Z"
+    },
+    {
+      "id": "f9d9715b-04d4-4512-9214-a1ca73e3326b",
+      "slug": "the-new-gate",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/f9d9715b-04d4-4512-9214-a1ca73e3326b/poster/e49a51e5-db5c-4f7b-a253-fc303d64f26e.jpeg",
+      "background": "https://static.inuko.me/book/f9d9715b-04d4-4512-9214-a1ca73e3326b/background/8e65db96-a680-44f8-8a6d-fe6215a5af58.jpeg",
+      "backgroundColor": "#904a43",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "The New Gate",
+        "ru": "Новые Врата",
+        "original": "Nauji Vartai"
+      },
+      "altNames": [],
+      "country": "JAPAN",
+      "year": 2014,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 199684,
+      "likesCount": 3689,
+      "bookmarksCount": 2468,
+      "ratingVotesCount": 18,
+      "averageRating": 9.222222,
+      "chaptersCount": 252,
+      "createdAt": "2022-03-20T13:16:18.809Z",
+      "updatedAt": "2025-09-18T15:45:53.699005Z"
+    },
+    {
+      "id": "b813cde3-243f-469a-8500-aa12ae2ac67f",
+      "slug": "rebirth-of-the-godly-prodigal",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/b813cde3-243f-469a-8500-aa12ae2ac67f/cover/4dbfa875-c4f3-4612-aa69-489fcf77b2ab.webp",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "UNSAFE",
+      "name": {
+        "en": "Rebirth of the Godly Prodigal",
+        "ru": "Возрождённый блудный сын уровня бога",
+        "original": "重生之神级败家子"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Chongsheng Zhi Shenji Baijiazi"
+        },
+        {
+          "language": "EN",
+          "name": "Chóng Shēng Zhī Shén Jí Bàijiāzi"
+        },
+        {
+          "language": "EN",
+          "name": "Kelahiran Kembali Anak Boros Tingkat Dewa"
+        },
+        {
+          "language": "EN",
+          "name": "Rebirth of God-Level Prodigal"
+        },
+        {
+          "language": "EN",
+          "name": "Rebirth of God-Rank Spendthrift"
+        },
+        {
+          "language": "EN",
+          "name": "Renacimiento del prodigio divino"
+        },
+        {
+          "language": "RU",
+          "name": "Возрождение первоклассного расточителя"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2021,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 104384,
+      "likesCount": 3025,
+      "bookmarksCount": 1160,
+      "ratingVotesCount": 16,
+      "averageRating": 8.375,
+      "chaptersCount": 166,
+      "createdAt": "2024-09-30T13:27:26.569116Z",
+      "updatedAt": "2025-09-18T15:46:46.386284Z"
+    },
+    {
+      "id": "032e3968-78ce-46b0-a740-158f85dfece6",
+      "slug": "fairy-tail",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/032e3968-78ce-46b0-a740-158f85dfece6/poster/4e9db388-cf60-4a46-83c9-17db3885c773.jpeg",
+      "background": "https://static.inuko.me/book/032e3968-78ce-46b0-a740-158f85dfece6/background/1535453b-77af-4749-8de5-6bb50817c002.jpeg",
+      "backgroundColor": "#815512",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "EROTIC",
+      "name": {
+        "en": "Fairy Tail",
+        "ru": "Хвост Феи",
+        "original": "Fairy Tail"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "FAIRY TAIL [フェアリーテイル]"
+        },
+        {
+          "language": "EN",
+          "name": "Хвост Феи"
+        },
+        {
+          "language": "EN",
+          "name": "فيري تيل"
+        },
+        {
+          "language": "EN",
+          "name": "फेयरी टेल"
+        },
+        {
+          "language": "EN",
+          "name": "妖精的尾巴"
+        },
+        {
+          "language": "EN",
+          "name": "페어리 테일"
+        }
+      ],
+      "country": "JAPAN",
+      "year": 2006,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 1899091,
+      "likesCount": 11097,
+      "bookmarksCount": 1994,
+      "ratingVotesCount": 38,
+      "averageRating": 8.631579,
+      "chaptersCount": 579,
+      "createdAt": "2022-03-20T13:16:18.807Z",
+      "updatedAt": "2025-12-01T13:21:07.102981Z"
+    },
+    {
+      "id": "0ddfcf66-f924-44db-a709-5f7c02b461e7",
+      "slug": "demon-king-daimao",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/demon-king-daimao/poster/1f274d49-8877-449f-ba80-ff896e438753.jpeg",
+      "background": null,
+      "backgroundColor": "#904a47",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "EROTIC",
+      "name": {
+        "en": "Demon King Daimao",
+        "ru": "Князь тьмы с задней парты",
+        "original": "Ichiban Ushiro no Daimaou"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Demon King Daimao"
+        },
+        {
+          "language": "EN",
+          "name": "Ichiban Ushiro no Dai Maoh"
+        },
+        {
+          "language": "EN",
+          "name": "Ichiban Ushiro no Dai Maou"
+        },
+        {
+          "language": "EN",
+          "name": "いちばんうしろの大魔王"
+        },
+        {
+          "language": "EN",
+          "name": "最后的大魔王"
+        }
+      ],
+      "country": "JAPAN",
+      "year": 2008,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 24639,
+      "likesCount": 361,
+      "bookmarksCount": 547,
+      "ratingVotesCount": 8,
+      "averageRating": 8.25,
+      "chaptersCount": 50,
+      "createdAt": "2024-07-09T19:45:12.880Z",
+      "updatedAt": "2025-09-18T15:49:10.528786Z"
+    },
+    {
+      "id": "ddbe686f-1335-41d0-8c53-7457516ccd34",
+      "slug": "my-little-brother-is-the-demon-king",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/ddbe686f-1335-41d0-8c53-7457516ccd34/cover/239c9cff-962d-45ba-a301-95493a09c4ea.webp",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "My little brother is the demon king",
+        "ru": "Мой младший брат - король демонов",
+        "original": "我的小弟是妖王"
+      },
+      "altNames": [
+        {
+          "language": "RU",
+          "name": "Мой брат - Король демонов"
+        },
+        {
+          "language": "EN",
+          "name": "My little brother is the demon king"
+        },
+        {
+          "language": "ZH",
+          "name": "我的小弟是妖王"
+        },
+        {
+          "language": "EN",
+          "name": "My little brother is a demon king"
+        },
+        {
+          "language": "EN",
+          "name": "Wo de xiaodi shi yaowang"
+        },
+        {
+          "language": "RU",
+          "name": "Я заключил контракт с императором демонов из другого мира!"
+        },
+        {
+          "language": "EN",
+          "name": "Wǒ De Xiǎodì Shì Yāo Wáng"
+        },
+        {
+          "language": "EN",
+          "name": "My Little Brother Is the Demon King"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2021,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 6648,
+      "likesCount": 36,
+      "bookmarksCount": 63,
+      "ratingVotesCount": 0,
+      "averageRating": 0,
+      "chaptersCount": 18,
+      "createdAt": "2024-11-11T01:36:00.684669Z",
+      "updatedAt": "2025-09-18T15:56:00.995347Z"
+    },
+    {
+      "id": "13ce35d2-6204-4868-ba6b-eea0b676127f",
+      "slug": "maou-tsukai-no-saikyou-shihai",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/13ce35d2-6204-4868-ba6b-eea0b676127f/cover/95089efb-c09a-458f-b5ce-aad4e1037fba.jpeg",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "EROTIC",
+      "name": {
+        "en": "The Strongest Reign of the Demon King",
+        "ru": "Сильнейшее господство Короля Демонов",
+        "original": "魔王使いの最強支配"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Maou Tsukai no Saikyou Shihai"
+        },
+        {
+          "language": "EN",
+          "name": "The Strongest Reign of the Demon King"
+        },
+        {
+          "language": "JA",
+          "name": "魔王使いの最強支配"
+        },
+        {
+          "language": "EN",
+          "name": "The Demon Lord Tamer Strongest Domination"
+        },
+        {
+          "language": "EN",
+          "name": "The Demon King Tamer’s Strongest Domination"
+        },
+        {
+          "language": "EN",
+          "name": "The Demon Lord Tamer's Strongest Domination"
+        }
+      ],
+      "country": "JAPAN",
+      "year": 2022,
+      "formats": [
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 1549,
+      "likesCount": 30,
+      "bookmarksCount": 52,
+      "ratingVotesCount": 3,
+      "averageRating": 10,
+      "chaptersCount": 15,
+      "createdAt": "2025-10-30T13:09:25.287132Z",
+      "updatedAt": "2025-10-30T13:09:25.287137Z"
+    },
+    {
+      "id": "8f9068a3-2b78-4de0-8fff-414380f787f8",
+      "slug": "sai-bo-huang-pao-guai-xiang-dongfang-huazhu",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/8f9068a3-2b78-4de0-8fff-414380f787f8/cover/a0aee33c-af73-49ca-92cd-abc096163fec.webp",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Sai Bo Huang Pao Guai Xiang Dongfang Huazhu",
+        "ru": "Желание сильнейшего игрока",
+        "original": "赛博黄袍怪想洞房花烛"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Desire of the strongest player"
+        },
+        {
+          "language": "ZH",
+          "name": "赛博黄袍怪想洞房花烛"
+        },
+        {
+          "language": "EN",
+          "name": "Sai Bo Huang Pao Guai Xiang Dongfang Huazhu"
+        },
+        {
+          "language": "EN",
+          "name": "Cyber Yellow Robe Wants Bridal Anthuriums"
+        },
+        {
+          "language": "VI",
+          "name": "Sài Bó Huáng Páo Guài Xiǎng Dòngfáng Huāzhú"
+        },
+        {
+          "language": "ZH",
+          "name": "賽博黃袍怪想洞房花燭"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2021,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 3705,
+      "likesCount": 7,
+      "bookmarksCount": 100,
+      "ratingVotesCount": 3,
+      "averageRating": 2.6666667,
+      "chaptersCount": 1,
+      "createdAt": "2025-02-16T17:14:23.387053Z",
+      "updatedAt": "2025-09-18T15:59:58.265560Z"
+    },
+    {
+      "id": "4960bf14-fca2-454d-bdab-81a407fc9687",
+      "slug": "erementar-gerad",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/4960bf14-fca2-454d-bdab-81a407fc9687/cover/71c73a7b-47c0-482c-894a-2a1761e73968.webp",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Erementar Gerad",
+        "ru": "Воздушные пираты",
+        "original": "エレメンタル ジェレイド"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Elemental Gelade"
+        },
+        {
+          "language": "EN",
+          "name": "Erementar Gerad"
+        },
+        {
+          "language": "JA",
+          "name": "エレメンタル ジェレイド"
+        },
+        {
+          "language": "ZH",
+          "name": "武器种族传说"
+        },
+        {
+          "language": "DE",
+          "name": "Erementar Gerade"
+        },
+        {
+          "language": "VI",
+          "name": "Truyền Nhân Yuruki"
+        },
+        {
+          "language": "KO",
+          "name": "엘르멘탈 제라드"
+        },
+        {
+          "language": "EN",
+          "name": "ＥＲＥＭＥＮＴＡＲ　ＧＥＲＡＤ"
+        }
+      ],
+      "country": "JAPAN",
+      "year": 2002,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 16292,
+      "likesCount": 17,
+      "bookmarksCount": 63,
+      "ratingVotesCount": 1,
+      "averageRating": 6,
+      "chaptersCount": 96,
+      "createdAt": "2025-03-09T12:21:07.745407Z",
+      "updatedAt": "2025-09-18T15:52:15.821140Z"
+    },
+    {
+      "id": "c3e36dd5-2cac-40ea-8b37-8f1537e27f46",
+      "slug": "nightwatcher",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/c3e36dd5-2cac-40ea-8b37-8f1537e27f46/cover/6eef6515-4999-434c-8d2f-450baa8eaa08.jpeg",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Nightwatcher",
+        "ru": "Ночной дозор",
+        "original": "大奉打更人"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Nightwatcher"
+        },
+        {
+          "language": "RU",
+          "name": "Ночной Дозор"
+        },
+        {
+          "language": "EN",
+          "name": "Dafeng's Night Squad"
+        },
+        {
+          "language": "EN",
+          "name": "Dà Fèng Dǎ Gēng Rén"
+        },
+        {
+          "language": "ZH",
+          "name": "大奉打更人"
+        },
+        {
+          "language": "EN",
+          "name": "Dafeng Night Squad"
+        },
+        {
+          "language": "EN",
+          "name": "Da Feng Da Geng Ren"
+        },
+        {
+          "language": "VI",
+          "name": "Đại Phụng Đả Canh Nhân"
+        },
+        {
+          "language": "KO",
+          "name": "절대타경"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2021,
+      "formats": [
+        "COLORED"
+      ],
+      "featured": false,
+      "viewsCount": 28323,
+      "likesCount": 218,
+      "bookmarksCount": 326,
+      "ratingVotesCount": 4,
+      "averageRating": 8,
+      "chaptersCount": 26,
+      "createdAt": "2025-01-09T17:13:04.334596Z",
+      "updatedAt": "2025-09-18T15:48:55.163054Z"
+    },
+    {
+      "id": "986ddaf7-59fc-4469-b81b-379a89765bb6",
+      "slug": "indestructible-body-of-vajra-of-the-village-leader",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/986ddaf7-59fc-4469-b81b-379a89765bb6/cover/69195879-f5eb-4e02-8115-87e63cf5d785.png",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Indestructible Body of Vajra of the Village Leader",
+        "ru": "Реинкарнация в Непревзойденного босса",
+        "original": "金刚不坏大寨主"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Indestructible Body of Vajra of the Village Leader"
+        },
+        {
+          "language": "RU",
+          "name": "Реинкарнация в непревзойдённого босса"
+        },
+        {
+          "language": "EN",
+          "name": "Diamond Indestructible Stronghold Master"
+        },
+        {
+          "language": "EN",
+          "name": "Indestructible Master of the Fortress"
+        },
+        {
+          "language": "EN",
+          "name": "Reincarnation as the Ultimate Boss"
+        },
+        {
+          "language": "ZH",
+          "name": "金刚不坏大寨主"
+        },
+        {
+          "language": "EN",
+          "name": "Jingang Buhuai Dazhaizhu"
+        },
+        {
+          "language": "EN",
+          "name": "Jīngāng bùhuài dàzhàizhǔ"
+        },
+        {
+          "language": "EN",
+          "name": "Jīn Gāng Bù Huài Dà Zhài Zhǔ"
+        },
+        {
+          "language": "EN",
+          "name": "Jin Gang Bu Huai Da Zhai Zhu"
+        },
+        {
+          "language": "VI",
+          "name": "Kim Cương Bất Hoại Đại Trại Chủ"
+        },
+        {
+          "language": "JA",
+          "name": "ゲーム世界で最強NPCを目指す"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2023,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 41330,
+      "likesCount": 420,
+      "bookmarksCount": 829,
+      "ratingVotesCount": 11,
+      "averageRating": 8.272727,
+      "chaptersCount": 16,
+      "createdAt": "2024-11-17T00:35:32.477357Z",
+      "updatedAt": "2025-09-18T15:48:06.126728Z"
+    },
+    {
+      "id": "f094a606-c790-4b45-8a67-b340874e64ce",
+      "slug": "suterareta-tensei-kenja-mamono-no-mori-de-saikyou-no-dai-ma-teikoku-o-tsukuriageru",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/f094a606-c790-4b45-8a67-b340874e64ce/poster/338309d7-ab03-4182-8067-45ef0f87ad5f.jpeg",
+      "background": "https://static.inuko.me/book/f094a606-c790-4b45-8a67-b340874e64ce/background/4a31bcce-904f-4a01-b3d3-914e826776bb.jpeg",
+      "backgroundColor": "#8f4c34",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "EROTIC",
+      "name": {
+        "en": "The Abandoned Reincarnated Sage; I will forge the strongest empire in the Demon Forest!",
+        "ru": "Реинкарнация мудреца ~ Создание самой сильной империи в лесу демонов~",
+        "original": "捨てられた転生賢者～魔物の森で最強の大魔帝国を作り上げる～"
+      },
+      "altNames": [
+        {
+          "language": "ID",
+          "name": "Suterareta Tensei Kenja - Mamono no Mori de Saikyou no Daima Teikoku wo Tsukuriageru"
+        },
+        {
+          "language": "ID",
+          "name": "Suterareta Tensei Kenja ~Mamono no Mori de Saikyou no Dai Ma Teikoku o Tsukuriageru~"
+        },
+        {
+          "language": "EN",
+          "name": "The Abandoned Reincarnation Sage"
+        },
+        {
+          "language": "EN",
+          "name": "The Reincarnated Sage Who Was Abandoned - I Will Create the Strongest Demon Empire in the Demon Forest"
+        },
+        {
+          "language": "TH",
+          "name": "จอมปราชญ์เกิดใหม่ดันโดนทิ้งซะงั้น ~สร้างจักรวรรดิเหล่าอสูรสุดแกร่งในป่าสัตว์อสูร~"
+        },
+        {
+          "language": "JA",
+          "name": "Suterareta Tensei Kenja ~ Mamono no Mori de Saikyou no dai ma Teikoku o Tsukuriageru~"
+        },
+        {
+          "language": "KO",
+          "name": "버려진 전생 현자"
+        }
+      ],
+      "country": "JAPAN",
+      "year": 2020,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 186498,
+      "likesCount": 5128,
+      "bookmarksCount": 1416,
+      "ratingVotesCount": 31,
+      "averageRating": 8.741936,
+      "chaptersCount": 82,
+      "createdAt": "2022-03-20T13:16:18.810Z",
+      "updatedAt": "2025-12-01T13:30:01.627685Z"
+    },
+    {
+      "id": "48ae1b1f-bd11-47d9-883b-f8a096a2ccda",
+      "slug": "the-golden-word-master-the-four-heroes-and-the-innocent-bystander-with-the-unique-cheat",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/48ae1b1f-bd11-47d9-883b-f8a096a2ccda/poster/06858cd3-f419-4201-a7b6-1d0625de1948.jpeg",
+      "background": null,
+      "backgroundColor": "#904a41",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "The Golden Word Master - the Four Heroes and the Innocent Bystander with the Unique Cheat",
+        "ru": "Мастер золотых слов: Четыре героя и Наблюдатель с Уникальным читом",
+        "original": "Konjiki no Moji Tsukai - Yuusha Yonin ni Makikomareta Unique Cheat"
+      },
+      "altNames": [],
+      "country": "JAPAN",
+      "year": 2014,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 108618,
+      "likesCount": 2534,
+      "bookmarksCount": 659,
+      "ratingVotesCount": 7,
+      "averageRating": 8.571428,
+      "chaptersCount": 121,
+      "createdAt": "2022-03-20T13:16:18.818Z",
+      "updatedAt": "2025-09-18T15:46:26.427964Z"
+    },
+    {
+      "id": "4cdc7ea4-542b-4143-a372-3422235473fd",
+      "slug": "unlimited-magic-novice-swordsman",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/unlimited-magic-novice-swordsman/poster/3f17322c-2119-49d4-b529-d4f31b6e0900.jpeg",
+      "background": null,
+      "backgroundColor": "#465d91",
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "UNSAFE",
+      "name": {
+        "en": "Unlimited Magic Novice Swordsman",
+        "ru": "Бесконечная магия юного мечника",
+        "original": "无限魔力初级剑士"
+      },
+      "altNames": [],
+      "country": "KOREA",
+      "year": 2020,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 72581,
+      "likesCount": 1355,
+      "bookmarksCount": 1031,
+      "ratingVotesCount": 12,
+      "averageRating": 3.6666667,
+      "chaptersCount": 61,
+      "createdAt": "2024-04-10T17:16:39.937Z",
+      "updatedAt": "2025-09-18T15:47:03.645348Z"
+    },
+    {
+      "id": "55843f7b-16ee-4530-8286-0bb577ac4786",
+      "slug": "fire-emblem-hasha-no-tsurugi",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/55843f7b-16ee-4530-8286-0bb577ac4786/cover/23302df6-fc8c-4909-9830-32cef178c605.jpeg",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Fire Emblem 6: Another Story - Champion's Sword",
+        "ru": "Знак огня: Меч чемпиона",
+        "original": "ファイアーエムブレム 覇者の剣"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Fire Emblem 6: Another Story - Champion's Sword"
+        },
+        {
+          "language": "EN",
+          "name": "Fire Emblem – Hasha no Tsurugi"
+        },
+        {
+          "language": "JA",
+          "name": "ファイアーエムブレム 覇者の剣"
+        },
+        {
+          "language": "EN",
+          "name": "Fire Emblem: Champion's Sword"
+        },
+        {
+          "language": "VI",
+          "name": "Dấu Ấn Lửa"
+        },
+        {
+          "language": "EN",
+          "name": "Fire Emblem: Champion Sword"
+        },
+        {
+          "language": "EN",
+          "name": "Fire Emblem 6: Another Story - Champion Sword"
+        },
+        {
+          "language": "EN",
+          "name": "Fire Emblem 6: Another Story - Champions Sword"
+        },
+        {
+          "language": "EN",
+          "name": "Fire Emblem - Hasha no Tsurugi"
+        },
+        {
+          "language": "EN",
+          "name": "Fire Emblem: Hasha no Tsurugi"
+        }
+      ],
+      "country": "JAPAN",
+      "year": 2002,
+      "formats": [],
+      "featured": false,
+      "viewsCount": 1468,
+      "likesCount": 0,
+      "bookmarksCount": 1,
+      "ratingVotesCount": 0,
+      "averageRating": 0,
+      "chaptersCount": 6,
+      "createdAt": "2025-03-09T13:45:53.191687Z",
+      "updatedAt": "2025-09-18T16:07:01.598013Z"
+    },
+    {
+      "id": "c43c8e76-46ca-450a-b3ec-fb122bfb6d09",
+      "slug": "i-have-yet-to-become-a-doll-today",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/c43c8e76-46ca-450a-b3ec-fb122bfb6d09/cover/fe524025-7a67-4110-9583-9da160239a15.webp",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "DONE",
+      "contentStatus": "UNSAFE",
+      "name": {
+        "en": "I Have Yet to Become a Doll Today",
+        "ru": "Сегодня я не стала куклой",
+        "original": "今天也没变成玩偶呢"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Not Becoming a Doll Today"
+        },
+        {
+          "language": "EN",
+          "name": "Doll Game"
+        },
+        {
+          "language": "EN",
+          "name": "I Have Yet to Become a Doll Today"
+        },
+        {
+          "language": "ZH",
+          "name": "今天也没变成玩偶呢"
+        },
+        {
+          "language": "EN",
+          "name": "Jintian Ye Mei Bian Cheng Wan'ou Ne"
+        },
+        {
+          "language": "EN",
+          "name": "Jīntiān Yě Méi Biàn Chéng Wán'ǒu Ne"
+        },
+        {
+          "language": "EN",
+          "name": "Jintian Ye Mei Bian Cheng Wanou Ne"
+        },
+        {
+          "language": "EN",
+          "name": "Still Didnt Get Turned Into a Puppet Today"
+        },
+        {
+          "language": "EN",
+          "name": "Jīntiān Yě Méi Biàn Chéng Wánǒu Ne"
+        },
+        {
+          "language": "JA",
+          "name": "パペットゲーム"
+        },
+        {
+          "language": "EN",
+          "name": "Still Didn't Get Turned Into a Puppet Today"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2022,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 47882,
+      "likesCount": 1593,
+      "bookmarksCount": 319,
+      "ratingVotesCount": 22,
+      "averageRating": 9.636364,
+      "chaptersCount": 75,
+      "createdAt": "2024-12-28T19:42:34.969219Z",
+      "updatedAt": "2025-09-18T15:48:35.518214Z"
+    },
+    {
+      "id": "70b68034-0719-4a10-8ae4-cc2793f0c0da",
+      "slug": "divine-coffin-spirit",
+      "type": "COMIC",
+      "serviceName": "inkstory",
+      "poster": "https://static.inuko.me/book/70b68034-0719-4a10-8ae4-cc2793f0c0da/cover/551abcdc-7b89-43e4-a669-90bd7a8cc7a3.jpeg",
+      "background": null,
+      "backgroundColor": null,
+      "featuredCharacter": null,
+      "featuredCharacterPreview": null,
+      "featuredCharacterBackground": null,
+      "featuredCharacterAnimation": null,
+      "featuredCharacterAnimationWithMask": null,
+      "featuredCharacterAnimationFirstFrame": null,
+      "status": "ONGOING",
+      "contentStatus": "SAFE",
+      "name": {
+        "en": "Divine Coffin Spirit",
+        "ru": "Великолепный боевой император",
+        "original": "已完结 极武玄帝"
+      },
+      "altNames": [
+        {
+          "language": "EN",
+          "name": "Emperor Wu"
+        },
+        {
+          "language": "RU",
+          "name": "Великолепный воинственный император"
+        },
+        {
+          "language": "EN",
+          "name": "The Greatest Martial Emperor"
+        },
+        {
+          "language": "ZH",
+          "name": "已完结 极武玄帝"
+        },
+        {
+          "language": "ZH",
+          "name": "极武玄帝"
+        },
+        {
+          "language": "EN",
+          "name": "Ji wu xuandi"
+        },
+        {
+          "language": "CS",
+          "name": "Jí wǔ xuándì"
+        },
+        {
+          "language": "EN",
+          "name": "The Throne"
+        },
+        {
+          "language": "EN",
+          "name": "Emperor Jiwu Xuan"
+        },
+        {
+          "language": "EN",
+          "name": "Fanatical Martial God"
+        },
+        {
+          "language": "EN",
+          "name": "Ji wu xuan di"
+        },
+        {
+          "language": "EN",
+          "name": "Divine Soul Emperor"
+        },
+        {
+          "language": "EN",
+          "name": "Divine Spirit Martial Emperor"
+        },
+        {
+          "language": "ES",
+          "name": "Espíritu Divino del Ataúd"
+        },
+        {
+          "language": "EN",
+          "name": "God Soul Emperor"
+        },
+        {
+          "language": "VI",
+          "name": "Shénhún Wǔdì"
+        },
+        {
+          "language": "EN",
+          "name": "The Supreme Spirit"
+        },
+        {
+          "language": "VI",
+          "name": "Thần Hồn Võ Đế"
+        },
+        {
+          "language": "ZH",
+          "name": "神魂武帝"
+        },
+        {
+          "language": "KO",
+          "name": "신혼무제"
+        }
+      ],
+      "country": "CHINA",
+      "year": 2020,
+      "formats": [
+        "COLORED",
+        "WEBTOON"
+      ],
+      "featured": false,
+      "viewsCount": 13640,
+      "likesCount": 77,
+      "bookmarksCount": 54,
+      "ratingVotesCount": 2,
+      "averageRating": 7.5,
+      "chaptersCount": 70,
+      "createdAt": "2025-02-18T19:42:59.924668Z",
+      "updatedAt": "2025-09-18T15:51:47.848700Z"
+    }
+  ]
+}
