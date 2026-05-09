@@ -1,206 +1,205 @@
 <p align="center">
-  <img src="screenshots/reader-clean.png" width="700" alt="ReManga Plus — чистая читалка без шума">
+  <img src="screenshots/hero-premium-free.jpg" width="900" alt="ReManga Plus — читалка без шума и без paywall">
 </p>
 
 <h1 align="center">ReManga Plus</h1>
 
 <p align="center">
-  Chrome-расширение, которое убирает визуальный шум из читалки <a href="https://remanga.org">ReManga</a> и даёт полный контроль над интерфейсом.
+  Расширение для Chrome, которое <b>открывает платные главы remanga.org бесплатно</b> и убирает весь визуальный шум из читалки.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Manifest-V3-blue?style=flat-square" alt="MV3">
-  <img src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT">
+  <a href="https://github.com/feechkablum6/remanga-plus/releases/latest"><img src="https://img.shields.io/badge/⬇_Скачать-последняя_версия-2ea44f?style=for-the-badge" alt="Скачать"></a>
 </p>
 
-> **💡 Совет:** для лучшего опыта используйте вместе с [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh?hl=en) — он уберёт рекламу, а ReManga Plus сделает интерфейс читалки идеально чистым.
+---
+
+## Что ты получишь
+
+- 🔓 **Premium Free** — читай платные главы бесплатно. Расширение само находит ту же главу в открытых источниках и подставляет в нативную читалку remanga.
+- 🧹 **Чистый интерфейс** — убирает кнопки, баннеры, попапы и всё, что мешает читать.
+- ⚙️ **Гибкие настройки** — сам решаешь, что скрыть, что оставить. Каждая кнопка — отдельный переключатель.
+- 🚫 **Без всплывашек** — промо, подарки, тосты автоматически закрываются.
 
 ---
 
-## Что делает
+## 🔓 Premium Free — главная фича
 
-ReManga Plus встраивается в страницу читалки и добавляет собственную панель **«Дополнительные настройки»** прямо в родной drawer. Все изменения применяются мгновенно и сохраняются между сессиями через `chrome.storage.sync`.
+Платная глава **без расширения** — нужно купить за монеты:
+
+<p align="center">
+  <img src="screenshots/pf-before-paywall.png" width="800" alt="Платная глава без расширения">
+</p>
+
+**С расширением** — та же глава открывается сразу, бесплатно:
+
+<p align="center">
+  <img src="screenshots/pf-after-reader.png" width="800" alt="Та же глава с Premium Free">
+</p>
+
+> Premium Free пока работает только на **macOS** — для Windows и Linux в планах. Чистка интерфейса работает на всех системах.
 
 ---
 
-## Скриншоты
+## 🧹 Чистая читалка
+
+Родная правая панель забита кнопками — расширение оставляет только нужные:
 
 <table>
   <tr>
-    <td align="center"><b>Настройки расширения в drawer</b></td>
-    <td align="center"><b>Гранулярное управление кнопками</b></td>
+    <td align="center"><b>До</b></td>
+    <td align="center"><b>После</b></td>
   </tr>
   <tr>
-    <td><img src="screenshots/settings-drawer.png" width="380" alt="Дополнительные настройки"></td>
-    <td><img src="screenshots/rail-buttons.png" width="380" alt="Выборочное скрытие кнопок"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Улучшенное меню настроек</b></td>
-    <td align="center"><b>Чистый режим чтения</b></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/settings-enhanced.png" width="380" alt="Улучшенное меню"></td>
-    <td><img src="screenshots/reader-clean.png" width="380" alt="Чистая читалка"></td>
+    <td><img src="screenshots/clean-rail-before.png" alt="Правая панель до"></td>
+    <td><img src="screenshots/clean-rail-after.png" alt="Правая панель после"></td>
   </tr>
 </table>
 
----
-
-## Возможности
-
-### Управление интерфейсом
-
-| Функция | Описание |
-|---------|----------|
-| **Полноэкранный режим** | Кнопка fullscreen прямо на правой панели читалки |
-| **Скрытие header** | Убирает верхнюю навигационную панель при чтении |
-| **Скрытие правой панели** | Гибкое скрытие — каждая кнопка управляется отдельным переключателем |
-| **Скрытие счётчика страниц** | Убирает индикатор текущей страницы |
-| **Скрытие комментариев** | Убирает блок комментариев под главой |
-| **Premium Free** | Подменяет locked/premium-экран native-like reader-слоем, повторяет настройки ReManga и в режиме `Лента` может продолжать paid/missing главы parser-backed chapter stream-ом |
-
-### Кнопки правой панели
-
-Отдельный переключатель для каждой кнопки:
-
-- Список глав
-- Комментарии
-- Лайк
-- Добавить изображение
-- Редактирование
-- Автоскролл
-- Жалоба
-- Кнопка полноэкранного режима
-
-### Улучшение меню настроек
-
-Пресет **«Улучшить меню настроек»** позволяет выборочно скрыть лишние пункты из нативного drawer:
-
-- Настройка изображения
-- Настройка горячих клавиш
-- Настройка скролла
-- Другие настройки
-- Тип читалки
-- Индикатор номера страницы
-- Показывать заметки
-
-### Авто-скрытие попапов
-
-| Категория | Что скрывает |
-|-----------|-------------|
-| **Подсказки** | Toast-уведомления и подсказки |
-| **Подарки и промо** | Всплывающие окна наград, подарков, промо-акций (включая dialog-модалки) |
-| **Прочие неблокирующие** | Остальные уведомления, не требующие действия |
+Каждая кнопка управляется отдельно — оставь то, чем реально пользуешься.
 
 ---
 
-## Установка
+## 📥 Установка (5 минут)
 
-### Из исходников
+### Шаг 1. Скачай ZIP
+
+Перейди на [страницу релизов](https://github.com/feechkablum6/remanga-plus/releases/latest) и скачай файл **`remanga-plus.zip`**.
+
+Распакуй архив куда угодно (например, в `Документы/remanga-plus/`). Внутри будет папка **`dist`** — она нам нужна.
+
+### Шаг 2. Открой страницу расширений Chrome
+
+В адресной строке введи:
+
+```
+chrome://extensions
+```
+
+В правом верхнем углу включи **«Режим разработчика»**.
+
+<p align="center">
+  <img src="screenshots/install-1-extensions-page.png" width="900" alt="Страница chrome://extensions с включённым режимом разработчика">
+</p>
+
+### Шаг 3. Загрузи папку `dist`
+
+Нажми **«Загрузить распакованное расширение»** (слева вверху).
+Откроется окно выбора папки — выбери **`dist`** из распакованного архива и нажми **«Выбрать»**.
+
+<p align="center">
+  <img src="screenshots/install-2-load-unpacked.png" width="900" alt="Выбор папки dist в Finder">
+</p>
+
+### Шаг 4. Готово
+
+Расширение появится в списке. Тумблер должен быть включён (синий).
+
+<p align="center">
+  <img src="screenshots/install-3-installed.png" width="900" alt="Расширение установлено и активно">
+</p>
+
+Открывай **remanga.org** — расширение уже работает. Иконка в тулбаре Chrome покажет статус.
+
+---
+
+## ⚙️ Настройки
+
+Все настройки — в двух местах:
+
+### 1. Drawer на странице читалки
+
+Открой любую главу, кликни на шестерёнку справа — увидишь раздел **«Дополнительные настройки»**:
+
+<p align="center">
+  <img src="screenshots/pf-toggle-in-drawer.png" width="450" alt="Дополнительные настройки в drawer">
+</p>
+
+Здесь включаешь Premium Free, скрываешь панели, меню, комментарии, попапы и т.д.
+
+### 2. Popup иконки в тулбаре
+
+Кликни на иконку расширения в тулбаре Chrome — откроется popup с настройками шапки сайта и статусом Premium Free:
+
+<p align="center">
+  <img src="screenshots/pf-popup-status.png" width="400" alt="Popup расширения со статусом">
+</p>
+
+---
+
+## 🔓 Подключение Premium Free (только macOS)
+
+Чтобы заработали бесплатные платные главы, нужно один раз установить вспомогательный компонент. Это требует одного шага в Терминале — не пугайся, всё по копипасте.
+
+### Шаг 1. Узнай ID расширения
+
+На странице `chrome://extensions` найди **Remanga Reader Enhancer** и нажми **«Сведения»**.
+Прокрути до поля **«Идентификатор»** — это длинная строка букв. Скопируй её.
+
+<p align="center">
+  <img src="screenshots/install-4-extension-id.png" width="900" alt="Идентификатор расширения в сведениях">
+</p>
+
+### Шаг 2. Запусти команду в Терминале
+
+Открой **Терминал** (через Spotlight: `Cmd + Space` → набери `Терминал`) и вставь:
 
 ```bash
-git clone https://github.com/feechkablum6/remanga-plus.git
-cd remanga-plus
+cd ~/Документы/remanga-plus  # путь к распакованному архиву
 npm install
-npm run build
+npm run native:install -- --extension-id ВСТАВЬ_СЮДА_ID
 ```
 
-### Загрузка в Chrome
+Замени `ВСТАВЬ_СЮДА_ID` на скопированный идентификатор.
 
-1. Открой `chrome://extensions`
-2. Включи **Developer mode** (переключатель в правом верхнем углу)
-3. Нажми **Load unpacked**
-4. Выбери папку `dist/`
+> Если в системе нет `npm` — поставь [Node.js](https://nodejs.org/ru) (LTS-версия), это разовая установка.
 
-Расширение автоматически активируется на страницах `remanga.org`.
+### Шаг 3. Включи Premium Free
 
-### Native Host для Premium Free
+Зайди на remanga.org, открой drawer настроек читалки → раздел **«Дополнительные настройки»** → переключатель **«Premium Free»**.
 
-`Premium Free` в текущей версии использует macOS Native Messaging host. После одноразовой установки он сам поднимает `parser-server` при открытии `remanga.org`, если включён переключатель `Premium Free`. В `Лента` режиме это позволяет не только открыть текущую платную главу, но и автоматически подгружать следующие parser-главы на paid/missing границах, сохраняя нативные индикаторы главы и страниц.
+Открой любую платную главу — должна загрузиться без оплаты.
 
-1. Загрузи unpacked-расширение и скопируй его **ID** со страницы `chrome://extensions`
-2. Выполни:
+В popup иконки расширения статус сменится на **«Parser-server работает»** — значит всё подключилось.
+
+---
+
+## 💡 Совет
+
+Для лучшего опыта используй вместе с [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh) — он уберёт рекламу, а ReManga Plus сделает сам интерфейс читалки идеально чистым.
+
+---
+
+## ❓ Частые вопросы
+
+**Premium Free не работает, что делать?**
+1. Проверь, что иконка расширения показывает **«Parser-server работает»**.
+2. Если статус «остановлен» — нажми кнопку **«Перезапустить parser-server»** в popup.
+3. Если по-прежнему не работает — переустанови Native Host командой из шага 2 выше.
+
+**Можно ли использовать на Windows/Linux?**
+Чистка интерфейса работает везде. Premium Free пока только macOS — поддержка других систем в планах.
+
+**Это безопасно?**
+Расширение полностью с открытым исходным кодом — можешь посмотреть сам. Никаких данных никуда не отправляется, никаких аккаунтов и токенов не запрашивается.
+
+**Почему расширения нет в Chrome Web Store?**
+Премиум-фича вряд ли пройдёт ревью Google, поэтому пока только установка вручную.
+
+---
+
+## Для разработчиков
+
+Полная документация по архитектуре, конвенциям и сборке — в [AGENTS.md](AGENTS.md) и [CLAUDE.md](CLAUDE.md). Команды:
 
 ```bash
-npm run native:install -- --extension-id <chrome-extension-id>
-```
-
-Инсталлер:
-- при необходимости установит зависимости `parser-server`
-- соберёт `parser-server`
-- соберёт `native-host`
-- зарегистрирует Native Messaging manifest в `~/Library/Application Support/Google/Chrome/NativeMessagingHosts`
-
-После этого `parser-server` будет автоматически стартовать через background service worker + native host. Если порт 3000 занят, native host автоматически найдёт свободный порт в диапазоне 3000–3009.
-
-### Ручной запуск parser-server
-
-Для отладки можно по-прежнему запускать backend вручную:
-
-```bash
-cd parser-server
 npm install
-npm run dev
+npm run build       # собрать расширение
+npm run check       # проверка типов
+npm run dev         # watch-режим
 ```
 
----
-
-## Разработка
-
-```bash
-# Проверка типов
-npm run check
-
-# Сборка
-npm run build
-
-# Сборка с авто-пересборкой при изменениях
-npm run dev
-
-# Проверка parser-server
-cd parser-server && npm run check
-
-# Тесты parser-server
-cd parser-server && npm test
-
-# Сборка native host
-npm run native:build
-
-# Установка native host
-npm run native:install -- --extension-id <chrome-extension-id>
-```
-
-### Структура проекта
-
-```
-src/
-├── background.ts               # MV3 service worker, healthcheck и Native Messaging bridge
-├── content.ts                  # Точка входа, наблюдатели DOM и маршрутов
-├── reader-enhancer.ts          # Основная логика UI-мутаций
-├── premium-free.ts             # Контракт Premium Free, metadata extraction и client config
-├── parser-server.ts            # Общие константы и message contract для parser-server startup
-├── settings.ts                 # Контракт chrome.storage.sync
-├── settings-menu-items.ts      # Описание пунктов нативного меню
-├── settings-panel-transition.ts # Обработка переходов панели настроек
-├── popup-dismissal.ts          # Селекторы и эвристики для автозакрытия попапов
-└── rail-overlay-state.ts       # Состояние оверлея правой панели
-
-parser-server/                  # Backend-резолвер внешних глав и proxy изображений
-native-host/                    # macOS Native Messaging launcher для автозапуска parser-server
-tests/                          # Юнит-тесты
-public/
-└── manifest.json               # MV3 манифест расширения
-```
-
----
-
-## Технологии
-
-- **TypeScript** (strict mode)
-- **Vite** — сборка в IIFE бандл
-- **Chrome Extension Manifest V3**
-- **chrome.storage.sync** — синхронизация настроек между устройствами
+Backend (parser-server): отдельный пакет в `parser-server/`.
 
 ## Лицензия
 
