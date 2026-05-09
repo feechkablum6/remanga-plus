@@ -17,9 +17,40 @@ const HEALTHCHECK_MAX_ATTEMPTS = 5;
 const HEALTHCHECK_RETRY_DELAY_MS = 500;
 const READY_CACHE_TTL_MS = 5_000;
 
+const DISCOVERED_PORT_SESSION_KEY = "rre:discoveredPort";
+
 let readyUntil = 0;
 let discoveredPort = PARSER_SERVER_DEFAULT_PORT;
 let activeEnsureRequest: Promise<ParserServerEnsureResult> | null = null;
+
+const sessionStorage = (): chrome.storage.StorageArea | null =>
+  typeof chrome !== "undefined" && chrome.storage?.session
+    ? chrome.storage.session
+    : null;
+
+const persistDiscoveredPort = (port: number): void => {
+  const area = sessionStorage();
+  if (!area) return;
+  area.set({ [DISCOVERED_PORT_SESSION_KEY]: port }, () => {
+    void chrome.runtime?.lastError;
+  });
+};
+
+const restoreDiscoveredPort = async (): Promise<void> => {
+  const area = sessionStorage();
+  if (!area) return;
+  await new Promise<void>((resolve) => {
+    area.get(DISCOVERED_PORT_SESSION_KEY, (items) => {
+      const stored = items?.[DISCOVERED_PORT_SESSION_KEY];
+      if (typeof stored === "number" && Number.isInteger(stored) && stored > 0) {
+        discoveredPort = stored;
+      }
+      resolve();
+    });
+  });
+};
+
+void restoreDiscoveredPort();
 
 type HealthcheckResult = {
   healthy: boolean;
@@ -221,6 +252,7 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
     }
 
     discoveredPort = extractPort(nativeResult);
+    persistDiscoveredPort(discoveredPort);
 
     if (await pollParserServerHealth(discoveredPort)) {
       readyUntil = Date.now() + READY_CACHE_TTL_MS;
@@ -295,12 +327,14 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
     }
 
     if (message.type === STATUS_PARSER_SERVER_MESSAGE_TYPE) {
-      void checkParserServerHealth(discoveredPort).then((healthy) => {
+      void (async () => {
+        await restoreDiscoveredPort();
+        const healthy = await checkParserServerHealth(discoveredPort);
         const result: ParserServerStatus = healthy
           ? { status: "ok", port: discoveredPort }
           : { status: "down" };
         sendResponse(result);
-      });
+      })();
       return true;
     }
 

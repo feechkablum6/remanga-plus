@@ -190,13 +190,29 @@ function bindRestartButton(): void {
 
         button.dataset.state = "";
         status.textContent = "Готово";
-        void refreshServerStatus();
+        const port = extractPort(response);
+        if (port !== null) {
+          renderServerStatus({ status: "ok", port });
+        }
         window.setTimeout(() => {
           status.textContent = "";
-        }, 2000);
+          void refreshServerStatus();
+        }, 1500);
       },
     );
   });
+}
+
+function extractPort(response: unknown): number | null {
+  if (
+    response &&
+    typeof response === "object" &&
+    "port" in response &&
+    typeof (response as { port: unknown }).port === "number"
+  ) {
+    return (response as { port: number }).port;
+  }
+  return null;
 }
 
 function isReady(response: unknown): boolean {
