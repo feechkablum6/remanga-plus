@@ -28,9 +28,17 @@ void main();
 async function main(): Promise<void> {
   const settings = await loadSettings();
 
+  renderVersionChip();
   renderHeaderToggles(settings);
   renderHomeToggles(settings);
   bindRestartButton();
+}
+
+function renderVersionChip(): void {
+  const chip = document.querySelector<HTMLElement>(".header__chip");
+  if (!chip) return;
+  const version = chrome.runtime?.getManifest?.().version;
+  if (version) chip.textContent = `v${version}`;
 }
 
 function renderHeaderToggles(settings: ReaderEnhancerSettings): void {
@@ -39,11 +47,12 @@ function renderHeaderToggles(settings: ReaderEnhancerSettings): void {
   );
   if (!group) return;
 
-  for (const [key, label] of HEADER_BUTTON_LABELS) {
+  HEADER_BUTTON_LABELS.forEach(([key, label], index) => {
     group.appendChild(
       buildToggle({
         label,
         checked: settings.hideHeaderButtons[key],
+        delayMs: 180 + index * 25,
         onChange: async (checked) => {
           const current = await loadSettings();
           current.hideHeaderButtons = {
@@ -54,7 +63,7 @@ function renderHeaderToggles(settings: ReaderEnhancerSettings): void {
         },
       }),
     );
-  }
+  });
 }
 
 function renderHomeToggles(settings: ReaderEnhancerSettings): void {
@@ -63,11 +72,12 @@ function renderHomeToggles(settings: ReaderEnhancerSettings): void {
   );
   if (!group) return;
 
-  for (const { key, label } of HOME_TOGGLES) {
+  HOME_TOGGLES.forEach(({ key, label }, index) => {
     group.appendChild(
       buildToggle({
         label,
         checked: settings[key],
+        delayMs: 250 + index * 25,
         onChange: async (checked) => {
           const current = await loadSettings();
           current[key] = checked;
@@ -75,16 +85,20 @@ function renderHomeToggles(settings: ReaderEnhancerSettings): void {
         },
       }),
     );
-  }
+  });
 }
 
 function buildToggle(options: {
   label: string;
   checked: boolean;
+  delayMs?: number;
   onChange: (checked: boolean) => void | Promise<void>;
 }): HTMLLabelElement {
   const wrapper = document.createElement("label");
   wrapper.className = "toggle";
+  if (typeof options.delayMs === "number") {
+    wrapper.style.animationDelay = `${options.delayMs}ms`;
+  }
 
   const text = document.createElement("span");
   text.className = "toggle__label";

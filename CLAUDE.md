@@ -82,6 +82,11 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `premium-free.ts` | Premium Free client: metadata extraction, response shapes, remanga read-state sync (`markRemangaChapterAsViewed` → `POST /api/activity/views/`) |
 | `parser-server.ts` | Shared constants: URLs, message types, host names |
 | `popup-dismissal.ts` | Селекторы и эвристики автозакрытия попапов |
+| `parser-server/src/providers/` | `mangabuff.ts` (HTML scrape), `senkuro.ts` (GraphQL), `inkstory.ts` (REST `api.inkstory.net`) — все реализуют `ExternalSourceProvider` |
+| `parser-server/src/http/client.ts` | `HttpClient` — UA, timeout, retry на 500/502/503/504/429 с Retry-After |
+| `parser-server/src/resolve-chapter.ts` | Fallback-chain по `DEFAULT_PROVIDER_PRIORITY`: на provider_error/no_match продолжаем, на success — return; лучший failure по rank (`chapter_not_found > no_match > provider_error`) |
+| `parser-server/fixtures/` | Живые JSON/HTML ответы провайдеров для тестов (НЕ путать с `tests/fixtures/` у Mangabuff) |
+| `parser-server/scripts/` | Одноразовые разведочные скрипты (`senkuro-*`, `inkstory-*`) |
 
 ## Конвенции
 
@@ -93,9 +98,32 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - **AGENTS.md** — содержит подробные behavior patterns и failure patterns. Читай его перед работой с reader-enhancer, premium-free, popup-dismissal.
 - **dist/** — только build output. Не редактировать напрямую.
 - **Provider logic** — title overrides и приоритеты провайдеров живут в `parser-server/src/config.ts`, не в расширении.
+- **Provider interface** — `SourceProvider`: `name`, `searchTitles`, `getTitleDetails(ref, options?)`, `parseChapter`, `fetchImage`, `manualSearchUrl`. Опциональные `branches[]` + `selectedBranchId` в `SourceTitleDetails` для multi-branch источников (InkStory). UI лейблы «Открыть X» — через `PROVIDER_DISPLAY_NAMES` в `premium-free.ts`.
+- **Translation picker** — `chrome.storage.sync.premiumFreeBranchPreferences: { [titleDir]: {provider, branchId} }`. Клиент шлёт `forcedBranchId` в resolve-body. Stale prefs автоматически purge'атся при несовпадении `selectedBranchId`.
+- **HttpClient обязателен** для новых провайдеров — без него попадёшь на DDoS-Guard / Cloudflare без UA.
 
 ## Anti-Patterns
 
 - DO NOT возвращать `minimizeSettingsButton`, `settings-peek-zone` или `openHiddenSettingsButton`.
 - DO NOT клонировать rail-кнопки в fixed-position hover-triggered overlay поверх читалки.
 - DO NOT удалять поле `"key"` из `public/manifest.json` или `dist/manifest.json`.
+- DO NOT устанавливать `emptyOutDir: true` в `vite.config.ts` / `vite.background.config.ts`.
+- DO NOT `return` failure внутри цикла по `providerPriority` — сломаешь fallback. `continue` + `recordFailure`.
+- DO NOT слать URL в `parseChapter` у Senkuro/InkStory напрямую — провайдер ждёт slug/UUID, URL парсится через `extractChapterSlug`/`extractChapterUuid`.
+- DO NOT `first: 10000` у Senkuro `mangaChapters` — сервер 400. Пагинация `first: 100` + `after: endCursor`.
+- DO NOT использовать `/v2/branches?book=X` у InkStory как authoritative список — там top-20 с editorsChoice. Группировать chapters по `branchId` из `/v2/chapters?bookId=`.
+- DO NOT запускать `node dist/index.js` parser-server руками параллельно с включённым Premium Free — native host сам поднимет, будет EADDRINUSE. `lsof -ti :3000 | xargs kill -9` перед ручным запуском.
+- DO NOT забывать `manga { slug }` в `CHAPTER_QUERY` — иначе `chapterUrl` в response без slug манги.
+
+## Visuals (gpt-image-prompt + frontend-design)
+
+Design state lives in `.design/`:
+- [`brand.md`](.design/brand.md) — ChatGPT memory project name, priming prompt, brand summary
+- [`tokens.md`](.design/tokens.md) — design tokens (colors, typography, spacing, radii)
+- [`log.md`](.design/log.md) — chronological log of generated visuals with their prompts
+
+**For any image / icon / UI mock generation:** the skill `gpt-image-prompt` reads/writes here automatically.
+
+**For frontend code generation:** when writing TSX/CSS/Tailwind for this project, read `.design/tokens.md` first and use those token values instead of inventing your own. The brand summary in `.design/brand.md` provides additional context.
+
+ChatGPT memory project name: `Remanga Reader Enhancer` — referenced in every image prompt to trigger memory recall.
