@@ -213,8 +213,11 @@ async function bootstrap(): Promise<void> {
   });
 
   watchSettings((nextSettings) => {
+    const previousPremiumFree = currentSettings.premiumFree;
     currentSettings = nextSettings;
-    requestParserServerWarmup(currentSettings);
+    if (!previousPremiumFree && currentSettings.premiumFree) {
+      requestParserServerWarmup(currentSettings);
+    }
     requestRefresh();
   });
 
