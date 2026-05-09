@@ -158,9 +158,48 @@ const fetchBranchChapters = async (
   }
 };
 
+export type PaidNextChapterMeta = {
+  titleDir: string;
+  chapterId: number;
+  chapter: string;
+  tome: number;
+};
+
+export type PrefetchNextChapterOptions = {
+  onPaidNextChapter?: (meta: PaidNextChapterMeta) => void | Promise<void>;
+};
+
+const fetchChapterDetail = async (
+  chapterId: number,
+): Promise<
+  | {
+      is_paid: boolean;
+      chapter?: unknown;
+      tome?: unknown;
+      pages?: unknown;
+    }
+  | null
+> => {
+  try {
+    const res = await fetch(REMANGA_CHAPTER_URL(chapterId));
+    if (!res.ok) return null;
+    const body = (await res.json()) as { content?: unknown };
+    if (!body.content || typeof body.content !== "object") return null;
+    return body.content as {
+      is_paid: boolean;
+      chapter?: unknown;
+      tome?: unknown;
+      pages?: unknown;
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const prefetchNextChapter = async (
   titleDir: string,
   currentChapterId: number,
+  options?: PrefetchNextChapterOptions,
 ): Promise<void> => {
   if (activeTitleDir !== null && activeTitleDir !== titleDir) {
     resetPrefetchDedup();
@@ -185,5 +224,32 @@ export const prefetchNextChapter = async (
   const next = findChapterByIndex(list, nextIndex);
   if (!next) return;
 
-  await prewarmChapter(next.id);
+  const detail = await fetchChapterDetail(next.id);
+  if (!detail) return;
+
+  if (detail.is_paid) {
+    if (options?.onPaidNextChapter) {
+      const chapterStr =
+        typeof detail.chapter === "string"
+          ? detail.chapter
+          : typeof detail.chapter === "number"
+            ? String(detail.chapter)
+            : "";
+      const tomeNum =
+        typeof detail.tome === "number" && Number.isFinite(detail.tome)
+          ? detail.tome
+          : 0;
+      await options.onPaidNextChapter({
+        titleDir,
+        chapterId: next.id,
+        chapter: chapterStr,
+        tome: tomeNum,
+      });
+    }
+    return;
+  }
+
+  for (const pageEntry of flattenPages(detail.pages)) {
+    addImagePreload(pageEntry.link);
+  }
 };

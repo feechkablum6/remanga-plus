@@ -335,3 +335,83 @@ test("prewarmChapter image preload links must NOT carry crossorigin (mismatch br
     "preload link must not have crossorigin attribute — Remanga's <img> tags don't use it, mismatch defeats cache reuse",
   );
 });
+
+test("prefetchNextChapter invokes onPaidNextChapter when next chapter is paid and skips image preloads", async () => {
+  resetPrefetchDedup();
+  const head = installDomStub();
+  installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/700/": {
+      content: { branch_id: 11, index: 50, is_paid: false, pages: [] },
+    },
+    "https://api.remanga.org/api/titles/chapters/?branch_id=11&ordering=index&page=2": {
+      content: [
+        { id: 700, index: 50, chapter: "49", tome: 3 },
+        { id: 701, index: 51, chapter: "50", tome: 3 },
+      ],
+    },
+    "https://api.remanga.org/api/titles/chapters/701/": {
+      content: {
+        is_paid: true,
+        chapter: "50",
+        tome: 3,
+        pages: [[{ link: "https://img.reimg.org/paid.webp" }]],
+      },
+    },
+  });
+
+  const paidCalls: Array<{
+    titleDir: string;
+    chapterId: number;
+    chapter: string;
+    tome: number;
+  }> = [];
+
+  await prefetchNextChapter("title-pf", 700, {
+    onPaidNextChapter: async (meta) => {
+      paidCalls.push(meta);
+    },
+  });
+
+  assert.equal(paidCalls.length, 1);
+  assert.deepEqual(paidCalls[0], {
+    titleDir: "title-pf",
+    chapterId: 701,
+    chapter: "50",
+    tome: 3,
+  });
+
+  // No <link rel=preload> for paid chapter — only PF flow handles it.
+  const preloads = head.children.filter((n) => n.rel === "preload");
+  assert.equal(preloads.length, 0);
+});
+
+test("prefetchNextChapter does NOT invoke onPaidNextChapter for free next chapter", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/800/": {
+      content: { branch_id: 12, index: 1, is_paid: false, pages: [] },
+    },
+    "https://api.remanga.org/api/titles/chapters/?branch_id=12&ordering=index&page=1": {
+      content: [
+        { id: 800, index: 1 },
+        { id: 801, index: 2 },
+      ],
+    },
+    "https://api.remanga.org/api/titles/chapters/801/": {
+      content: {
+        is_paid: false,
+        pages: [[{ link: "https://img.reimg.org/free.webp" }]],
+      },
+    },
+  });
+
+  let called = false;
+  await prefetchNextChapter("title-free", 800, {
+    onPaidNextChapter: async () => {
+      called = true;
+    },
+  });
+
+  assert.equal(called, false);
+});

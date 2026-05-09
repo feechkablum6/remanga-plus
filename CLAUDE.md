@@ -80,6 +80,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `settings.ts` | Контракт `chrome.storage.sync` — defaults, merge, clone |
 | `reader-enhancer.ts` | Все UI-мутации читалки |
 | `premium-free.ts` | Premium Free client: metadata extraction, response shapes, remanga read-state sync (`markRemangaChapterAsViewed` → `POST /api/activity/views/`) |
+| `premium-free-prefetch.ts` | PF prewarm: `prewarmPremiumFreeChapter(ref, resolver, { prewarmImage })` resolves a PF chapter and prewarms each page's `proxyUrl` via the in-memory `imageBlobCache` (NOT `<link rel=preload>` — PF images bypass HTTP cache by going through `chrome.runtime.sendMessage(PROXY_IMAGE_MESSAGE_TYPE)` → background → base64 → blob URL). Triggered (a) when next remanga chapter is paid via `prefetchNextChapter` `onPaidNextChapter` callback, (b) at PF stream root render to prewarm X+1, (c) after each stream entry add to chain X+2. |
 | `parser-server.ts` | Shared constants: URLs, message types, host names |
 | `popup-dismissal.ts` | Селекторы и эвристики автозакрытия попапов |
 | `parser-server/src/providers/` | `mangabuff.ts` (HTML scrape), `senkuro.ts` (GraphQL), `inkstory.ts` (REST `api.inkstory.net`) — все реализуют `ExternalSourceProvider` |

@@ -3,6 +3,7 @@ import {
   hideDynamicReaderArtifacts,
   isReaderPage,
   syncReaderEnhancer,
+  triggerPremiumFreePaidPrefetch,
 } from "./reader-enhancer";
 import {
   cloneSettings,
@@ -55,7 +56,11 @@ async function bootstrap(): Promise<void> {
       resetPrefetchDedup();
     }
     lastTitleDir = titleDir;
-    void prefetchNextChapter(titleDir, chapterId);
+    void prefetchNextChapter(titleDir, chapterId, {
+      onPaidNextChapter: currentSettings.premiumFree
+        ? triggerPremiumFreePaidPrefetch
+        : undefined,
+    });
   };
 
   const runRefresh = () => {

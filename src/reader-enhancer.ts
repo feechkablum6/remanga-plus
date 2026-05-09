@@ -44,7 +44,11 @@ import {
   POPUP_SELECTORS,
   isLikelyCornerCloseButton,
 } from "./popup-dismissal";
-import { prefetchNextChapter as prefetchRemangaNextChapter } from "./chapter-prefetch";
+import {
+  prefetchNextChapter as prefetchRemangaNextChapter,
+  type PaidNextChapterMeta,
+} from "./chapter-prefetch";
+import { prewarmPremiumFreeChapter } from "./premium-free-prefetch";
 import {
   createProgressTracker,
   type ProgressTracker,
@@ -194,6 +198,7 @@ const INACTIVE_FULLSCREEN_CLASSES = [
 let fullscreenListenerAttached = false;
 let stylesInstalled = false;
 let prefetchNextChapterEnabled = false;
+let premiumFreeEnabled = false;
 let progressTrackerEnabled = false;
 let activeProgressTracker: ProgressTracker | null = null;
 let activeProgressTrackerKey: string | null = null;
@@ -574,6 +579,7 @@ export const syncReaderEnhancer = ({
   commitSettings,
 }: SyncOptions): void => {
   prefetchNextChapterEnabled = settings.prefetchNextChapter;
+  premiumFreeEnabled = settings.premiumFree;
   progressTrackerEnabled = settings.showPremiumFreeProgress;
   ensureProgressTracker();
   // Toggle the data-rre-tighten-chapter-feed attribute that the CSS rule in
@@ -4247,6 +4253,7 @@ const renderPremiumFreePages = (
   const stream = ensurePremiumFreeChapterStream(container, key, reference, result);
   ensureProgressTracker();
   renderPremiumFreeFeedStream(container, stream, readerState);
+  prewarmPremiumFreeNextStreamChapter(reference, result);
 };
 
 const renderPremiumFreeError = (
@@ -4349,6 +4356,59 @@ const resolvePremiumFreeChapterResult = async (
   return result;
 };
 
+const handlePaidNextChapterPrefetch = async (
+  paidNext: PaidNextChapterMeta,
+): Promise<void> => {
+  if (!premiumFreeEnabled) return;
+
+  const baseRef = collectPremiumFreeReference();
+  if (!baseRef) return;
+
+  const reference: RemangaChapterReference = {
+    titleDir: paidNext.titleDir,
+    titleName: baseRef.titleName,
+    aliases: baseRef.aliases,
+    tome: paidNext.tome > 0 ? paidNext.tome : baseRef.tome,
+    chapter: paidNext.chapter || baseRef.chapter,
+    chapterId: paidNext.chapterId,
+    chapterUrl: `https://remanga.org/manga/${paidNext.titleDir}/${paidNext.chapterId}`,
+  };
+
+  await prewarmPremiumFreeChapter(reference, resolvePremiumFreeChapterResult, {
+    prewarmImage: fetchImageBlobUrl,
+  });
+};
+
+export const triggerPremiumFreePaidPrefetch = handlePaidNextChapterPrefetch;
+
+const prewarmPremiumFreeNextStreamChapter = (
+  currentReference: RemangaChapterReference,
+  result: PremiumFreeSuccessResult,
+): void => {
+  if (!premiumFreeEnabled) return;
+  if (!result.nextChapter) return;
+
+  const nextReference = createPremiumFreeStreamReference(
+    currentReference,
+    result.nextChapter,
+  );
+
+  void prewarmPremiumFreeChapter(
+    nextReference,
+    resolvePremiumFreeChapterResult,
+    { prewarmImage: fetchImageBlobUrl },
+  );
+};
+
+const prefetchNextChapterWithFallback = (
+  titleDir: string,
+  chapterId: number,
+): void => {
+  void prefetchRemangaNextChapter(titleDir, chapterId, {
+    onPaidNextChapter: handlePaidNextChapterPrefetch,
+  });
+};
+
 const loadPremiumFreeNextChapter = async (): Promise<void> => {
   const stream = premiumFreeChapterStream;
   if (!stream || !stream.container.isConnected || stream.status === "loading-next") {
@@ -4387,9 +4447,10 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
       if (prefetchNextChapterEnabled) {
         const { titleDir, chapterId } = nextReference;
         if (typeof titleDir === "string" && typeof chapterId === "number") {
-          void prefetchRemangaNextChapter(titleDir, chapterId);
+          prefetchNextChapterWithFallback(titleDir, chapterId);
         }
       }
+      prewarmPremiumFreeNextStreamChapter(nextReference, cachedResult);
     }
 
     renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
@@ -4445,9 +4506,10 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   if (prefetchNextChapterEnabled) {
     const { titleDir, chapterId } = nextReference;
     if (typeof titleDir === "string" && typeof chapterId === "number") {
-      void prefetchRemangaNextChapter(titleDir, chapterId);
+      prefetchNextChapterWithFallback(titleDir, chapterId);
     }
   }
+  prewarmPremiumFreeNextStreamChapter(nextReference, result);
   renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
 };
 
