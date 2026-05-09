@@ -9,6 +9,7 @@ export const buildParserServerHealthcheckUrl = (port: number): string =>
   `${buildParserServerBaseUrl(port)}${PARSER_SERVER_HEALTHCHECK_PATH}`;
 
 export const ENSURE_PARSER_SERVER_MESSAGE_TYPE = "rre:ensure-parser-server";
+export const RESTART_PARSER_SERVER_MESSAGE_TYPE = "rre:restart-parser-server";
 export const PROXY_IMAGE_MESSAGE_TYPE = "rre:proxy-image";
 export const NATIVE_HOST_NAME = "org.remanga.parser_host";
 

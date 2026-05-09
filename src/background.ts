@@ -1,5 +1,6 @@
 import {
   ENSURE_PARSER_SERVER_MESSAGE_TYPE,
+  RESTART_PARSER_SERVER_MESSAGE_TYPE,
   NATIVE_HOST_NAME,
   PARSER_SERVER_DEFAULT_PORT,
   PROXY_IMAGE_MESSAGE_TYPE,
@@ -281,6 +282,13 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       void handleProxyImage(
         (message as { proxyPath: string }).proxyPath,
       ).then(sendResponse);
+      return true;
+    }
+
+    if (message.type === RESTART_PARSER_SERVER_MESSAGE_TYPE) {
+      readyUntil = 0;
+      activeEnsureRequest = null;
+      void ensureParserServer().then(sendResponse);
       return true;
     }
 
