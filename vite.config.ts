@@ -7,7 +7,7 @@ const rootDirectory = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   publicDir: "public",
   build: {
-    emptyOutDir: true,
+    emptyOutDir: false,
     outDir: "dist",
     sourcemap: true,
     lib: {

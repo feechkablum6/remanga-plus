@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .codex-tmp/
+.codex-tmp2/
+tmp/
+*.test.js
 AGENTS.md
 docs/
 *.map
