@@ -5,11 +5,14 @@ import {
   createPremiumFreeStreamReference,
   createPremiumFreeCacheEntry,
   derivePremiumFreeTargetReference,
+  describePremiumFreeFailure,
   extractRemangaChapterReference,
   pickPremiumFreeActivePage,
+  readPremiumFreeBranchPreference,
   readPremiumFreeCacheEntry,
   shouldPrefetchPremiumFreeNextChapter,
   shouldPrefetchPremiumFreeNextChapterByViewport,
+  writePremiumFreeBranchPreference,
 } from "../src/premium-free.js";
 
 test("extracts remanga chapter metadata for premium-free resolution", () => {
@@ -270,6 +273,157 @@ test("picks the active parser page from viewport geometry when observer ratios a
     ),
     null,
   );
+});
+
+test("uses the provider-specific display name in the failure button label", () => {
+  const mangabuffFailure = describePremiumFreeFailure(
+    {
+      status: "failure",
+      reason: "chapter_not_found",
+      provider: "mangabuff",
+      manualUrl: "https://mangabuff.ru/manga/x",
+    },
+    "Возвращение Еретика",
+  );
+  assert.equal(mangabuffFailure.linkLabel, "Открыть Mangabuff");
+
+  const senkuroFailure = describePremiumFreeFailure(
+    {
+      status: "failure",
+      reason: "chapter_not_found",
+      provider: "senkuro",
+      manualUrl: "https://senkuro.com/manga/x",
+    },
+    "Башня Бога",
+  );
+  assert.equal(senkuroFailure.linkLabel, "Открыть Senkuro");
+
+  const inkstoryFailure = describePremiumFreeFailure(
+    {
+      status: "failure",
+      reason: "chapter_not_found",
+      provider: "inkstory",
+      manualUrl: "https://inkstory.net/content/x",
+    },
+    "Solo Leveling",
+  );
+  assert.equal(inkstoryFailure.linkLabel, "Открыть InkStory");
+});
+
+test("uses a generic 'Открыть источник' label for unknown providers", () => {
+  const unknownFailure = describePremiumFreeFailure(
+    {
+      status: "failure",
+      reason: "provider_error",
+      provider: "unknown",
+      manualUrl: "",
+    },
+    "Какой-то тайтл",
+  );
+  assert.equal(unknownFailure.linkLabel, "Открыть источник");
+});
+
+test("install_required failure keeps provider-specific label with 'вручную' suffix", () => {
+  const senkuroInstall = describePremiumFreeFailure(
+    {
+      status: "failure",
+      reason: "install_required",
+      provider: "senkuro",
+      manualUrl: "https://senkuro.com/browse/manga?search=x",
+    },
+    "Башня Бога",
+  );
+  assert.equal(senkuroInstall.linkLabel, "Открыть Senkuro вручную");
+});
+
+test("readPremiumFreeBranchPreference returns null when no matching entry", () => {
+  assert.equal(readPremiumFreeBranchPreference(null, "solo-leveling"), null);
+  assert.equal(readPremiumFreeBranchPreference({}, "solo-leveling"), null);
+});
+
+test("writePremiumFreeBranchPreference stores under titleDir key, does not mutate input", () => {
+  const before = { foo: { provider: "inkstory", branchId: "old" } };
+  const after = writePremiumFreeBranchPreference(before, "solo-leveling", {
+    provider: "inkstory",
+    branchId: "branch-xyz",
+  });
+  assert.deepEqual(before, { foo: { provider: "inkstory", branchId: "old" } });
+  assert.deepEqual(after["solo-leveling"], {
+    provider: "inkstory",
+    branchId: "branch-xyz",
+  });
+  assert.deepEqual(after["foo"], { provider: "inkstory", branchId: "old" });
+
+  assert.equal(
+    readPremiumFreeBranchPreference(after, "solo-leveling")?.branchId,
+    "branch-xyz",
+  );
+});
+
+test("clearStalePremiumFreeBranchPreference removes entry when server didn't honor forcedBranchId", async () => {
+  const { clearStalePremiumFreeBranchPreference } = await import(
+    "../src/premium-free.js"
+  );
+  const prefs = {
+    "solo-leveling": { provider: "inkstory", branchId: "REQ" },
+  };
+
+  // server returned success with a DIFFERENT selectedBranchId → stale
+  const stale = clearStalePremiumFreeBranchPreference(prefs, "solo-leveling", "REQ", {
+    status: "success",
+    branches: [
+      { id: "OTHER", name: "x", chaptersCount: 1 },
+      { id: "REQ", name: "y", chaptersCount: 0 },
+    ],
+    selectedBranchId: "OTHER",
+  });
+  assert.equal(stale["solo-leveling"], undefined);
+
+  // honored — keep
+  const honored = clearStalePremiumFreeBranchPreference(prefs, "solo-leveling", "REQ", {
+    status: "success",
+    branches: [{ id: "REQ", name: "y", chaptersCount: 1 }],
+    selectedBranchId: "REQ",
+  });
+  assert.deepEqual(honored, prefs);
+
+  // no forcedBranchId requested → never invalidate
+  const never = clearStalePremiumFreeBranchPreference(prefs, "solo-leveling", null, {
+    status: "success",
+    branches: [{ id: "X", name: "y", chaptersCount: 1 }],
+    selectedBranchId: "X",
+  });
+  assert.deepEqual(never, prefs);
+
+  // source has no branches (e.g. mangabuff) → keep (may apply on fallback later)
+  const noBranchSource = clearStalePremiumFreeBranchPreference(
+    prefs,
+    "solo-leveling",
+    "REQ",
+    { status: "success" },
+  );
+  assert.deepEqual(noBranchSource, prefs);
+
+  // failure → keep, might be transient
+  const onFailure = clearStalePremiumFreeBranchPreference(
+    prefs,
+    "solo-leveling",
+    "REQ",
+    { status: "failure" },
+  );
+  assert.deepEqual(onFailure, prefs);
+});
+
+test("writePremiumFreeBranchPreference overwrites existing entry for same titleDir", () => {
+  const first = writePremiumFreeBranchPreference({}, "foo", {
+    provider: "inkstory",
+    branchId: "b1",
+  });
+  const second = writePremiumFreeBranchPreference(first, "foo", {
+    provider: "senkuro",
+    branchId: "b2",
+  });
+  assert.deepEqual(second["foo"], { provider: "senkuro", branchId: "b2" });
 });
 
 test("prefetches the next parser chapter when the viewport approaches the stream end", () => {

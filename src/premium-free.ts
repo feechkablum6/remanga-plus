@@ -14,6 +14,12 @@ export type RemangaChapterReference = {
   chapterUrl: string;
 };
 
+export type PremiumFreeBranch = {
+  id: string;
+  name: string;
+  chaptersCount: number;
+};
+
 export type PremiumFreeResolveSuccess = {
   status: "success";
   provider: string;
@@ -41,6 +47,8 @@ export type PremiumFreeResolveSuccess = {
     index: number;
     proxyUrl: string;
   }>;
+  branches?: PremiumFreeBranch[];
+  selectedBranchId?: string;
 };
 
 export type PremiumFreeResolveFailure = {
@@ -199,13 +207,22 @@ export const buildPremiumFreeSearchUrl = (titleName: string): string =>
 export const isResolverUnavailableError = (error: unknown): boolean =>
   error instanceof TypeError;
 
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+  mangabuff: "Mangabuff",
+  senkuro: "Senkuro",
+  inkstory: "InkStory",
+};
+
+const displayProviderName = (provider: string): string =>
+  PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+
 const createParserServerFailure = (
   reason: PremiumFreeClientFailureReason,
   detail?: string,
 ): PremiumFreeClientFailure => ({
   status: "failure",
   reason,
-  provider: "mangabuff",
+  provider: "unknown",
   manualUrl: "",
   ...(detail ? { detail } : {}),
 });
@@ -259,6 +276,14 @@ export const mapParserServerFailure = (
   return createParserServerFailure("resolver_unavailable", result.detail);
 };
 
+const buildOpenLabel = (provider: string, { manual = false }: { manual?: boolean } = {}): string => {
+  if (provider === "unknown") {
+    return manual ? "Открыть источник вручную" : "Открыть источник";
+  }
+  const name = displayProviderName(provider);
+  return manual ? `Открыть ${name} вручную` : `Открыть ${name}`;
+};
+
 export const describePremiumFreeFailure = (
   failure: PremiumFreeClientFailure,
   titleName: string,
@@ -276,7 +301,7 @@ export const describePremiumFreeFailure = (
       copy:
         "Native Messaging host не установлен. Выполни установку launcher-а и обнови страницу.",
       linkHref: fallbackUrl,
-      linkLabel: "Открыть Mangabuff вручную",
+      linkLabel: buildOpenLabel(failure.provider, { manual: true }),
     };
   }
 
@@ -293,7 +318,7 @@ export const describePremiumFreeFailure = (
       title: "Premium Free",
       copy: "Тайтл найден, но нужная глава не обнаружена у текущего источника.",
       linkHref: fallbackUrl,
-      linkLabel: "Открыть Mangabuff",
+      linkLabel: buildOpenLabel(failure.provider),
     };
   }
 
@@ -302,7 +327,7 @@ export const describePremiumFreeFailure = (
       title: "Premium Free",
       copy: "Parser-server или внешний источник вернул ошибку. Можно открыть главу вручную.",
       linkHref: fallbackUrl,
-      linkLabel: "Открыть Mangabuff",
+      linkLabel: buildOpenLabel(failure.provider),
     };
   }
 
@@ -310,7 +335,7 @@ export const describePremiumFreeFailure = (
     title: "Premium Free",
     copy: "Не удалось надёжно сопоставить главу. Можно открыть источник вручную.",
     linkHref: fallbackUrl,
-    linkLabel: "Открыть Mangabuff",
+    linkLabel: buildOpenLabel(failure.provider),
   };
 };
 
@@ -497,6 +522,80 @@ export const shouldPrefetchPremiumFreeNextChapterByViewport = (
   }
 
   return distanceToViewportBottom <= PREMIUM_FREE_VIEWPORT_PREFETCH_DISTANCE_PX;
+};
+
+/**
+ * Per-title user preference for which translation branch to use.
+ *
+ * Keyed by plain `titleDir` (not provider+titleDir) because the client sends
+ * the preference *before* it knows which provider will win the resolve.
+ * The value carries `provider` so we can detect staleness: if the preference
+ * was set when source X was used but the resolver now returns source Y,
+ * the provider-specific `branchId` will simply not match any real branch in Y
+ * and the provider-side extractor will fall back to its default pick
+ * (see `extractInkstoryTitleDetails.chosenBranchId` fallback logic).
+ */
+export type PremiumFreeBranchPreference = {
+  provider: string;
+  branchId: string;
+};
+
+export const PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY =
+  "premiumFreeBranchPreferences";
+
+export const readPremiumFreeBranchPreference = (
+  map: Record<string, PremiumFreeBranchPreference> | null | undefined,
+  titleDir: string,
+): PremiumFreeBranchPreference | null => {
+  if (!map) return null;
+  const entry = map[titleDir];
+  if (!entry || !entry.branchId || !entry.provider) return null;
+  return entry;
+};
+
+export const writePremiumFreeBranchPreference = (
+  map: Record<string, PremiumFreeBranchPreference> | null | undefined,
+  titleDir: string,
+  pref: PremiumFreeBranchPreference,
+): Record<string, PremiumFreeBranchPreference> => {
+  const next = { ...(map ?? {}) };
+  next[titleDir] = { provider: pref.provider, branchId: pref.branchId };
+  return next;
+};
+
+/**
+ * Return a new preference map with the stored entry for `titleDir` removed
+ * if the client-sent `requestedBranchId` was NOT honored by the server.
+ *
+ * Only purges when:
+ *   1. we actually sent a forcedBranchId this request (not just an initial open),
+ *   2. the server returned a success with branch information, and
+ *   3. the `selectedBranchId` differs from the branch we asked for.
+ *
+ * In all other cases the map is returned unchanged so that:
+ *   - a one-off failure doesn't wipe user choice,
+ *   - opening the same title via a different provider that has no branches
+ *     (Mangabuff/Senkuro) keeps the InkStory pref intact for next time.
+ */
+export const clearStalePremiumFreeBranchPreference = (
+  map: Record<string, PremiumFreeBranchPreference> | null | undefined,
+  titleDir: string,
+  requestedBranchId: string | null | undefined,
+  result: {
+    status: string;
+    branches?: PremiumFreeBranch[];
+    selectedBranchId?: string;
+  } | null | undefined,
+): Record<string, PremiumFreeBranchPreference> => {
+  const current = map ?? {};
+  if (!requestedBranchId) return current;
+  if (!result || result.status !== "success") return current;
+  if (!result.branches || result.branches.length === 0) return current;
+  if (result.selectedBranchId === requestedBranchId) return current;
+
+  const next = { ...current };
+  delete next[titleDir];
+  return next;
 };
 
 export const REMANGA_MARK_VIEWED_URL =
