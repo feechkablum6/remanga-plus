@@ -17,6 +17,7 @@ import {
   prefetchNextChapter,
   resetPrefetchDedup,
 } from "./chapter-prefetch";
+import { applyHomeEnhancements } from "./home-enhancer";
 
 declare global {
   interface Window {
@@ -58,6 +59,8 @@ async function bootstrap(): Promise<void> {
   };
 
   const runRefresh = () => {
+    applyHomeEnhancements(document, currentSettings);
+
     if (!isReaderPage()) {
       clearEnhancerArtifacts();
       return;
