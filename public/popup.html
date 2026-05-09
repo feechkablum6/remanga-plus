@@ -228,6 +228,43 @@
         animation: rre-fade-up 360ms cubic-bezier(0.2, 0.8, 0.2, 1) 200ms both;
       }
 
+      .server-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 4px 10px;
+        font-size: 11px;
+        color: var(--text-muted);
+        font-feature-settings: "tnum";
+      }
+
+      .server-status__dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        flex-shrink: 0;
+        transition: background 200ms ease, box-shadow 200ms ease;
+      }
+
+      .server-status[data-state="ok"] .server-status__dot {
+        background: var(--accent);
+        box-shadow: 0 0 0 3px rgba(62, 218, 224, 0.16);
+      }
+
+      .server-status[data-state="ok"] .server-status__label {
+        color: var(--text);
+      }
+
+      .server-status[data-state="down"] .server-status__dot {
+        background: var(--danger);
+        box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.16);
+      }
+
+      .server-status[data-state="down"] .server-status__label {
+        color: var(--danger);
+      }
+
       .button {
         position: relative;
         width: 100%;
@@ -345,6 +382,10 @@
     </section>
 
     <section class="actions">
+      <div class="server-status" data-server-status>
+        <span class="server-status__dot" data-server-dot></span>
+        <span class="server-status__label" data-server-label>Проверка…</span>
+      </div>
       <button class="button" data-action="restart-parser">
         <svg class="button__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path

@@ -10,8 +10,23 @@ export const buildParserServerHealthcheckUrl = (port: number): string =>
 
 export const ENSURE_PARSER_SERVER_MESSAGE_TYPE = "rre:ensure-parser-server";
 export const RESTART_PARSER_SERVER_MESSAGE_TYPE = "rre:restart-parser-server";
+export const STATUS_PARSER_SERVER_MESSAGE_TYPE = "rre:status-parser-server";
 export const PROXY_IMAGE_MESSAGE_TYPE = "rre:proxy-image";
 export const NATIVE_HOST_NAME = "org.remanga.parser_host";
+
+export type ParserServerStatus =
+  | { status: "ok"; port: number }
+  | { status: "down" };
+
+export const isParserServerStatus = (
+  value: unknown,
+): value is ParserServerStatus => {
+  if (!value || typeof value !== "object" || !("status" in value)) {
+    return false;
+  }
+  const status = (value as { status: unknown }).status;
+  return status === "ok" || status === "down";
+};
 
 export type ParserServerEnsureResult =
   | {

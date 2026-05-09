@@ -1,6 +1,7 @@
 import {
   ENSURE_PARSER_SERVER_MESSAGE_TYPE,
   RESTART_PARSER_SERVER_MESSAGE_TYPE,
+  STATUS_PARSER_SERVER_MESSAGE_TYPE,
   NATIVE_HOST_NAME,
   PARSER_SERVER_DEFAULT_PORT,
   PROXY_IMAGE_MESSAGE_TYPE,
@@ -8,6 +9,7 @@ import {
   buildParserServerHealthcheckUrl,
   isParserServerEnsureResult,
   type ParserServerEnsureResult,
+  type ParserServerStatus,
 } from "./parser-server.js";
 
 const HEALTHCHECK_TIMEOUT_MS = 3_000;
@@ -289,6 +291,16 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       readyUntil = 0;
       activeEnsureRequest = null;
       void ensureParserServer().then(sendResponse);
+      return true;
+    }
+
+    if (message.type === STATUS_PARSER_SERVER_MESSAGE_TYPE) {
+      void checkParserServerHealth(discoveredPort).then((healthy) => {
+        const result: ParserServerStatus = healthy
+          ? { status: "ok", port: discoveredPort }
+          : { status: "down" };
+        sendResponse(result);
+      });
       return true;
     }
 

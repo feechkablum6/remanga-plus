@@ -4,7 +4,14 @@ import {
   type HeaderButtonKey,
   type ReaderEnhancerSettings,
 } from "./settings.js";
-import { RESTART_PARSER_SERVER_MESSAGE_TYPE } from "./parser-server.js";
+import {
+  RESTART_PARSER_SERVER_MESSAGE_TYPE,
+  STATUS_PARSER_SERVER_MESSAGE_TYPE,
+  isParserServerStatus,
+  type ParserServerStatus,
+} from "./parser-server.js";
+
+const STATUS_POLL_MS = 5000;
 
 const HEADER_BUTTON_LABELS: ReadonlyArray<[HeaderButtonKey, string]> = [
   ["logo", "Логотип"],
@@ -32,6 +39,43 @@ async function main(): Promise<void> {
   renderHeaderToggles(settings);
   renderHomeToggles(settings);
   bindRestartButton();
+  startStatusPolling();
+}
+
+function startStatusPolling(): void {
+  void refreshServerStatus();
+  window.setInterval(() => {
+    void refreshServerStatus();
+  }, STATUS_POLL_MS);
+}
+
+function refreshServerStatus(): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: STATUS_PARSER_SERVER_MESSAGE_TYPE },
+      (response: unknown) => {
+        void chrome.runtime?.lastError;
+        renderServerStatus(
+          isParserServerStatus(response) ? response : { status: "down" },
+        );
+        resolve();
+      },
+    );
+  });
+}
+
+function renderServerStatus(status: ParserServerStatus): void {
+  const root = document.querySelector<HTMLElement>("[data-server-status]");
+  const label = document.querySelector<HTMLElement>("[data-server-label]");
+  if (!root || !label) return;
+
+  if (status.status === "ok") {
+    root.dataset.state = "ok";
+    label.textContent = `Parser-server работает на :${status.port}`;
+  } else {
+    root.dataset.state = "down";
+    label.textContent = "Parser-server не запущен";
+  }
 }
 
 function renderVersionChip(): void {
@@ -146,6 +190,7 @@ function bindRestartButton(): void {
 
         button.dataset.state = "";
         status.textContent = "Готово";
+        void refreshServerStatus();
         window.setTimeout(() => {
           status.textContent = "";
         }, 2000);
