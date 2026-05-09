@@ -23,20 +23,8 @@ const HEADER_LOCATORS: Record<HeaderButtonKey, Locator> = {
   tops: (root) => root.querySelector('a[href="/manga/top"]'),
   forum: (root) => root.querySelector('a[href*="/forum"]'),
   ellipsis: (root) => {
-    const candidates = Array.from(
-      root.querySelectorAll<HTMLButtonElement>(
-        'button[data-state][data-sentry-element="Button"]',
-      ),
-    );
-    return (
-      candidates.find(
-        (b) =>
-          !b.getAttribute("data-sentry-component") &&
-          !b.getAttribute("aria-haspopup") &&
-          !b.textContent?.trim() &&
-          b.closest('div[class*="md:flex"]'),
-      ) ?? null
-    );
+    const navStrip = (root as Element).querySelector?.('div[class*="md:flex"]');
+    return navStrip?.querySelector("nav") ?? null;
   },
   search: (root) => root.querySelector('[data-sentry-component="SearchButton"]'),
   bookmarks: (root) => root.querySelector('a[href="/user/bookmarks"]'),

@@ -14,7 +14,7 @@ const buildHeader = (): { root: HTMLElement; cleanup: () => void } => {
         <a href="/manga">Каталог</a>
         <a href="/manga/top">Топы</a>
         <a href="/forum?ordering=last">Форум</a>
-        <button data-state="closed" data-sentry-element="Button"></button>
+        <nav><div><ul><li><button data-state="closed"></button></li></ul></div></nav>
       </div>
       <button data-sentry-component="SearchButton">Поиск</button>
       <a href="/user/bookmarks">Закладки</a>
@@ -101,7 +101,7 @@ test("applyHomeEnhancements hides logo, search, bookmarks, ellipsis, avatar when
     const logo = root.querySelector('a[data-sentry-component="LogoButton"]') as HTMLElement;
     const search = root.querySelector('[data-sentry-component="SearchButton"]') as HTMLElement;
     const bookmarks = root.querySelector('a[href="/user/bookmarks"]') as HTMLElement;
-    const ellipsis = root.querySelector('div.md\\:flex > button[data-state]') as HTMLElement;
+    const ellipsis = root.querySelector('div.md\\:flex > nav') as HTMLElement;
     const avatar = root.querySelector('button[aria-haspopup="menu"]') as HTMLElement;
 
     assert.equal(logo.style.display, "none");
