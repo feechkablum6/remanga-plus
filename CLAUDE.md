@@ -33,6 +33,13 @@ npm version major    # 0.2.0 → 1.0.0
 npm run pkg:build    # → packaging/build/Remanga-Plus.pkg
 npm run pkg:test     # тесты сборки .pkg + postinstall
 
+# One-click installer .exe для Windows x64 (через GitHub Actions, на arm64 macOS Tahoe makensis 3.12 сломан)
+# Триггеры: push tag v* → автосборка + GitHub Release с .exe
+#           workflow_dispatch вручную из вкладки Actions
+# Локально: npm run pkg:windows работает на Linux/Intel Mac, на arm64 macOS падает std::bad_alloc
+npm run pkg:windows         # → packaging/build-windows/Remanga-Plus-Setup.exe (если makensis рабочий)
+npm run pkg:windows:test    # тесты Windows-пайплайна (skip'нутся если makensis сломан)
+
 # Parser-server
 cd parser-server && npm install
 cd parser-server && npm run dev      # dev с hot reload
@@ -79,6 +86,8 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 
 5. **Packaging** (`packaging/`) — One-click installer `.pkg` для macOS arm64. `bundle-parser.mjs` esbuild'ит весь parser-server в один JS, `bundle-host.mjs` — host.ts. `download-node.mjs` тянет Node arm64 binary. `build-pkg.mjs` оркестрирует всё + кладёт payload в `/Applications/Remanga Plus/` через `pkgbuild`/`productbuild`. Postinstall (`packaging/templates/postinstall`) вычисляет extension ID из `manifest.json` "key" и регистрирует Native Messaging manifest для всех Chromium-браузеров пользователя (Chrome/Brave/Edge/Vivaldi/Arc/...). Без подписи Apple Developer — друг открывает через правый клик → «Открыть».
 
+   Windows-аналог: `build-installer-windows.mjs` — переиспользует `bundle-parser.mjs` / `bundle-host.mjs` (платформо-нейтральные esbuild-выходы), тянет `node.exe` через `download-node-windows.mjs`, копирует `host.bat` shim, собирает payload в `packaging/build-windows/` и зовёт `makensis -DEXTENSION_ID=... -DVERSION=... installer.nsi` → `Remanga-Plus-Setup.exe`. NSIS-скрипт сам генерирует `nm-manifest.json` и пишет ключи `HKCU\Software\<browser>\NativeMessagingHosts\org.remanga.parser_host` для 10 Chromium-браузеров (Chrome stable/beta/dev/canary, Edge, Brave, Vivaldi, Chromium, Yandex, Opera); per-user install в `%LOCALAPPDATA%\Programs\Remanga Plus`, без UAC, zlib-компрессор. Сам `.exe` собирается на CI через `.github/workflows/build-windows-installer.yml` (ubuntu-latest + apt nsis) — Homebrew `makensis 3.12` на arm64 macOS Tahoe сломан (std::bad_alloc). Без подписи Windows — друг через SmartScreen жмёт «More info → Run anyway».
+
 ### Ключевые модули
 
 | Файл | Роль |
@@ -121,6 +130,9 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT использовать `/v2/branches?book=X` у InkStory как authoritative список — там top-20 с editorsChoice. Группировать chapters по `branchId` из `/v2/chapters?bookId=`.
 - DO NOT запускать `node dist/index.js` parser-server руками параллельно с включённым Premium Free — native host сам поднимет, будет EADDRINUSE. `lsof -ti :3000 | xargs kill -9` перед ручным запуском.
 - DO NOT забывать `manga { slug }` в `CHAPTER_QUERY` — иначе `chapterUrl` в response без slug манги.
+- DO NOT использовать non-ASCII символы в `installer.nsi`.
+- DO NOT использовать `SetCompressor /SOLID lzma` или `SetCompressor lzma` в `installer.nsi`.
+- DO NOT коммитить `packaging/build-windows/` (build artefacts).
 
 ## Visuals (gpt-image-prompt + frontend-design)
 
