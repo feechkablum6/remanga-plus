@@ -1,0 +1,106 @@
+#!/bin/bash
+# ReManga Plus postinstall:
+#  - registers the bundled native host with every Chromium-based browser
+#    that already exists in the console user's profile.
+# Test-mode env overrides:
+#   REMANGA_INSTALL_DIR  full path of the install dir (default: /Applications/Remanga Plus)
+#   REMANGA_TARGET_HOME  user $HOME to write NM manifests into (default: console user home)
+#   REMANGA_TARGET_USER  user name (default: console user)
+#   REMANGA_SKIP_CHOWN   if set, skip chown (test mode)
+
+set -e
+
+INSTALL_DIR="${REMANGA_INSTALL_DIR:-/Applications/Remanga Plus}"
+EXTENSION_MANIFEST="$INSTALL_DIR/extension/manifest.json"
+HOST_PATH="$INSTALL_DIR/host"
+
+if [ -n "$REMANGA_TARGET_USER" ]; then
+  TARGET_USER="$REMANGA_TARGET_USER"
+else
+  TARGET_USER=$(stat -f "%Su" /dev/console)
+fi
+
+if [ -n "$REMANGA_TARGET_HOME" ]; then
+  TARGET_HOME="$REMANGA_TARGET_HOME"
+else
+  TARGET_HOME=$(dscl . -read "/Users/$TARGET_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+fi
+
+if [ -z "$TARGET_HOME" ] || [ ! -d "$TARGET_HOME" ]; then
+  echo "remanga-plus postinstall: cannot resolve target home for user '$TARGET_USER'" >&2
+  exit 1
+fi
+
+if [ ! -f "$EXTENSION_MANIFEST" ]; then
+  echo "remanga-plus postinstall: missing $EXTENSION_MANIFEST" >&2
+  exit 1
+fi
+
+# Extract base64 "key" from manifest.json (single-line or pretty JSON).
+KEY=$(tr -d '\n' < "$EXTENSION_MANIFEST" | sed -E 's/.*"key"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+if [ -z "$KEY" ] || [ "$KEY" = "$(cat "$EXTENSION_MANIFEST")" ]; then
+  echo "remanga-plus postinstall: no \"key\" field in extension manifest" >&2
+  exit 1
+fi
+
+# Compute Chrome extension id: sha256(base64decode(key))[0:32], hex 0-9a-f → letters a-p.
+EXT_ID=$(printf %s "$KEY" | base64 -d 2>/dev/null | shasum -a 256 | cut -c1-32 | tr '0-9a-f' 'a-p')
+if [ "${#EXT_ID}" -ne 32 ]; then
+  echo "remanga-plus postinstall: failed to derive extension id (got '$EXT_ID')" >&2
+  exit 1
+fi
+
+# Browser profile roots to probe (relative to $TARGET_HOME).
+BROWSERS=(
+  "Library/Application Support/Google/Chrome"
+  "Library/Application Support/Google/Chrome Beta"
+  "Library/Application Support/Google/Chrome Dev"
+  "Library/Application Support/Google/Chrome Canary"
+  "Library/Application Support/BraveSoftware/Brave-Browser"
+  "Library/Application Support/BraveSoftware/Brave-Browser-Beta"
+  "Library/Application Support/Microsoft Edge"
+  "Library/Application Support/Vivaldi"
+  "Library/Application Support/Arc/User Data"
+  "Library/Application Support/Chromium"
+  "Library/Application Support/Yandex/YandexBrowser"
+)
+
+write_manifest() {
+  local nm_dir="$1"
+  mkdir -p "$nm_dir"
+  local out="$nm_dir/org.remanga.parser_host.json"
+  cat > "$out" <<JSON
+{
+  "name": "org.remanga.parser_host",
+  "description": "Autostarts the local parser-server for ReManga Premium Free",
+  "path": "$HOST_PATH",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://$EXT_ID/"]
+}
+JSON
+  if [ -z "$REMANGA_SKIP_CHOWN" ]; then
+    chown "$TARGET_USER" "$out" || true
+  fi
+  echo "  registered: $out"
+}
+
+REGISTERED=0
+for rel in "${BROWSERS[@]}"; do
+  root="$TARGET_HOME/$rel"
+  if [ -d "$root" ]; then
+    write_manifest "$root/NativeMessagingHosts"
+    REGISTERED=$((REGISTERED + 1))
+  fi
+done
+
+echo "remanga-plus: extension id = $EXT_ID"
+echo "remanga-plus: native host registered for $REGISTERED browser(s)"
+
+# Make cache dir owned by user so the launcher can write to it later.
+CACHE_DIR="$TARGET_HOME/Library/Caches/Remanga Plus"
+mkdir -p "$CACHE_DIR"
+if [ -z "$REMANGA_SKIP_CHOWN" ]; then
+  chown "$TARGET_USER" "$CACHE_DIR" || true
+fi
+
+exit 0

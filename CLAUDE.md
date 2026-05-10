@@ -29,6 +29,10 @@ npm version patch    # 0.2.0 → 0.2.1
 npm version minor    # 0.2.0 → 0.3.0
 npm version major    # 0.2.0 → 1.0.0
 
+# One-click installer .pkg для macOS arm64 (parser-server + Node + extension внутри)
+npm run pkg:build    # → packaging/build/Remanga-Plus.pkg
+npm run pkg:test     # тесты сборки .pkg + postinstall
+
 # Parser-server
 cd parser-server && npm install
 cd parser-server && npm run dev      # dev с hot reload
@@ -71,7 +75,9 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 
 3. **Parser-server** (`parser-server/`) — Fastify backend, резолвит внешние главы и проксирует изображения. Расширение общается только с parser-server, никогда напрямую с внешними источниками.
 
-4. **Native host** (`native-host/`) — macOS Native Messaging launcher, автоматически поднимает parser-server при открытии remanga.org.
+4. **Native host** (`native-host/`) — macOS Native Messaging launcher, автоматически поднимает parser-server при открытии remanga.org. Поддерживает env-overrides `REMANGA_PARSER_BUNDLE`, `REMANGA_NODE_BIN`, `REMANGA_PARSER_CACHE_DIR` — без них работает как раньше (dev-режим, parser-server из `parser-server/dist/index.js`).
+
+5. **Packaging** (`packaging/`) — One-click installer `.pkg` для macOS arm64. `bundle-parser.mjs` esbuild'ит весь parser-server в один JS, `bundle-host.mjs` — host.ts. `download-node.mjs` тянет Node arm64 binary. `build-pkg.mjs` оркестрирует всё + кладёт payload в `/Applications/Remanga Plus/` через `pkgbuild`/`productbuild`. Postinstall (`packaging/templates/postinstall`) вычисляет extension ID из `manifest.json` "key" и регистрирует Native Messaging manifest для всех Chromium-браузеров пользователя (Chrome/Brave/Edge/Vivaldi/Arc/...). Без подписи Apple Developer — друг открывает через правый клик → «Открыть».
 
 ### Ключевые модули
 

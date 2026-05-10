@@ -9,6 +9,8 @@
     "dev": "vite build --watch",
     "native:build": "tsc -p native-host/tsconfig.json",
     "native:install": "tsx native-host/install-macos.ts",
+    "pkg:build": "node packaging/scripts/build-pkg.mjs",
+    "pkg:test": "node --test packaging/tests/*.test.mjs",
     "version": "node scripts/sync-manifest-version.mjs && git add public/manifest.json",
     "postversion": "npm run build"
   },

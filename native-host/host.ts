@@ -8,11 +8,14 @@ import { fileURLToPath } from "node:url";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(currentDirectory, "..", "..");
-const parserServerDirectory = path.resolve(repositoryRoot, "parser-server");
-const parserServerEntrypoint = path.resolve(
-  repositoryRoot,
-  "parser-server/dist/index.js",
-);
+const parserServerEntrypoint = process.env.REMANGA_PARSER_BUNDLE
+  ? path.resolve(process.env.REMANGA_PARSER_BUNDLE)
+  : path.resolve(repositoryRoot, "parser-server/dist/index.js");
+const parserServerDirectory = path.dirname(parserServerEntrypoint);
+const parserServerCacheDir = process.env.REMANGA_PARSER_CACHE_DIR ?? null;
+const parserServerNodeBin = process.env.REMANGA_NODE_BIN
+  ? path.resolve(process.env.REMANGA_NODE_BIN)
+  : process.execPath;
 const parserServerHost = "127.0.0.1";
 const portRange = [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009];
 const launchTimeoutMs = 15_000;
@@ -160,15 +163,19 @@ const ensureParserServerBuild = async (): Promise<void> => {
 };
 
 const launchParserServer = (port: number): void => {
-  const child = spawn(process.execPath, [parserServerEntrypoint], {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOST: parserServerHost,
+    PORT: String(port),
+  };
+  if (parserServerCacheDir) {
+    env.CACHE_DIR = parserServerCacheDir;
+  }
+  const child = spawn(parserServerNodeBin, [parserServerEntrypoint], {
     cwd: parserServerDirectory,
     detached: true,
     stdio: "ignore",
-    env: {
-      ...process.env,
-      HOST: parserServerHost,
-      PORT: String(port),
-    },
+    env,
   });
 
   child.unref();
