@@ -63,7 +63,8 @@ async function main(): Promise<void> {
   void wireAuthRow();
   wireImportButton();
   wireSiteLinks();
-  wireResumeBanner(document, await loadImportState());
+  wireResumeBanner(document);
+  renderResumeBanner(document, await loadImportState());
 }
 
 function startServerStatusPolling(): void {
@@ -140,7 +141,15 @@ function wireSiteLinks(): void {
   }
 }
 
-export function wireResumeBanner(doc: Document, state: ImportState | null): void {
+export function wireResumeBanner(doc: Document): void {
+  const banner = doc.querySelector<HTMLElement>("[data-resume-banner]");
+  if (!banner) return;
+  banner.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+  });
+}
+
+export function renderResumeBanner(doc: Document, state: ImportState | null): void {
   const banner = doc.querySelector<HTMLElement>("[data-resume-banner]");
   if (!banner) return;
   if (!state || state.phase === "done") {
@@ -149,10 +158,7 @@ export function wireResumeBanner(doc: Document, state: ImportState | null): void
     return;
   }
   banner.hidden = false;
-  banner.textContent = `Прерван — продолжить (${state.phase})`;
-  banner.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
-  });
+  banner.textContent = "Прерван — продолжить";
 }
 
 function checkAuth(site: "mangalib" | "remanga"): Promise<AuthState> {

@@ -23,6 +23,22 @@ function setImportButton(doc: Document, snapshot: AuthSnapshot): void {
   const btn = doc.querySelector<HTMLButtonElement>("[data-import-button]");
   if (!btn) return;
   btn.disabled = !(snapshot.mangalib === "ok" && snapshot.remanga === "ok");
+  const tooltip = computeTooltip(snapshot);
+  if (tooltip === "") {
+    btn.removeAttribute("title");
+  } else {
+    btn.title = tooltip;
+  }
+}
+
+function computeTooltip(s: AuthSnapshot): string {
+  if (s.mangalib === "checking" || s.remanga === "checking") return "";
+  const mlBad = s.mangalib === "bad";
+  const rmBad = s.remanga === "bad";
+  if (mlBad && rmBad) return "Войдите в MangaLib и Remanga, чтобы импортировать";
+  if (mlBad) return "Войдите в MangaLib, чтобы импортировать";
+  if (rmBad) return "Войдите в Remanga, чтобы импортировать";
+  return "";
 }
 
 function setHint(doc: Document, snapshot: AuthSnapshot): void {

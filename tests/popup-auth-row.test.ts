@@ -16,6 +16,7 @@ const cases: Array<{
   remangaName: string;
   importDisabled: boolean;
   hintText: string | null;
+  tooltipText: string;
 }> = [
   {
     name: "both ok → button enabled, no hint",
@@ -26,6 +27,7 @@ const cases: Array<{
     remangaName: "ok",
     importDisabled: false,
     hintText: null,
+    tooltipText: "",
   },
   {
     name: "mangalib bad → button disabled, hint about MangaLib",
@@ -36,6 +38,7 @@ const cases: Array<{
     remangaName: "ok",
     importDisabled: true,
     hintText: "Войдите в MangaLib для импорта",
+    tooltipText: "Войдите в MangaLib, чтобы импортировать",
   },
   {
     name: "remanga bad → button disabled, hint about Remanga",
@@ -46,6 +49,7 @@ const cases: Array<{
     remangaName: "bad",
     importDisabled: true,
     hintText: "Войдите в Remanga для импорта",
+    tooltipText: "Войдите в Remanga, чтобы импортировать",
   },
   {
     name: "both bad → button disabled, hint about both",
@@ -56,6 +60,7 @@ const cases: Array<{
     remangaName: "bad",
     importDisabled: true,
     hintText: "Войдите в MangaLib и Remanga для импорта",
+    tooltipText: "Войдите в MangaLib и Remanga, чтобы импортировать",
   },
   {
     name: "checking → button disabled, no hint",
@@ -66,6 +71,7 @@ const cases: Array<{
     remangaName: "checking",
     importDisabled: true,
     hintText: null,
+    tooltipText: "",
   },
 ];
 
@@ -103,6 +109,12 @@ for (const c of cases) {
     } else {
       assert.equal(hint?.hidden, false, "hint visible");
       assert.equal(hint?.textContent, c.hintText);
+    }
+
+    if (c.tooltipText === "") {
+      assert.equal(btn?.getAttribute("title"), null, "no title attribute");
+    } else {
+      assert.equal(btn?.getAttribute("title"), c.tooltipText, "title tooltip");
     }
   });
 }
