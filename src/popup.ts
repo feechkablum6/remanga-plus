@@ -27,6 +27,12 @@ import {
   STATUS_PARSER_SERVER_MESSAGE_TYPE,
   isParserServerStatus,
 } from "./parser-server.js";
+import { renderAuthRow, type AuthState } from "./popup-auth-row.js";
+import {
+  CHECK_AUTH_MESSAGE_TYPE,
+  type CheckAuthRequest,
+  type CheckAuthResponse,
+} from "./import-mangalib/messages.js";
 
 type CommitSettings = (next: ReaderEnhancerSettings) => Promise<void>;
 
@@ -53,6 +59,7 @@ async function main(): Promise<void> {
   renderServerStatus(document, { kind: "checking" });
   wireRestart();
   startServerStatusPolling();
+  void wireAuthRow();
 }
 
 function startServerStatusPolling(): void {
@@ -94,6 +101,29 @@ function wireRestart(): void {
         }
       },
     );
+  });
+}
+
+async function wireAuthRow(): Promise<void> {
+  renderAuthRow(document, { mangalib: "checking", remanga: "checking" });
+  const [mangalib, remanga] = await Promise.all([
+    checkAuth("mangalib"),
+    checkAuth("remanga"),
+  ]);
+  renderAuthRow(document, { mangalib, remanga });
+}
+
+function checkAuth(site: "mangalib" | "remanga"): Promise<AuthState> {
+  return new Promise((resolve) => {
+    const req: CheckAuthRequest = { type: CHECK_AUTH_MESSAGE_TYPE, site };
+    chrome.runtime.sendMessage(req, (response: unknown) => {
+      void chrome.runtime?.lastError;
+      if (response && typeof response === "object" && "signedIn" in response) {
+        resolve((response as CheckAuthResponse).signedIn ? "ok" : "bad");
+      } else {
+        resolve("bad");
+      }
+    });
   });
 }
 
