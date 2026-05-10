@@ -13,4 +13,5 @@ docs/
 .tmp.*
 .release-build/
 packaging/build/
+packaging/build-windows/
 packaging/cache/
