@@ -1,23 +1,38 @@
 #!/usr/bin/env node
 import path from "node:path";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 const parserRoot = path.join(repoRoot, "parser-server");
 const outputDir = path.join(repoRoot, "packaging/build");
 const outputPath = path.join(outputDir, "parser-server.js");
-const entryPoint = path.join(parserRoot, "src/index.ts");
+// Bundle from the tsc-compiled JS, not from .ts sources. parser-server uses
+// NodeNext-style imports with explicit ".js" extensions ("./cache/file-cache.js"),
+// which esbuild cannot resolve to .ts source files on a fresh checkout.
+const compiledEntry = path.join(parserRoot, "dist/index.js");
 
 mkdirSync(outputDir, { recursive: true });
 
 const require = createRequire(path.join(parserRoot, "package.json"));
 const esbuild = require("esbuild");
 
+// Compile TypeScript to dist/ if missing or stale-looking. Cheap when up-to-date.
+if (!existsSync(compiledEntry)) {
+  const tsc = spawnSync("npx", ["tsc", "-p", "tsconfig.json"], {
+    cwd: parserRoot,
+    stdio: "inherit",
+  });
+  if (tsc.status !== 0) {
+    throw new Error(`tsc -p parser-server/tsconfig.json exited ${tsc.status}`);
+  }
+}
+
 await esbuild.build({
-  entryPoints: [entryPoint],
+  entryPoints: [compiledEntry],
   outfile: outputPath,
   bundle: true,
   platform: "node",
