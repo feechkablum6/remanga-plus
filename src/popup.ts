@@ -33,6 +33,7 @@ import {
   type CheckAuthRequest,
   type CheckAuthResponse,
 } from "./import-mangalib/messages.js";
+import { loadImportState, type ImportState } from "./import-mangalib/state.js";
 
 type CommitSettings = (next: ReaderEnhancerSettings) => Promise<void>;
 
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
   void wireAuthRow();
   wireImportButton();
   wireSiteLinks();
+  wireResumeBanner(document, await loadImportState());
 }
 
 function startServerStatusPolling(): void {
@@ -136,6 +138,21 @@ function wireSiteLinks(): void {
       chrome.tabs.create({ url });
     });
   }
+}
+
+export function wireResumeBanner(doc: Document, state: ImportState | null): void {
+  const banner = doc.querySelector<HTMLElement>("[data-resume-banner]");
+  if (!banner) return;
+  if (!state || state.phase === "done") {
+    banner.hidden = true;
+    banner.textContent = "";
+    return;
+  }
+  banner.hidden = false;
+  banner.textContent = `Прерван — продолжить (${state.phase})`;
+  banner.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+  });
 }
 
 function checkAuth(site: "mangalib" | "remanga"): Promise<AuthState> {
