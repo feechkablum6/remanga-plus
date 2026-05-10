@@ -19,10 +19,22 @@ test("permissions include cookies", () => {
   assert.ok(p.includes("nativeMessaging"));
 });
 
+test("permissions include scripting (for on-demand bridge injection)", () => {
+  const p = manifest.permissions as string[];
+  assert.ok(p.includes("scripting"));
+});
+
 test("content_scripts has both remanga and mangalib entries", () => {
   const cs = manifest.content_scripts as Array<{ matches: string[]; js: string[] }>;
   assert.ok(cs.some((s) => s.matches.some((m) => m.includes("remanga.org")) && s.js.includes("content.js")));
   assert.ok(cs.some((s) => s.matches.some((m) => m.includes("mangalib.me")) && s.js.includes("mangalib-bridge.js")));
+});
+
+test("content_scripts has remanga-bridge for category lookup", () => {
+  const cs = manifest.content_scripts as Array<{ matches: string[]; js: string[] }>;
+  assert.ok(
+    cs.some((s) => s.matches.some((m) => m.includes("remanga.org")) && s.js.includes("remanga-bridge.js")),
+  );
 });
 
 test("manifest preserves existing key field", () => {

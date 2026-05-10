@@ -43,6 +43,7 @@ export type ReaderEnhancerSettings = {
   hidePopups: Record<PopupSettingKey, boolean>;
   hideHeaderButtons: Record<HeaderButtonKey, boolean>;
   hideHomeGameBanner: boolean;
+  hideHomePromoBanner: boolean;
 };
 
 type PartialSettings = Partial<
@@ -103,6 +104,7 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
     avatar: false,
   },
   hideHomeGameBanner: false,
+  hideHomePromoBanner: false,
 };
 
 export const cloneSettings = (
@@ -124,6 +126,7 @@ export const cloneSettings = (
   hidePopups: { ...settings.hidePopups },
   hideHeaderButtons: { ...settings.hideHeaderButtons },
   hideHomeGameBanner: settings.hideHomeGameBanner,
+  hideHomePromoBanner: settings.hideHomePromoBanner,
 });
 
 export const mergeSettings = (
@@ -171,6 +174,8 @@ export const mergeSettings = (
   },
   hideHomeGameBanner:
     partialSettings?.hideHomeGameBanner ?? DEFAULT_SETTINGS.hideHomeGameBanner,
+  hideHomePromoBanner:
+    partialSettings?.hideHomePromoBanner ?? DEFAULT_SETTINGS.hideHomePromoBanner,
 });
 
 const getStorageArea = (): chrome.storage.SyncStorageArea | null =>

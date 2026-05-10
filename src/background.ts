@@ -13,14 +13,20 @@ import {
 } from "./parser-server.js";
 import {
   fetchMangalibAuthStatus,
+  type MangalibFetch,
+  type MangalibResponse,
   type MangalibTokenProvider,
 } from "./import-mangalib/mangalib-client.js";
 import { fetchRemangaAuthStatus } from "./import-mangalib/remanga-client.js";
 import {
+  MANGALIB_PROXIED_FETCH_MESSAGE_TYPE,
   READ_MANGALIB_TOKEN_MESSAGE_TYPE,
+  READ_REMANGA_BOOKMARK_TYPES_MESSAGE_TYPE,
   type CheckAuthRequest,
   type CheckAuthResponse,
+  type MangalibProxiedFetchResponse,
   type ReadMangalibTokenResponse,
+  type ReadRemangaBookmarkTypesResponse,
 } from "./import-mangalib/messages.js";
 import { readRemangaAuthToken } from "./premium-free.js";
 
@@ -309,23 +315,67 @@ const handleProxyImage = async (
   }
 };
 
-async function getMangalibTokenViaBridge(): Promise<ReadMangalibTokenResponse> {
-  const tabs = await chrome.tabs.query({ url: "https://mangalib.me/*" });
-  for (const tab of tabs) {
-    if (typeof tab.id !== "number") continue;
+async function sendWithBridgeFallback<T>(
+  tabId: number,
+  bridgeFile: string,
+  message: unknown,
+): Promise<T | undefined> {
+  try {
+    return (await chrome.tabs.sendMessage(tabId, message)) as T | undefined;
+  } catch {
+    // No content script yet (stale tab loaded before extension install/reload).
+    // Inject the bridge file on-demand and retry once.
     try {
-      const response = (await chrome.tabs.sendMessage(tab.id, {
-        type: READ_MANGALIB_TOKEN_MESSAGE_TYPE,
-      })) as ReadMangalibTokenResponse;
-      if (response && (response.token || response.token === null)) return response;
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: [bridgeFile],
+      });
+      return (await chrome.tabs.sendMessage(tabId, message)) as T | undefined;
     } catch {
-      continue;
+      return undefined;
     }
   }
-  return { token: null, userId: null };
+}
+
+async function getMangalibTokenViaBridge(): Promise<ReadMangalibTokenResponse & { reason?: "no-tab" | "no-token" }> {
+  const allTabs = await chrome.tabs.query({});
+  const tabs = allTabs.filter((t) => typeof t.url === "string" && t.url.startsWith("https://mangalib.me/"));
+  if (tabs.length === 0) return { token: null, userId: null, reason: "no-tab" };
+  for (const tab of tabs) {
+    if (typeof tab.id !== "number") continue;
+    const response = await sendWithBridgeFallback<ReadMangalibTokenResponse>(
+      tab.id,
+      "mangalib-bridge.js",
+      { type: READ_MANGALIB_TOKEN_MESSAGE_TYPE },
+    );
+    if (response && response.token) return response;
+  }
+  return { token: null, userId: null, reason: "no-token" };
 }
 
 const mangalibTokenProvider: MangalibTokenProvider = async () => getMangalibTokenViaBridge();
+
+const mangalibBridgeFetch: MangalibFetch = async (url, headers): Promise<MangalibResponse> => {
+  const allTabs = await chrome.tabs.query({});
+  const tabs = allTabs.filter((t) => typeof t.url === "string" && t.url.startsWith("https://mangalib.me/"));
+  for (const tab of tabs) {
+    if (typeof tab.id !== "number") continue;
+    const resp = await sendWithBridgeFallback<MangalibProxiedFetchResponse>(
+      tab.id,
+      "mangalib-bridge.js",
+      { type: MANGALIB_PROXIED_FETCH_MESSAGE_TYPE, url, headers },
+    );
+    if (resp && resp.ok) {
+      const body = resp.body;
+      return {
+        status: resp.status,
+        ok: resp.httpOk,
+        json: async () => JSON.parse(body) as unknown,
+      };
+    }
+  }
+  throw new Error("mangalib bridge unreachable");
+};
 
 async function getRemangaToken(): Promise<string | null> {
   const cookies = await chrome.cookies.getAll({ url: "https://remanga.org/" });
@@ -374,15 +424,84 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       return true;
     }
 
+    if (message.type === READ_MANGALIB_TOKEN_MESSAGE_TYPE) {
+      void getMangalibTokenViaBridge().then((r) => sendResponse(r));
+      return true;
+    }
+
+    if (message.type === READ_REMANGA_BOOKMARK_TYPES_MESSAGE_TYPE) {
+      void (async () => {
+        const allTabs = await chrome.tabs.query({});
+        const tabs = allTabs.filter(
+          (t) => typeof t.url === "string" && t.url.startsWith("https://remanga.org/"),
+        );
+        for (const tab of tabs) {
+          if (typeof tab.id !== "number") continue;
+          const resp = await sendWithBridgeFallback<ReadRemangaBookmarkTypesResponse>(
+            tab.id,
+            "remanga-bridge.js",
+            message,
+          );
+          if (resp && Array.isArray(resp.types) && resp.types.length > 0) {
+            sendResponse(resp);
+            return;
+          }
+        }
+        sendResponse({ types: [] } satisfies ReadRemangaBookmarkTypesResponse);
+      })();
+      return true;
+    }
+
+    if (message.type === MANGALIB_PROXIED_FETCH_MESSAGE_TYPE) {
+      void (async () => {
+        const allTabs = await chrome.tabs.query({});
+        const tabs = allTabs.filter(
+          (t) => typeof t.url === "string" && t.url.startsWith("https://mangalib.me/"),
+        );
+        for (const tab of tabs) {
+          if (typeof tab.id !== "number") continue;
+          try {
+            const resp = await chrome.tabs.sendMessage(tab.id, message);
+            if (resp) {
+              sendResponse(resp);
+              return;
+            }
+          } catch {
+            continue;
+          }
+        }
+        sendResponse({ ok: false, error: "no mangalib tab" } satisfies MangalibProxiedFetchResponse);
+      })();
+      return true;
+    }
+
     if (message.type === "import-mangalib/check-auth") {
       const site = (message as CheckAuthRequest).site;
-      const action =
+      const origins =
         site === "mangalib"
-          ? fetchMangalibAuthStatus(mangalibTokenProvider)
-          : fetchRemangaAuthStatus(getRemangaToken);
-      action
-        .then((status) => sendResponse(status as CheckAuthResponse))
-        .catch(() => sendResponse({ signedIn: false }));
+          ? ["https://mangalib.me/*", "https://api.cdnlibs.org/*"]
+          : ["https://remanga.org/*", "https://api.remanga.org/*"];
+      void (async () => {
+        let hasPerm = true;
+        try {
+          hasPerm = await chrome.permissions.contains({ origins });
+        } catch {
+          hasPerm = false;
+        }
+        if (!hasPerm) {
+          sendResponse({ signedIn: false, reason: "no-permission" });
+          return;
+        }
+        try {
+          const status =
+            site === "mangalib"
+              ? await fetchMangalibAuthStatus(mangalibTokenProvider, mangalibBridgeFetch)
+              : await fetchRemangaAuthStatus(getRemangaToken);
+          sendResponse(status as CheckAuthResponse);
+        } catch {
+          sendResponse({ signedIn: false, reason: "network" });
+        }
+      })();
       return true;
     }
 

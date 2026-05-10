@@ -103,6 +103,10 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `parser-server/src/resolve-chapter.ts` | Fallback-chain по `DEFAULT_PROVIDER_PRIORITY`: на provider_error/no_match продолжаем, на success — return; лучший failure по rank (`chapter_not_found > no_match > provider_error`) |
 | `parser-server/fixtures/` | Живые JSON/HTML ответы провайдеров для тестов (НЕ путать с `tests/fixtures/` у Mangabuff) |
 | `parser-server/scripts/` | Одноразовые разведочные скрипты (`senkuro-*`, `inkstory-*`) |
+| `mangalib-bridge.ts` | Content script на mangalib.me — читает `localStorage.auth.token.access_token`, проксирует API-запросы (Cloudflare блокирует chrome-extension origin → 403, нужен mangalib.me origin) |
+| `remanga-bridge.ts` | Content script на remanga.org — читает имена bookmark-категорий из DOM `[role="tab"][id*="trigger-"]` на странице `/user/bookmarks` (нет API-эндпоинта для имён) |
+| `import-page.ts` + `import.html` | Страница импорта закладок MangaLib → Remanga; auth-check через background, реальный fetchExistingRemangaBookmarks + safety-guard в `orchestrator.execute` |
+| `import-mangalib/` | Клиенты MangaLib/Remanga, orchestrator, status-mapping, title-matcher, chapter-progress, state |
 
 ## Конвенции
 
@@ -133,6 +137,13 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT использовать non-ASCII символы в `installer.nsi`.
 - DO NOT использовать `SetCompressor /SOLID lzma` или `SetCompressor lzma` в `installer.nsi`.
 - DO NOT коммитить `packaging/build-windows/` (build artefacts).
+- DO NOT слать запросы к `api.cdnlibs.org` из background service worker — Cloudflare 403. Проксировать через `mangalib-bridge.ts` content script (origin = mangalib.me).
+- DO NOT использовать `/api/v2/bookmark-types/` или `/api/v2/users/{id}/bookmark-types/` — endpoint не существует, имена категорий читать из DOM через `remanga-bridge.ts`.
+- DO NOT использовать `/api/v2/bookmarks/` для add — endpoint 404. Правильный: `POST /api/users/bookmarks/` body `{title, type}` где `type` — это `bookmark_type_id` (per-user ID категории, не enum).
+- DO NOT использовать `/api/v2/users/{id}/user_bookmarks/` для add закладки — это endpoint управления **категориями**, POST туда создаёт пользовательскую категорию.
+- DO NOT полагаться на `chrome.tabs.query({url: "..."})` для match patterns — может не находить вкладки даже при наличии host_permission. `chrome.tabs.query({})` + JS filter по `t.url.startsWith(...)`.
+- DO NOT забывать про `chrome.scripting.executeScript` fallback при `chrome.tabs.sendMessage` — content scripts не пере-инжектируются автоматически в существующие вкладки после reload extension.
+- DO NOT забывать про переустановку расширения при изменении `permissions` / `host_permissions` / `content_scripts.matches` — Chrome не активирует новые declarations на reload.
 
 ## Visuals (gpt-image-prompt + frontend-design)
 

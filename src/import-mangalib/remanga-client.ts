@@ -5,9 +5,13 @@ const REMANGA_API = "https://api.remanga.org";
 
 export type RemangaTokenProvider = () => Promise<string | null>;
 
+export type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network";
+
 export interface AuthStatus {
   signedIn: boolean;
   username?: string;
+  userId?: number;
+  reason?: AuthFailReason;
 }
 
 export interface RemangaTitleDetail {
@@ -37,15 +41,24 @@ async function getJson<T>(url: string, token: string): Promise<T | null> {
 
 export async function fetchRemangaAuthStatus(provider: RemangaTokenProvider): Promise<AuthStatus> {
   const token = await provider();
-  if (!token) return { signedIn: false };
-  const r = await fetch(`${REMANGA_API}/api/v2/users/current/`, {
-    credentials: "omit",
-    headers: headers(token),
-  });
-  if (!r.ok) return { signedIn: false };
-  const body = (await r.json()) as { username?: string };
-  if (!body?.username) return { signedIn: false };
-  return { signedIn: true, username: body.username };
+  if (!token) return { signedIn: false, reason: "no-token" };
+  try {
+    const r = await fetch(`${REMANGA_API}/api/v2/users/current/`, {
+      credentials: "omit",
+      headers: headers(token),
+    });
+    if (r.status === 401 || r.status === 403) return { signedIn: false, reason: "unauthorized" };
+    if (!r.ok) return { signedIn: false, reason: "network" };
+    const body = (await r.json()) as { username?: string; id?: number };
+    if (!body?.username) return { signedIn: false, reason: "unauthorized" };
+    return {
+      signedIn: true,
+      username: body.username,
+      ...(typeof body.id === "number" ? { userId: body.id } : {}),
+    };
+  } catch {
+    return { signedIn: false, reason: "network" };
+  }
 }
 
 export async function searchRemanga(
@@ -110,12 +123,18 @@ export async function addRemangaBookmark(
 ): Promise<void> {
   const token = await provider();
   if (!token) throw new Error("no remanga token");
-  const r = await fetch(`${REMANGA_API}/api/v2/bookmarks/`, {
+  const r = await fetch(`${REMANGA_API}/api/users/bookmarks/`, {
     method: "POST",
     credentials: "omit",
     headers: headers(token),
     body: JSON.stringify({ title: titleId, type: bookmarkTypeId }),
   });
+  if (r.status === 400) {
+    // Server rejects with messages like "Тайтл уже в этом списке" — treat as benign skip.
+    const text = await r.text();
+    if (text.includes("уже в этом списке")) return;
+    throw new Error("Remanga add bookmark: HTTP 400 " + text.slice(0, 200));
+  }
   if (!r.ok) throw new Error("Remanga add bookmark: HTTP " + r.status);
 }
 

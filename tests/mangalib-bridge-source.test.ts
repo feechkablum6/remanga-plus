@@ -20,3 +20,8 @@ test("bridge replies with token and userId or nulls", () => {
   assert.match(source, /token: null/);
   assert.match(source, /userId: null/);
 });
+
+test("bridge handles proxied-fetch by calling fetch with provided url and headers", () => {
+  assert.match(source, /import-mangalib\/proxied-fetch/);
+  assert.match(source, /fetch\(/);
+});

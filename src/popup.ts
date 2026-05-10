@@ -32,8 +32,12 @@ const HEADER_BUTTON_LABELS: ReadonlyArray<[HeaderButtonKey, string]> = [
   ["avatar", "Профиль"],
 ];
 
-const HOME_TOGGLES: ReadonlyArray<{ key: "hideHomeGameBanner"; label: string }> = [
+const HOME_TOGGLES: ReadonlyArray<{
+  key: "hideHomeGameBanner" | "hideHomePromoBanner";
+  label: string;
+}> = [
   { key: "hideHomeGameBanner", label: "Скрыть баннер игры" },
+  { key: "hideHomePromoBanner", label: "Скрыть промо-плашку Telegram" },
 ];
 
 void main();
@@ -250,9 +254,27 @@ async function wireImportSection(): Promise<void> {
   const banner = document.querySelector<HTMLElement>("[data-resume-banner]");
   if (!ml || !rm || !btn) return;
 
-  const setSpan = (el: HTMLElement, r: CheckAuthResponse | null) => {
-    if (r?.signedIn) { el.textContent = `✓ ${r.username ?? "вошли"}`; el.dataset.state = "ok"; }
-    else { el.textContent = "✗ не авторизован"; el.dataset.state = "bad"; }
+  const reasonText = (site: "mangalib" | "remanga", reason: string | undefined): string => {
+    if (reason === "no-permission") return "✗ переустановите расширение";
+    if (reason === "no-tab") return site === "mangalib" ? "✗ откройте mangalib.me" : "✗ откройте remanga.org";
+    if (reason === "no-token") return "✗ войдите на сайт";
+    if (reason === "unauthorized") return "✗ войдите снова";
+    if (reason === "network") return "✗ нет сети";
+    return "✗ не авторизован";
+  };
+  const setSpan = (site: "mangalib" | "remanga", el: HTMLElement, r: CheckAuthResponse | null) => {
+    if (r?.signedIn) { el.textContent = `✓ ${r.username ?? "вошли"}`; el.dataset.state = "ok"; el.title = ""; }
+    else {
+      let text = reasonText(site, r?.reason);
+      if (r?.debug && (r.debug.status || r.debug.tokenLen)) {
+        const parts: string[] = [];
+        if (typeof r.debug.status === "number") parts.push(`HTTP ${r.debug.status}`);
+        if (typeof r.debug.tokenLen === "number") parts.push(`token ${r.debug.tokenLen}`);
+        if (parts.length) text += ` · ${parts.join(", ")}`;
+      }
+      el.textContent = text;
+      el.dataset.state = "bad";
+    }
   };
   const ask = (site: "mangalib" | "remanga") => new Promise<CheckAuthResponse | null>((res) => {
     const req: CheckAuthRequest = { type: CHECK_AUTH_MESSAGE_TYPE, site };
@@ -263,7 +285,7 @@ async function wireImportSection(): Promise<void> {
   });
 
   const [m, r] = await Promise.all([ask("mangalib"), ask("remanga")]);
-  setSpan(ml, m); setSpan(rm, r);
+  setSpan("mangalib", ml, m); setSpan("remanga", rm, r);
   btn.disabled = !(m?.signedIn && r?.signedIn);
   if (btn.disabled) btn.title = "Сначала войдите в оба сайта";
   btn.addEventListener("click", () => {

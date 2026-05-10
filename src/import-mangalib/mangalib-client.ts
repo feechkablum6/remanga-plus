@@ -3,15 +3,20 @@ import type { MangalibBookmark } from "./types.js";
 
 const MANGALIB_API_BASE = "https://api.cdnlibs.org";
 
+export type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network";
+
 export interface MangalibToken {
   token: string | null;
   userId: number | null;
+  reason?: "no-tab" | "no-token";
 }
 export type MangalibTokenProvider = () => Promise<MangalibToken>;
 
 export interface AuthStatus {
   signedIn: boolean;
   username?: string;
+  reason?: AuthFailReason;
+  debug?: { status?: number; tokenLen?: number };
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -22,26 +27,49 @@ function authHeaders(token: string): Record<string, string> {
   };
 }
 
+export interface MangalibResponse {
+  status: number;
+  ok: boolean;
+  json(): Promise<unknown>;
+}
+export type MangalibFetch = (
+  url: string,
+  headers: Record<string, string>,
+) => Promise<MangalibResponse>;
+
+const defaultFetch: MangalibFetch = async (url, headers) => {
+  const r = await fetch(url, { credentials: "omit", headers });
+  return {
+    status: r.status,
+    ok: r.ok,
+    json: () => r.json(),
+  };
+};
+
 export async function fetchMangalibAuthStatus(
   tokenProvider: MangalibTokenProvider,
+  customFetch: MangalibFetch = defaultFetch,
 ): Promise<AuthStatus> {
-  const { token } = await tokenProvider();
-  if (!token) return { signedIn: false };
-  const r = await fetch(`${MANGALIB_API_BASE}/api/auth/me`, {
-    credentials: "omit",
-    headers: authHeaders(token),
-  });
-  if (r.status === 401 || r.status === 403) return { signedIn: false };
-  if (!r.ok) return { signedIn: false };
-  const body = (await r.json()) as { data?: { username?: string } };
-  const username = body?.data?.username;
-  if (!username) return { signedIn: false };
-  return { signedIn: true, username };
+  const t = await tokenProvider();
+  if (!t.token) return { signedIn: false, reason: t.reason ?? "no-token" };
+  const tokenLen = t.token.length;
+  try {
+    const r = await customFetch(`${MANGALIB_API_BASE}/api/auth/me`, authHeaders(t.token));
+    if (r.status === 401 || r.status === 403) return { signedIn: false, reason: "unauthorized", debug: { status: r.status, tokenLen } };
+    if (!r.ok) return { signedIn: false, reason: "network", debug: { status: r.status, tokenLen } };
+    const body = (await r.json()) as { data?: { username?: string } };
+    const username = body?.data?.username;
+    if (!username) return { signedIn: false, reason: "unauthorized", debug: { status: r.status, tokenLen } };
+    return { signedIn: true, username };
+  } catch {
+    return { signedIn: false, reason: "network", debug: { tokenLen } };
+  }
 }
 
 export async function fetchMangalibBookmarks(
   tokenProvider: MangalibTokenProvider,
   siteId: number,
+  customFetch: MangalibFetch = defaultFetch,
 ): Promise<MangalibBookmark[]> {
   const { token, userId } = await tokenProvider();
   if (!token || !userId) return [];
@@ -54,7 +82,7 @@ export async function fetchMangalibBookmarks(
     u.searchParams.set("status", String(status));
     u.searchParams.set("user_id", String(userId));
     void siteId;
-    const r = await fetch(u, { credentials: "omit", headers: authHeaders(token) });
+    const r = await customFetch(u.toString(), authHeaders(token));
     if (!r.ok) continue;
     const body = (await r.json()) as unknown;
     all.push(...parseMangalibBookmarks(body));

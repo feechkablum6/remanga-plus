@@ -18,14 +18,15 @@
 
 | Назначение | Метод | URL | Фикстура |
 |------------|-------|-----|----------|
-| Текущий пользователь | GET | `/api/v2/users/current/` | `tests/fixtures/import-mangalib/auth-remanga.json` |
+| Текущий пользователь | GET | `/api/v2/users/current/` (поле `id` — нужен для запроса закладок) | `tests/fixtures/import-mangalib/auth-remanga.json` |
 | Поиск по названию | GET | `/api/v2/search/?query=<text>&count=<n>` | `tests/fixtures/import-mangalib/remanga-search.json` |
 | Закладки пользователя | GET | `/api/v2/users/<user_id>/bookmarks/?ordering=-chapter_date&page=<n>&type=<type_id>` | `tests/fixtures/import-mangalib/remanga-bookmarks.json` |
 | Главы тайтла (по ветке) | GET | `/api/v2/titles/chapters/?branch_id=<id>&page=<n>&count=<n>` | `tests/fixtures/import-mangalib/remanga-chapters.json` |
 | Детали тайтла (для `branches[]`) | GET | `/api/v2/titles/<dir>/` | (не сохраняли — но shape известен, см. ниже) |
-| Bookmark-state тайтла у текущего user'а | GET | `/api/v2/users/<user_id>/user_bookmarks/` | (не понадобилось) |
+| Кастомные категории закладок (CRUD) | GET/POST/PUT/DELETE | `/api/v2/users/<user_id>/user_bookmarks/` | (управление **категориями**, не самими закладками!) |
 | Отметить главу прочитанной | POST | `/api/activity/views/` | body: `{"chapter": <id>}` |
-| Добавить закладку | POST | **TBD — endpoint не подтверждён живым запросом** | предположительно `/api/v2/bookmarks/` или `/api/bookmarks/` с body `{title: <id>, type: <bookmark_type_id>}`. Подтвердить через interceptor когда будет **тестовый** аккаунт (правила запрещают писать на боевой). |
+| **Добавить закладку (титул в категорию)** | POST | `/api/users/bookmarks/` (БЕЗ `v2`!) | body: `{"title": <title_id>, "type": <bookmark_type_id>}`. На дубль возвращает 400 «Тайтл уже в этом списке» — обрабатывать как мягкий skip. |
+| Имена bookmark-категорий | — | **Нет API endpoint!** Имена живут только в DOM `/user/bookmarks` `[role="tab"][id*="trigger-<typeId>"]`. Читаем через `remanga-bridge.ts` content script. |
 
 ### Ключевые ноты по structure
 
@@ -62,6 +63,11 @@
 3. Закладки лежат в `/api/v2/users/<id>/bookmarks/`, не в `/api/v2/users/current/bookmarks/`. **User ID сначала достать через `/api/v2/users/current/`**, потом подставить.
 4. mark-viewed уже реализован в проекте (`src/premium-free.ts`), нужно переиспользовать.
 5. Auth — Bearer из cookie `token`, не сессия `credentials: 'include'`.
+
+### Что нашли позже (после первого запуска)
+
+6. **Add-bookmark endpoint реально `POST /api/users/bookmarks/`** (без `v2`!). Body: `{title: <id>, type: <bookmark_type_id>}`. Прозвон сетки 2026-05-11 показал: `/api/v2/bookmarks/` и `/api/v2/users/<id>/user_bookmarks/` — **не для добавления манги**, второй — это endpoint управления **категориями** (POST `{name}` создаёт пользовательскую категорию).
+7. **Имена bookmark-категорий нельзя получить через API** — все известные пути (`/api/v2/bookmark-types/`, `/api/v2/users/<id>/bookmark-types/` и ~10 вариантов) возвращают 404. Сайт получает имена из DOM `/user/bookmarks` (Next.js Tabs `[role="tab"]` с `id="...trigger-<typeId>"` и `textContent="<имя><count>"`). Нужен `remanga-bridge.ts` content script на remanga.org/* для чтения этих табов.
 
 ## MangaLib
 

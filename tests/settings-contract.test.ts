@@ -146,6 +146,24 @@ test("DEFAULT_SETTINGS exposes hideHomeGameBanner defaulting to false", () => {
   assert.equal(DEFAULT_SETTINGS.hideHomeGameBanner, false);
 });
 
+test("DEFAULT_SETTINGS exposes hideHomePromoBanner defaulting to false", () => {
+  assert.equal(DEFAULT_SETTINGS.hideHomePromoBanner, false);
+});
+
+test("mergeSettings respects explicit hideHomePromoBanner", () => {
+  const merged = mergeSettings({ hideHomePromoBanner: true });
+  assert.equal(merged.hideHomePromoBanner, true);
+
+  const def = mergeSettings({});
+  assert.equal(def.hideHomePromoBanner, false);
+});
+
+test("cloneSettings copies hideHomePromoBanner", () => {
+  const settings = mergeSettings({ hideHomePromoBanner: true });
+  const copy = cloneSettings(settings);
+  assert.equal(copy.hideHomePromoBanner, true);
+});
+
 test("mergeSettings merges partial hideHeaderButtons overrides", () => {
   const merged = mergeSettings({
     hideHeaderButtons: { forum: true, chat: true },

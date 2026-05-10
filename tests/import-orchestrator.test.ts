@@ -99,6 +99,24 @@ test("duplicate is unselected by default", async () => {
   assert.equal(c.selected, false);
 });
 
+test("execute SAFETY GUARD: even if row.selected, never call addBookmark for a title that exists in remanga", async () => {
+  const adds: number[] = [];
+  const views: number[] = [];
+  const deps = makeDeps({
+    fetchExistingBookmarks: async () => new Set<number>([100]),
+    addBookmark: async (id) => { adds.push(id); },
+    markChapterViewed: async (id) => { views.push(id); },
+  });
+  const preview = await runImport.buildPreview(deps);
+  const c = preview.find((r) => r.match.kind === "certain")!;
+  c.selected = true;
+  const report = await runImport.execute(deps, preview);
+  assert.deepEqual(adds, [], "must not call addBookmark for existing title");
+  assert.deepEqual(views, [], "must not mark any chapter for existing title");
+  assert.ok(report.skipped.includes("solo-leveling"));
+  assert.equal(report.added.length, 0);
+});
+
 test("execute records failures and continues", async () => {
   const deps = makeDeps({
     addBookmark: async () => { throw new Error("HTTP 500"); },

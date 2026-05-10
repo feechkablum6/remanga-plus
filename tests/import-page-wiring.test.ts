@@ -23,3 +23,13 @@ test("reads mangalib token via runtime.sendMessage to background", () => {
 test("persists state via state.ts", () => {
   assert.match(source, /from "\.\/import-mangalib\/state\.js"/);
 });
+
+test("import-page proxies mangalib API through background bridge", () => {
+  assert.match(source, /MANGALIB_PROXIED_FETCH_MESSAGE_TYPE/);
+  assert.match(source, /fetchMangalibBookmarks\(mangalibTokenProvider, 1, /);
+});
+
+test("import-page wires real fetchExistingRemangaBookmarks (safety: never auto-touch existing)", () => {
+  assert.match(source, /fetchExistingRemangaBookmarks/);
+  assert.doesNotMatch(source, /fetchExistingBookmarks: async \(\) => new Set</);
+});

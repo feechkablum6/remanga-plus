@@ -53,9 +53,54 @@ test("fetchMangalibAuthStatus → signedIn:true with username from /api/auth/me"
   assert.ok((status.username ?? "").length > 0);
 });
 
-test("fetchMangalibAuthStatus returns signedIn:false when token is null", async () => {
+test("fetchMangalibAuthStatus returns signedIn:false with reason:'no-token' when token is null", async () => {
   const status = await fetchMangalibAuthStatus(async () => ({ token: null, userId: null }));
   assert.equal(status.signedIn, false);
+  assert.equal(status.reason, "no-token");
+});
+
+test("fetchMangalibAuthStatus forwards reason:'no-tab' from token provider", async () => {
+  const status = await fetchMangalibAuthStatus(async () => ({
+    token: null,
+    userId: null,
+    reason: "no-tab",
+  }));
+  assert.equal(status.signedIn, false);
+  assert.equal(status.reason, "no-tab");
+});
+
+test("fetchMangalibAuthStatus returns reason:'unauthorized' on 401/403", async () => {
+  (globalThis as { fetch: typeof fetch }).fetch = (async () =>
+    new Response("unauth", { status: 401 })) as typeof fetch;
+  const s = await fetchMangalibAuthStatus(tokenProvider);
+  assert.equal(s.signedIn, false);
+  assert.equal(s.reason, "unauthorized");
+});
+
+test("fetchMangalibAuthStatus returns reason:'network' on fetch throw", async () => {
+  (globalThis as { fetch: typeof fetch }).fetch = (async () => {
+    throw new Error("boom");
+  }) as typeof fetch;
+  const s = await fetchMangalibAuthStatus(tokenProvider);
+  assert.equal(s.signedIn, false);
+  assert.equal(s.reason, "network");
+});
+
+test("fetchMangalibAuthStatus uses customFetch when provided (not global fetch)", async () => {
+  (globalThis as { fetch: typeof fetch }).fetch = (async () => {
+    throw new Error("global fetch must NOT be called");
+  }) as typeof fetch;
+  const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+  const customFetch = async (url: string, headers: Record<string, string>) => {
+    calls.push({ url, headers });
+    return { status: 200, ok: true, json: async () => authFixture };
+  };
+  const s = await fetchMangalibAuthStatus(tokenProvider, customFetch);
+  assert.equal(s.signedIn, true);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.includes("/api/auth/me"));
+  assert.equal(calls[0].headers["Authorization"], "Bearer TKN");
+  assert.equal(calls[0].headers["Site-Id"], "1");
 });
 
 test("fetchMangalibBookmarks sends Site-Id: 1 and Bearer token", async () => {

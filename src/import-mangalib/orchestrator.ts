@@ -82,11 +82,16 @@ async function execute(
   onProgress: (p: ImportProgress) => void = () => {},
 ): Promise<ExecutionReport> {
   const report: ExecutionReport = { added: [], skipped: [], failed: [] };
+  const existing = await deps.fetchExistingBookmarks();
   const targets = preview.filter((r) => r.selected && r.match.kind === "certain" && r.targetBookmarkTypeId !== null);
   for (let i = 0; i < targets.length; i += 1) {
     const row = targets[i];
     if (row.match.kind !== "certain") continue;
     const candidate = row.match.chosen;
+    if (existing.has(candidate.id)) {
+      report.skipped.push(row.bookmark.slug);
+      continue;
+    }
     onProgress({ phase: "executing", current: i, total: targets.length, slug: row.bookmark.slug });
     try {
       await deps.addBookmark(candidate.id, row.targetBookmarkTypeId!);

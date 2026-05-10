@@ -1,6 +1,7 @@
 import { type ReadMangalibTokenResponse } from "./import-mangalib/messages.js";
 
 const READ_MANGALIB_TOKEN_MESSAGE_TYPE = "import-mangalib/read-mangalib-token";
+const MANGALIB_PROXIED_FETCH_MESSAGE_TYPE = "import-mangalib/proxied-fetch";
 
 function readToken(): ReadMangalibTokenResponse {
   try {
@@ -29,6 +30,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (message as { type?: unknown }).type === READ_MANGALIB_TOKEN_MESSAGE_TYPE
   ) {
     sendResponse(readToken());
+    return true;
+  }
+  if (
+    message &&
+    typeof message === "object" &&
+    (message as { type?: unknown }).type === MANGALIB_PROXIED_FETCH_MESSAGE_TYPE
+  ) {
+    const m = message as { url: string; headers: Record<string, string> };
+    void (async () => {
+      try {
+        const r = await fetch(m.url, { credentials: "omit", headers: m.headers });
+        const body = await r.text();
+        sendResponse({ ok: true, status: r.status, httpOk: r.ok, body });
+      } catch (e) {
+        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+    })();
     return true;
   }
   return false;

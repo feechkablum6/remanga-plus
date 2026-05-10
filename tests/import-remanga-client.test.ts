@@ -44,9 +44,34 @@ test("fetchRemangaAuthStatus parses username from /api/v2/users/current/", async
   assert.ok(typeof s.username === "string");
 });
 
-test("fetchRemangaAuthStatus signedIn:false when token absent", async () => {
+test("fetchRemangaAuthStatus exposes the numeric user id for follow-up calls", async () => {
+  installMock({ "users/current": { body: { id: 2437788, username: "feechkablum6" } } });
+  const s = await fetchRemangaAuthStatus(provider);
+  assert.equal(s.signedIn, true);
+  assert.equal(s.userId, 2437788);
+});
+
+test("fetchRemangaAuthStatus signedIn:false with reason:'no-token' when token absent", async () => {
   const s = await fetchRemangaAuthStatus(async () => null);
   assert.equal(s.signedIn, false);
+  assert.equal(s.reason, "no-token");
+});
+
+test("fetchRemangaAuthStatus reason:'unauthorized' on 401", async () => {
+  (globalThis as { fetch: typeof fetch }).fetch = (async () =>
+    new Response("unauth", { status: 401 })) as typeof fetch;
+  const s = await fetchRemangaAuthStatus(provider);
+  assert.equal(s.signedIn, false);
+  assert.equal(s.reason, "unauthorized");
+});
+
+test("fetchRemangaAuthStatus reason:'network' on fetch throw", async () => {
+  (globalThis as { fetch: typeof fetch }).fetch = (async () => {
+    throw new Error("boom");
+  }) as typeof fetch;
+  const s = await fetchRemangaAuthStatus(provider);
+  assert.equal(s.signedIn, false);
+  assert.equal(s.reason, "network");
 });
 
 test("searchRemanga returns up to 3 candidates with main_name/secondary_name/another_name", async () => {
@@ -72,11 +97,12 @@ test("fetchExistingRemangaBookmarks returns Set of title.id", async () => {
   assert.ok(out.size > 0);
 });
 
-test("addRemangaBookmark POSTs body {title, type}", async () => {
-  const calls = installMock({ "/api/v2/bookmarks/": { body: { content: { id: 1 } } } });
+test("addRemangaBookmark POSTs to /api/users/bookmarks/ with body {title, type}", async () => {
+  const calls = installMock({ "/api/users/bookmarks/": { body: { ok: true } } });
   await addRemangaBookmark(provider, 42, 7);
   const post = calls.find((c) => c.init?.method === "POST");
   assert.ok(post);
+  assert.match(post!.url, /\/api\/users\/bookmarks\/$/);
   const body = JSON.parse(String(post!.init!.body));
   assert.equal(body.title, 42);
   assert.equal(body.type, 7);

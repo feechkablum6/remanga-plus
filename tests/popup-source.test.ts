@@ -32,6 +32,11 @@ test("popup.ts wires hideHomeGameBanner toggle", () => {
   assert.match(popupSource, /Скрыть\s+баннер\s+игры/i);
 });
 
+test("popup.ts wires hideHomePromoBanner toggle", () => {
+  assert.match(popupSource, /hideHomePromoBanner/);
+  assert.match(popupSource, /Скрыть\s+промо/i);
+});
+
 test("popup.ts wires restart button to RESTART_PARSER_SERVER_MESSAGE_TYPE", () => {
   assert.match(popupSource, /RESTART_PARSER_SERVER_MESSAGE_TYPE/);
   assert.match(popupSource, /data-action=["']restart-parser["']/);

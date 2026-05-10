@@ -84,6 +84,97 @@ test("applyHomeEnhancements hides game banner when hideHomeGameBanner = true", (
   }
 });
 
+const buildPromoBanner = (): { root: HTMLElement; cleanup: () => void } => {
+  const root = document.createElement("div");
+  root.innerHTML = `
+    <main>
+      <div data-promo-host class="border-border bg-card relative mx-auto w-full max-w-[600px] rounded-2xl border px-4 py-3">
+        <div class="flex items-center gap-3 pr-8">
+          <img src="/cat.png" alt="" />
+          <div>
+            <p>Твой чит-код на ReManga!</p>
+            <p>Промокоды, анонсы и новости — всё в одном канале.</p>
+          </div>
+          <a class="cs-button" href="https://remanga.org/lnk6ayx5yy">Подписаться</a>
+        </div>
+        <button aria-label="Dismiss"><svg></svg></button>
+      </div>
+    </main>
+  `;
+  document.body.appendChild(root);
+  return {
+    root,
+    cleanup: () => root.remove(),
+  };
+};
+
+test("applyHomeEnhancements hides telegram promo banner when hideHomePromoBanner = true", () => {
+  const { root, cleanup } = buildPromoBanner();
+  try {
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    const banner = root.querySelector("[data-promo-host]") as HTMLElement;
+    assert.equal(banner.style.display, "none");
+  } finally {
+    cleanup();
+  }
+});
+
+test("applyHomeEnhancements leaves telegram promo banner visible when toggle is false", () => {
+  const { root, cleanup } = buildPromoBanner();
+  try {
+    applyHomeEnhancements(root, mergeSettings({}));
+    const banner = root.querySelector("[data-promo-host]") as HTMLElement;
+    assert.notEqual(banner.style.display, "none");
+  } finally {
+    cleanup();
+  }
+});
+
+test("applyHomeEnhancements restores promo banner when toggle becomes false", () => {
+  const { root, cleanup } = buildPromoBanner();
+  try {
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    const banner = root.querySelector("[data-promo-host]") as HTMLElement;
+    assert.equal(banner.style.display, "none");
+
+    applyHomeEnhancements(root, mergeSettings({}));
+    assert.notEqual(banner.style.display, "none");
+  } finally {
+    cleanup();
+  }
+});
+
+test("applyHomeEnhancements does not hide unrelated containers when toggle is on", () => {
+  const root = document.createElement("div");
+  root.innerHTML = `
+    <div data-other class="rounded-2xl border p-3">
+      <a href="/manga/some-title">Обычная ссылка</a>
+      <button>Какая-то кнопка</button>
+    </div>
+  `;
+  document.body.appendChild(root);
+  try {
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    const other = root.querySelector("[data-other]") as HTMLElement;
+    assert.notEqual(other.style.display, "none");
+  } finally {
+    root.remove();
+  }
+});
+
+test("applyHomeEnhancements hides only the smallest promo container, not main page wrapper", () => {
+  const { root, cleanup } = buildPromoBanner();
+  try {
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    const banner = root.querySelector("[data-promo-host]") as HTMLElement;
+    const main = root.querySelector("main") as HTMLElement;
+    assert.equal(banner.style.display, "none");
+    assert.notEqual(main.style.display, "none");
+  } finally {
+    cleanup();
+  }
+});
+
 test("applyHomeEnhancements hides logo, search, bookmarks, ellipsis, avatar when toggled", () => {
   const { root, cleanup } = buildHeader();
   try {

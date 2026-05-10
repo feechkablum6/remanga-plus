@@ -48,6 +48,7 @@ export function applyHomeEnhancements(
     ) ?? (root as Element).querySelector?.("header") ?? root;
   applyHeaderButtons(header as ParentNode, settings);
   applyGameBanner(root, settings);
+  applyPromoBanner(root, settings);
 }
 
 function applyHeaderButtons(
@@ -83,6 +84,33 @@ function applyGameBanner(
 
   candidates.forEach((el) => {
     setHidden(el, "game-banner", settings.hideHomeGameBanner);
+  });
+}
+
+function applyPromoBanner(
+  root: ParentNode,
+  settings: ReaderEnhancerSettings,
+): void {
+  const candidates = new Set<HTMLElement>();
+
+  const promoLinks = (root as Element).querySelectorAll?.(
+    'a[href*="/lnk"]',
+  ) ?? [];
+  promoLinks.forEach((link) => {
+    let el: HTMLElement | null = (link as HTMLElement).parentElement;
+    while (el && el !== root) {
+      if (
+        el.querySelector('button[aria-label="Dismiss"], button[aria-label="Закрыть"], button[aria-label="Скрыть"]')
+      ) {
+        candidates.add(el);
+        break;
+      }
+      el = el.parentElement;
+    }
+  });
+
+  candidates.forEach((el) => {
+    setHidden(el, "promo-banner", settings.hideHomePromoBanner);
   });
 }
 

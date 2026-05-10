@@ -1,13 +1,15 @@
 import {
   fetchMangalibBookmarks,
+  type MangalibFetch,
   type MangalibTokenProvider,
 } from "./import-mangalib/mangalib-client.js";
 import {
   searchRemanga,
-  fetchRemangaBookmarkTypes,
+  fetchExistingRemangaBookmarks,
   fetchRemangaTitleDetail,
   fetchRemangaChapters,
   addRemangaBookmark,
+  type RemangaBookmarkType,
   type RemangaTokenProvider,
 } from "./import-mangalib/remanga-client.js";
 import {
@@ -19,10 +21,14 @@ import {
 import { saveImportState, clearImportState } from "./import-mangalib/state.js";
 import {
   CHECK_AUTH_MESSAGE_TYPE,
+  MANGALIB_PROXIED_FETCH_MESSAGE_TYPE,
   READ_MANGALIB_TOKEN_MESSAGE_TYPE,
+  READ_REMANGA_BOOKMARK_TYPES_MESSAGE_TYPE,
   type CheckAuthRequest,
   type CheckAuthResponse,
+  type MangalibProxiedFetchResponse,
   type ReadMangalibTokenResponse,
+  type ReadRemangaBookmarkTypesResponse,
 } from "./import-mangalib/messages.js";
 import { markRemangaChapterAsViewed } from "./premium-free.js";
 
@@ -49,10 +55,40 @@ const mangalibTokenProvider: MangalibTokenProvider = async () => {
   return r ?? { token: null, userId: null };
 };
 
+const mangalibBridgeFetch: MangalibFetch = async (url, headers) => {
+  const resp = await askBackground<MangalibProxiedFetchResponse>({
+    type: MANGALIB_PROXIED_FETCH_MESSAGE_TYPE,
+    url,
+    headers,
+  });
+  if (!resp || !resp.ok) throw new Error("mangalib bridge fetch failed");
+  const body = resp.body;
+  return {
+    status: resp.status,
+    ok: resp.httpOk,
+    json: async () => JSON.parse(body) as unknown,
+  };
+};
+
 const remangaTokenProvider: RemangaTokenProvider = async () => {
   const cookies = await chrome.cookies.getAll({ url: "https://remanga.org/" });
   const tokenCookie = cookies.find((c) => c.name === "token");
   return tokenCookie?.value ?? null;
+};
+
+let remangaUserId: number | null = null;
+
+const fetchExistingForCurrentUser = async (): Promise<Set<number>> => {
+  if (remangaUserId === null) return new Set();
+  return fetchExistingRemangaBookmarks(remangaTokenProvider, remangaUserId);
+};
+
+const fetchRemangaBookmarkTypesViaBridge = async (): Promise<RemangaBookmarkType[]> => {
+  const resp = await askBackground<ReadRemangaBookmarkTypesResponse>({
+    type: READ_REMANGA_BOOKMARK_TYPES_MESSAGE_TYPE,
+  });
+  if (!resp || !Array.isArray(resp.types)) return [];
+  return resp.types.map((t) => ({ id: t.typeId, name: t.name }));
 };
 
 async function renderAuthStrip(): Promise<void> {
@@ -62,12 +98,21 @@ async function renderAuthStrip(): Promise<void> {
     span.textContent = text;
     span.dataset.state = state;
   };
+  const failText = (site: "mangalib" | "remanga", reason: string | undefined): string => {
+    if (reason === "no-permission") return "✗ Переустановите расширение";
+    if (reason === "no-tab") return site === "mangalib" ? "✗ Откройте mangalib.me" : "✗ Откройте remanga.org";
+    if (reason === "no-token") return "✗ Войдите на сайт";
+    if (reason === "unauthorized") return "✗ Войдите снова";
+    if (reason === "network") return "✗ Нет сети";
+    return "✗ Не авторизован";
+  };
   const [m, r] = await Promise.all([
     askBackground<CheckAuthResponse>({ type: CHECK_AUTH_MESSAGE_TYPE, site: "mangalib" } satisfies CheckAuthRequest),
     askBackground<CheckAuthResponse>({ type: CHECK_AUTH_MESSAGE_TYPE, site: "remanga" } satisfies CheckAuthRequest),
   ]);
-  set("mangalib", m?.signedIn ? `✓ Вошли как ${m.username ?? ""}` : "✗ Не авторизован", m?.signedIn ? "ok" : "bad");
-  set("remanga", r?.signedIn ? `✓ Вошли как ${r.username ?? ""}` : "✗ Не авторизован", r?.signedIn ? "ok" : "bad");
+  set("mangalib", m?.signedIn ? `✓ Вошли как ${m.username ?? ""}` : failText("mangalib", m?.reason), m?.signedIn ? "ok" : "bad");
+  set("remanga", r?.signedIn ? `✓ Вошли как ${r.username ?? ""}` : failText("remanga", r?.reason), r?.signedIn ? "ok" : "bad");
+  if (typeof r?.userId === "number") remangaUserId = r.userId;
 }
 
 async function buildPreviewWithProgress(): Promise<PreviewRow[]> {
@@ -79,9 +124,9 @@ async function buildPreviewWithProgress(): Promise<PreviewRow[]> {
   };
 
   const deps = {
-    fetchBookmarks: () => fetchMangalibBookmarks(mangalibTokenProvider, 1),
-    fetchBookmarkTypes: () => fetchRemangaBookmarkTypes(remangaTokenProvider),
-    fetchExistingBookmarks: async () => new Set<number>(),
+    fetchBookmarks: () => fetchMangalibBookmarks(mangalibTokenProvider, 1, mangalibBridgeFetch),
+    fetchBookmarkTypes: fetchRemangaBookmarkTypesViaBridge,
+    fetchExistingBookmarks: fetchExistingForCurrentUser,
     searchRemanga: (q: string) => searchRemanga(remangaTokenProvider, q),
     fetchTitleDetail: (dir: string) => fetchRemangaTitleDetail(remangaTokenProvider, dir),
     fetchChapters: (b: number) => fetchRemangaChapters(remangaTokenProvider, b),
@@ -160,9 +205,9 @@ function bindExecuteButton(preview: PreviewRow[]): void {
   btn.addEventListener("click", async () => {
     btn.disabled = true;
     const deps = {
-      fetchBookmarks: () => fetchMangalibBookmarks(mangalibTokenProvider, 1),
-      fetchBookmarkTypes: () => fetchRemangaBookmarkTypes(remangaTokenProvider),
-      fetchExistingBookmarks: async () => new Set<number>(),
+      fetchBookmarks: () => fetchMangalibBookmarks(mangalibTokenProvider, 1, mangalibBridgeFetch),
+      fetchBookmarkTypes: fetchRemangaBookmarkTypesViaBridge,
+      fetchExistingBookmarks: fetchExistingForCurrentUser,
       searchRemanga: (q: string) => searchRemanga(remangaTokenProvider, q),
       fetchTitleDetail: (dir: string) => fetchRemangaTitleDetail(remangaTokenProvider, dir),
       fetchChapters: (b: number) => fetchRemangaChapters(remangaTokenProvider, b),
