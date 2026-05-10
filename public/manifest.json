@@ -21,7 +21,8 @@
   },
   "permissions": [
     "storage",
-    "nativeMessaging"
+    "nativeMessaging",
+    "cookies"
   ],
   "background": {
     "service_worker": "background.js"
@@ -36,7 +37,12 @@
     "http://127.0.0.1:3006/*",
     "http://127.0.0.1:3007/*",
     "http://127.0.0.1:3008/*",
-    "http://127.0.0.1:3009/*"
+    "http://127.0.0.1:3009/*",
+    "https://api.cdnlibs.org/*",
+    "https://mangalib.me/*",
+    "https://*.mangalib.me/*",
+    "https://api.remanga.org/*",
+    "https://remanga.org/*"
   ],
   "content_scripts": [
     {
@@ -46,6 +52,11 @@
       "js": [
         "content.js"
       ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://mangalib.me/*"],
+      "js": ["mangalib-bridge.js"],
       "run_at": "document_idle"
     }
   ]
