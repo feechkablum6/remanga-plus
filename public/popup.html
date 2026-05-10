@@ -347,6 +347,63 @@
         opacity: 0;
       }
 
+      .import-section {
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+
+      .import-section h2 {
+        font-size: 14px;
+        margin: 0 0 8px;
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+
+      .auth-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        padding: 4px 0;
+      }
+
+      .auth-row span[data-state="ok"] {
+        color: #4ade80;
+      }
+
+      .auth-row span[data-state="bad"] {
+        color: #ef4444;
+      }
+
+      .import-section button.primary {
+        width: 100%;
+        margin-top: 8px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border: 1px solid rgba(62, 218, 224, 0.3);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .import-section button.primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      [data-resume-banner] {
+        margin-top: 8px;
+        padding: 8px;
+        background: rgba(251, 191, 36, 0.12);
+        border-radius: 8px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -399,6 +456,14 @@
         Перезапустить parser-server
       </button>
       <div class="status" data-status></div>
+    </section>
+
+    <section data-import-section class="import-section">
+      <h2>Импорт закладок из MangaLib</h2>
+      <div class="auth-row"><span>MangaLib:</span> <span data-auth-mangalib data-state="checking">проверяю…</span></div>
+      <div class="auth-row"><span>Remanga:</span> <span data-auth-remanga data-state="checking">проверяю…</span></div>
+      <button class="primary" data-import-button disabled>Импорт закладок из MangaLib</button>
+      <div data-resume-banner hidden></div>
     </section>
 
     <script src="popup.js"></script>

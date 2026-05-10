@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Импорт закладок из MangaLib — Remanga Enhancer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root { color-scheme: dark; --bg:#131416; --bg-elevated:#18191b; --border:#27272a; --text:#fafafa; --text-muted:#8a8f9c; --accent:#3edae0; --ok:#4ade80; --warn:#fbbf24; --bad:#ef4444; }
+      *{box-sizing:border-box}
+      body{margin:0;font-family:"Exo 2",system-ui,sans-serif;background:var(--bg);color:var(--text);padding:24px;max-width:1200px;margin:0 auto}
+      h1{font-size:22px;margin:0 0 16px}
+      .auth-strip{display:flex;gap:24px;padding:12px 16px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;margin-bottom:16px}
+      .auth-strip span[data-state="ok"]{color:var(--ok)}
+      .auth-strip span[data-state="bad"]{color:var(--bad)}
+      .progress{margin:8px 0;color:var(--text-muted)}
+      table{width:100%;border-collapse:collapse;margin:16px 0}
+      th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:top}
+      th{color:var(--text-muted);font-weight:500}
+      tr[data-kind="certain"] td:nth-child(2)::before{content:"✅ "}
+      tr[data-kind="ambiguous"] td:nth-child(2)::before{content:"⚠ "}
+      tr[data-kind="not_found"] td:nth-child(2)::before{content:"❌ "}
+      tr[data-already-exists="true"] td:nth-child(2)::before{content:"🔁 "}
+      button.primary{background:var(--accent);color:#001a1a;border:0;padding:10px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px}
+      button.primary:disabled{opacity:.5;cursor:not-allowed}
+      .report{margin-top:24px;padding:16px;background:var(--bg-elevated);border-radius:12px}
+    </style>
+  </head>
+  <body>
+    <h1>Импорт закладок из MangaLib в Remanga</h1>
+    <section class="auth-strip" data-auth-status>
+      <div>MangaLib: <span data-site="mangalib" data-state="checking">проверяю…</span></div>
+      <div>Remanga: <span data-site="remanga" data-state="checking">проверяю…</span></div>
+    </section>
+    <section>
+      <p class="progress" data-progress-fetch>Получаю закладки с MangaLib…</p>
+      <p class="progress" data-progress-match>Ищу совпадения на Remanga…</p>
+    </section>
+    <section data-preview-table></section>
+    <button class="primary" data-execute-button disabled>Перенести отмеченные (0)</button>
+    <p class="progress" data-progress-execute></p>
+    <section class="report" data-report hidden></section>
+    <script src="import.js"></script>
+  </body>
+</html>

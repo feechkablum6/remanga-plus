@@ -10,6 +10,12 @@ import {
   isParserServerStatus,
   type ParserServerStatus,
 } from "./parser-server.js";
+import {
+  CHECK_AUTH_MESSAGE_TYPE,
+  type CheckAuthRequest,
+  type CheckAuthResponse,
+} from "./import-mangalib/messages.js";
+import { loadImportState } from "./import-mangalib/state.js";
 
 const STATUS_POLL_MS = 5000;
 
@@ -40,6 +46,7 @@ async function main(): Promise<void> {
   renderHomeToggles(settings);
   bindRestartButton();
   startStatusPolling();
+  await wireImportSection();
 }
 
 function startStatusPolling(): void {
@@ -234,4 +241,43 @@ function describeFailure(response: unknown): string {
     return (response as { detail: string }).detail;
   }
   return "Не удалось перезапустить parser-server";
+}
+
+async function wireImportSection(): Promise<void> {
+  const ml = document.querySelector<HTMLElement>("[data-auth-mangalib]");
+  const rm = document.querySelector<HTMLElement>("[data-auth-remanga]");
+  const btn = document.querySelector<HTMLButtonElement>("[data-import-button]");
+  const banner = document.querySelector<HTMLElement>("[data-resume-banner]");
+  if (!ml || !rm || !btn) return;
+
+  const setSpan = (el: HTMLElement, r: CheckAuthResponse | null) => {
+    if (r?.signedIn) { el.textContent = `✓ ${r.username ?? "вошли"}`; el.dataset.state = "ok"; }
+    else { el.textContent = "✗ не авторизован"; el.dataset.state = "bad"; }
+  };
+  const ask = (site: "mangalib" | "remanga") => new Promise<CheckAuthResponse | null>((res) => {
+    const req: CheckAuthRequest = { type: CHECK_AUTH_MESSAGE_TYPE, site };
+    chrome.runtime.sendMessage(req, (resp: unknown) => {
+      void chrome.runtime?.lastError;
+      res(resp && typeof resp === "object" && "signedIn" in resp ? (resp as CheckAuthResponse) : null);
+    });
+  });
+
+  const [m, r] = await Promise.all([ask("mangalib"), ask("remanga")]);
+  setSpan(ml, m); setSpan(rm, r);
+  btn.disabled = !(m?.signedIn && r?.signedIn);
+  if (btn.disabled) btn.title = "Сначала войдите в оба сайта";
+  btn.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+  });
+
+  if (banner) {
+    const state = await loadImportState();
+    if (state && state.phase !== "done") {
+      banner.hidden = false;
+      banner.textContent = `Прерванный импорт (${state.phase}). Открыть страницу импорта.`;
+      banner.addEventListener("click", () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+      });
+    }
+  }
 }
