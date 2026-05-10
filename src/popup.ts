@@ -1,17 +1,29 @@
-import { loadSettings } from "./settings.js";
+import {
+  loadSettings,
+  saveSettings,
+  watchSettings,
+  type ReaderEnhancerSettings,
+} from "./settings.js";
 import {
   createPopupRouter,
   type PopupRouter,
   type PopupScreen,
 } from "./popup-router.js";
-import { CATEGORY_KEYS, countCategoryToggles } from "./popup-categories.js";
+import {
+  CATEGORIES,
+  CATEGORY_KEYS,
+  countCategoryToggles,
+  type ToggleDescriptor,
+  type CategoryKey,
+  type SiteSubsection,
+} from "./popup-categories.js";
+
+type CommitSettings = (next: ReaderEnhancerSettings) => Promise<void>;
 
 if (typeof document !== "undefined") void main();
 
 async function main(): Promise<void> {
-  // Settings are loaded for use by later wirings (toggles, etc. added in Task 6+).
-  await loadSettings();
-
+  const settings = await loadSettings();
   const router = createPopupRouter();
 
   renderVersionChip();
@@ -19,6 +31,12 @@ async function main(): Promise<void> {
   wireCardNavigation(document, router);
   wireBackButtons(document, router);
   renderCardSubtitles(document);
+
+  const commit: CommitSettings = async (next) => {
+    await saveSettings(next);
+  };
+  renderToggles(document, settings, commit);
+  watchSettings((next) => renderToggles(document, next, commit));
 }
 
 export function wireScreenVisibility(doc: Document, router: PopupRouter): void {
@@ -68,4 +86,98 @@ function renderVersionChip(): void {
   if (!chip) return;
   const version = chrome.runtime?.getManifest?.().version;
   if (version) chip.textContent = `v${version}`;
+}
+
+export function renderToggles(
+  doc: Document,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): void {
+  for (const key of CATEGORY_KEYS) {
+    const container = doc.querySelector<HTMLElement>(`[data-toggle-list="${key}"]`);
+    if (!container) continue;
+    container.replaceChildren(...buildToggles(doc, key, settings, commit));
+  }
+}
+
+function buildToggles(
+  doc: Document,
+  key: CategoryKey,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): Node[] {
+  const toggles = CATEGORIES[key].toggles;
+  const nodes: Node[] = [];
+  let lastSubsection: SiteSubsection | undefined = undefined;
+
+  for (const toggle of toggles) {
+    if (toggle.subsection && toggle.subsection !== lastSubsection) {
+      const heading = doc.createElement("h3");
+      heading.className = "drill-subheading";
+      heading.textContent = toggle.subsection;
+      nodes.push(heading);
+      lastSubsection = toggle.subsection;
+    }
+    nodes.push(buildToggleRow(doc, toggle, settings, commit));
+  }
+  return nodes;
+}
+
+function buildToggleRow(
+  doc: Document,
+  toggle: ToggleDescriptor,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): HTMLLabelElement {
+  const wrapper = doc.createElement("label");
+  wrapper.className = "toggle";
+
+  const body = doc.createElement("span");
+  body.className = "toggle__body";
+
+  const labelText = doc.createElement("span");
+  labelText.className = "toggle__label";
+  labelText.textContent = toggle.label;
+  body.appendChild(labelText);
+
+  if (toggle.caption) {
+    const cap = doc.createElement("span");
+    cap.className = "toggle__caption";
+    cap.textContent = toggle.caption;
+    body.appendChild(cap);
+  }
+
+  const input = doc.createElement("input");
+  input.type = "checkbox";
+  input.checked = readToggleValue(settings, toggle);
+
+  const switchEl = doc.createElement("span");
+  switchEl.className = "toggle__switch";
+
+  input.addEventListener("change", () => {
+    const next = applyToggleChange(settings, toggle, input.checked);
+    void commit(next);
+  });
+
+  wrapper.append(body, input, switchEl);
+  return wrapper;
+}
+
+function readToggleValue(s: ReaderEnhancerSettings, toggle: ToggleDescriptor): boolean {
+  if (toggle.accessor.kind === "scalar") return s[toggle.accessor.key];
+  return s.hideHeaderButtons[toggle.accessor.key];
+}
+
+function applyToggleChange(
+  s: ReaderEnhancerSettings,
+  toggle: ToggleDescriptor,
+  next: boolean,
+): ReaderEnhancerSettings {
+  if (toggle.accessor.kind === "scalar") {
+    return { ...s, [toggle.accessor.key]: next };
+  }
+  return {
+    ...s,
+    hideHeaderButtons: { ...s.hideHeaderButtons, [toggle.accessor.key]: next },
+  };
 }
