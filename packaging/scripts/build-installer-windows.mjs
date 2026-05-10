@@ -30,9 +30,17 @@ const computeExtensionIdFromKey = (base64Key) =>
 // Pre-flight: makensis must be installed. Fail fast and helpful.
 const makensisCheck = spawnSync("makensis", ["-VERSION"], { encoding: "utf8" });
 if (makensisCheck.status !== 0) {
+  const installHint =
+    process.platform === "linux"
+      ? "  sudo apt-get install -y nsis"
+      : "  brew install makensis";
   console.error(
-    "makensis not found. Install with:\n  brew install makensis\n" +
-      "Then re-run `npm run pkg:windows`.",
+    `makensis not found. Install with:\n${installHint}\n` +
+      "Then re-run `npm run pkg:windows`.\n\n" +
+      "Note: on macOS Tahoe arm64, the Homebrew makensis 3.12 bottle is broken " +
+      "(std::bad_alloc on every script). Build via the GitHub Actions workflow " +
+      ".github/workflows/build-windows-installer.yml instead — it runs on Linux " +
+      "where nsis works.",
   );
   process.exit(1);
 }
