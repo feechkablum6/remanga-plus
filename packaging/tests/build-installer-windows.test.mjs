@@ -59,7 +59,7 @@ test("build-installer-windows produces payload + Setup.exe", { timeout: 360_000 
 
   // Final installer.
   assert.ok(existsSync(installerExe), "Remanga-Plus-Setup.exe not produced");
-  // LZMA-compressed installer should be ~20-30 MB.
+  // zlib-compressed installer should be ~25-40 MB (LZMA OOMs on arm64; see installer.nsi comment).
   const installerSize = statSync(installerExe).size;
   assert.ok(installerSize > 15_000_000, `installer suspiciously small: ${installerSize}`);
   assert.ok(installerSize < 80_000_000, `installer suspiciously large: ${installerSize}`);
