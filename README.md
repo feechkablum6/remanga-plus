@@ -92,8 +92,6 @@
 
 ## 📥 Установка на Windows
 
-> Premium Free работает только на macOS. На Windows работает чистка интерфейса.
-
 1. Скачайте `Remanga-Plus-Setup.exe` из последнего релиза в [Releases](https://github.com/feechkablum6/remanga-plus/releases/latest) (~25 МБ).
 
 2. Двойной клик. Windows покажет **«Windows protected your PC»** — это нормально, расширение без платной подписи Microsoft.
