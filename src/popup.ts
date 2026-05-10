@@ -60,6 +60,8 @@ async function main(): Promise<void> {
   wireRestart();
   startServerStatusPolling();
   void wireAuthRow();
+  wireImportButton();
+  wireSiteLinks();
 }
 
 function startServerStatusPolling(): void {
@@ -111,6 +113,29 @@ async function wireAuthRow(): Promise<void> {
     checkAuth("remanga"),
   ]);
   renderAuthRow(document, { mangalib, remanga });
+}
+
+function wireImportButton(): void {
+  const btn = document.querySelector<HTMLButtonElement>("[data-import-button]");
+  btn?.addEventListener("click", () => {
+    if (btn.disabled) return;
+    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+  });
+}
+
+function wireSiteLinks(): void {
+  const links: Array<[string, string]> = [
+    ['[data-auth-link="mangalib"]', "https://mangalib.me/"],
+    ['[data-auth-link="remanga"]', "https://remanga.org/"],
+  ];
+  for (const [selector, url] of links) {
+    const link = document.querySelector<HTMLAnchorElement>(selector);
+    link?.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (link.dataset.state === "checking") return;
+      chrome.tabs.create({ url });
+    });
+  }
 }
 
 function checkAuth(site: "mangalib" | "remanga"): Promise<AuthState> {
