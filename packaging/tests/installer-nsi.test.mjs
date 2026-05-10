@@ -29,7 +29,7 @@ test("installer.nsi has correct top-level config", () => {
   assert.match(nsi, /RequestExecutionLevel\s+user/, "must request user-level (no UAC)");
   assert.match(nsi, /InstallDir\s+"\$LOCALAPPDATA\\Programs\\Remanga Plus"/, "default InstallDir under LOCALAPPDATA");
   assert.match(nsi, /OutFile\s+"Remanga-Plus-Setup\.exe"/, "must produce Remanga-Plus-Setup.exe");
-  assert.match(nsi, /SetCompressor\s+\/SOLID\s+lzma/, "use solid LZMA compression");
+  assert.match(nsi, /^SetCompressor\s+zlib\b/m, "use zlib compression (arm64 makensis LZMA OOMs on bundled node.exe)");
   assert.match(nsi, /!define\s+APPNAME\s+"Remanga Plus"/, "must define APPNAME");
   assert.match(nsi, new RegExp(`!define\\s+HOSTNAME\\s+"${HOST_NAME.replace(/\./g, "\\.")}"`), "must define HOSTNAME");
 });

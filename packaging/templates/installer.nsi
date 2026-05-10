@@ -1,4 +1,6 @@
-; ReManga Plus — Windows installer
+; ReManga Plus -- Windows installer (ASCII-only on purpose: NSIS 3 rejects
+; non-ASCII bytes without an explicit UTF-8 BOM. Keep this file pure ASCII
+; so makensis works out of the box.)
 ; Build with: makensis -DEXTENSION_ID=<id> -DVERSION=<x.y.z> installer.nsi
 ; Per-user install, no UAC, no admin rights.
 
@@ -19,7 +21,10 @@ Name "${APPNAME}"
 OutFile "Remanga-Plus-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\Remanga Plus"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+; zlib compressor: arm64 makensis 3.12's LZMA implementation OOMs on the
+; bundled ~70 MB node.exe (both /SOLID and per-file modes throw std::bad_alloc).
+; zlib is less compact (~30% larger installer) but stable.
+SetCompressor zlib
 ShowInstDetails show
 ShowUninstDetails show
 
@@ -64,7 +69,7 @@ Section "Install"
     FileClose $0
 
     ; Register Native Messaging host for every known Chromium browser (HKCU only).
-    ; Browsers that aren't installed will simply ignore their key — harmless.
+    ; Browsers that aren't installed will simply ignore their key -- harmless.
     WriteRegStr HKCU "Software\Google\Chrome\NativeMessagingHosts\${HOSTNAME}" "" "$INSTDIR\nm-manifest.json"
     WriteRegStr HKCU "Software\Google\Chrome Beta\NativeMessagingHosts\${HOSTNAME}" "" "$INSTDIR\nm-manifest.json"
     WriteRegStr HKCU "Software\Google\Chrome Dev\NativeMessagingHosts\${HOSTNAME}" "" "$INSTDIR\nm-manifest.json"
@@ -76,7 +81,7 @@ Section "Install"
     WriteRegStr HKCU "Software\Yandex\YandexBrowser\NativeMessagingHosts\${HOSTNAME}" "" "$INSTDIR\nm-manifest.json"
     WriteRegStr HKCU "Software\Opera Software\Opera Stable\NativeMessagingHosts\${HOSTNAME}" "" "$INSTDIR\nm-manifest.json"
 
-    ; Uninstaller registration in Add/Remove Programs (per-user → HKCU).
+    ; Uninstaller registration in Add/Remove Programs (per-user -> HKCU).
     WriteUninstaller "$INSTDIR\Uninstall.exe"
     WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APPNAME}" "DisplayName" "${APPNAME}"
     WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APPNAME}" "UninstallString" "$INSTDIR\Uninstall.exe"
