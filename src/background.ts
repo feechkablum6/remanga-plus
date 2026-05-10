@@ -11,6 +11,18 @@ import {
   type ParserServerEnsureResult,
   type ParserServerStatus,
 } from "./parser-server.js";
+import {
+  fetchMangalibAuthStatus,
+  type MangalibTokenProvider,
+} from "./import-mangalib/mangalib-client.js";
+import { fetchRemangaAuthStatus } from "./import-mangalib/remanga-client.js";
+import {
+  READ_MANGALIB_TOKEN_MESSAGE_TYPE,
+  type CheckAuthRequest,
+  type CheckAuthResponse,
+  type ReadMangalibTokenResponse,
+} from "./import-mangalib/messages.js";
+import { readRemangaAuthToken } from "./premium-free.js";
 
 const HEALTHCHECK_TIMEOUT_MS = 3_000;
 const HEALTHCHECK_MAX_ATTEMPTS = 5;
@@ -297,6 +309,30 @@ const handleProxyImage = async (
   }
 };
 
+async function getMangalibTokenViaBridge(): Promise<ReadMangalibTokenResponse> {
+  const tabs = await chrome.tabs.query({ url: "https://mangalib.me/*" });
+  for (const tab of tabs) {
+    if (typeof tab.id !== "number") continue;
+    try {
+      const response = (await chrome.tabs.sendMessage(tab.id, {
+        type: READ_MANGALIB_TOKEN_MESSAGE_TYPE,
+      })) as ReadMangalibTokenResponse;
+      if (response && (response.token || response.token === null)) return response;
+    } catch {
+      continue;
+    }
+  }
+  return { token: null, userId: null };
+}
+
+const mangalibTokenProvider: MangalibTokenProvider = async () => getMangalibTokenViaBridge();
+
+async function getRemangaToken(): Promise<string | null> {
+  const cookies = await chrome.cookies.getAll({ url: "https://remanga.org/" });
+  const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  return readRemangaAuthToken(cookieHeader);
+}
+
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (!message || typeof message !== "object" || !("type" in message)) {
@@ -335,6 +371,18 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
           : { status: "down" };
         sendResponse(result);
       })();
+      return true;
+    }
+
+    if (message.type === "import-mangalib/check-auth") {
+      const site = (message as CheckAuthRequest).site;
+      const action =
+        site === "mangalib"
+          ? fetchMangalibAuthStatus(mangalibTokenProvider)
+          : fetchRemangaAuthStatus(getRemangaToken);
+      action
+        .then((status) => sendResponse(status as CheckAuthResponse))
+        .catch(() => sendResponse({ signedIn: false }));
       return true;
     }
 
