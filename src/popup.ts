@@ -17,8 +17,20 @@ import {
   type CategoryKey,
   type SiteSubsection,
 } from "./popup-categories.js";
+import {
+  renderServerStatus,
+  wireRestartButton,
+  type ServerStatusState,
+} from "./popup-service-status.js";
+import {
+  RESTART_PARSER_SERVER_MESSAGE_TYPE,
+  STATUS_PARSER_SERVER_MESSAGE_TYPE,
+  isParserServerStatus,
+} from "./parser-server.js";
 
 type CommitSettings = (next: ReaderEnhancerSettings) => Promise<void>;
+
+const STATUS_POLL_MS = 5000;
 
 if (typeof document !== "undefined") void main();
 
@@ -37,6 +49,52 @@ async function main(): Promise<void> {
   };
   renderToggles(document, settings, commit);
   watchSettings((next) => renderToggles(document, next, commit));
+
+  renderServerStatus(document, { kind: "checking" });
+  wireRestart();
+  startServerStatusPolling();
+}
+
+function startServerStatusPolling(): void {
+  void refreshServerStatus();
+  setInterval(() => void refreshServerStatus(), STATUS_POLL_MS);
+}
+
+function refreshServerStatus(): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: STATUS_PARSER_SERVER_MESSAGE_TYPE },
+      (response: unknown) => {
+        void chrome.runtime?.lastError;
+        renderServerStatus(document, mapStatus(response));
+        resolve();
+      },
+    );
+  });
+}
+
+function mapStatus(response: unknown): ServerStatusState {
+  if (!isParserServerStatus(response)) return { kind: "down" };
+  return response.status === "ok"
+    ? { kind: "ok", port: response.port }
+    : { kind: "down" };
+}
+
+function wireRestart(): void {
+  wireRestartButton(document, () => {
+    renderServerStatus(document, { kind: "busy" });
+    chrome.runtime.sendMessage(
+      { type: RESTART_PARSER_SERVER_MESSAGE_TYPE },
+      (response: unknown) => {
+        void chrome.runtime?.lastError;
+        if (isParserServerStatus(response) && response.status === "ok") {
+          renderServerStatus(document, { kind: "ok", port: response.port });
+        } else {
+          renderServerStatus(document, { kind: "down" });
+        }
+      },
+    );
+  });
 }
 
 export function wireScreenVisibility(doc: Document, router: PopupRouter): void {
