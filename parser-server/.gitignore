@@ -1,4 +1,6 @@
 node_modules/
 dist/
-cache/
+# Runtime image cache lives at parser-server/cache/ (anchored to root). The
+# glob must NOT match parser-server/src/cache/, where source files live.
+/cache/
 .env
