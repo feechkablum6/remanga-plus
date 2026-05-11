@@ -22,7 +22,8 @@
   "permissions": [
     "storage",
     "nativeMessaging",
-    "cookies"
+    "cookies",
+    "scripting"
   ],
   "background": {
     "service_worker": "background.js"
@@ -50,7 +51,8 @@
         "https://remanga.org/*"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "remanga-bridge.js"
       ],
       "run_at": "document_idle"
     },

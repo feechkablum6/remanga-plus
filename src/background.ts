@@ -29,6 +29,11 @@ import {
   type ReadRemangaBookmarkTypesResponse,
 } from "./import-mangalib/messages.js";
 import { readRemangaAuthToken } from "./premium-free.js";
+import {
+  resolveRemangaBookmarkTypes,
+  type BookmarkType,
+  type CachedBookmarkTypes,
+} from "./bookmark-types-resolver.js";
 
 const HEALTHCHECK_TIMEOUT_MS = 3_000;
 const HEALTHCHECK_MAX_ATTEMPTS = 5;
@@ -337,6 +342,102 @@ async function sendWithBridgeFallback<T>(
   }
 }
 
+const REMANGA_BOOKMARK_TYPES_CACHE_KEY = "remangaBookmarkTypesCache";
+const REMANGA_BOOKMARKS_URL = "https://remanga.org/user/bookmarks";
+const HIDDEN_TAB_POLL_DEADLINE_MS = 15_000;
+const HIDDEN_TAB_POLL_INTERVAL_MS = 500;
+
+async function readRemangaTypesFromExistingTabs(): Promise<BookmarkType[]> {
+  const allTabs = await chrome.tabs.query({});
+  const tabs = allTabs.filter(
+    (t) => typeof t.url === "string" && t.url.startsWith("https://remanga.org/"),
+  );
+  for (const tab of tabs) {
+    if (typeof tab.id !== "number") continue;
+    const resp = await sendWithBridgeFallback<ReadRemangaBookmarkTypesResponse>(
+      tab.id,
+      "remanga-bridge.js",
+      { type: READ_REMANGA_BOOKMARK_TYPES_MESSAGE_TYPE },
+    );
+    if (resp && Array.isArray(resp.types) && resp.types.length > 0) {
+      return resp.types;
+    }
+  }
+  return [];
+}
+
+async function readRemangaTypesCache(): Promise<CachedBookmarkTypes | null> {
+  const area = chrome.storage?.local;
+  if (!area) return null;
+  return await new Promise<CachedBookmarkTypes | null>((resolve) => {
+    area.get(REMANGA_BOOKMARK_TYPES_CACHE_KEY, (items) => {
+      void chrome.runtime?.lastError;
+      const raw = items?.[REMANGA_BOOKMARK_TYPES_CACHE_KEY] as
+        | { types?: unknown; updatedAt?: unknown }
+        | undefined;
+      if (!raw || !Array.isArray(raw.types) || typeof raw.updatedAt !== "number") {
+        resolve(null);
+        return;
+      }
+      const types: BookmarkType[] = [];
+      for (const t of raw.types) {
+        if (
+          t &&
+          typeof (t as BookmarkType).typeId === "number" &&
+          typeof (t as BookmarkType).name === "string"
+        ) {
+          types.push({ typeId: (t as BookmarkType).typeId, name: (t as BookmarkType).name });
+        }
+      }
+      resolve({ types, updatedAt: raw.updatedAt });
+    });
+  });
+}
+
+async function writeRemangaTypesCache(types: BookmarkType[]): Promise<void> {
+  const area = chrome.storage?.local;
+  if (!area) return;
+  const payload: CachedBookmarkTypes = { types, updatedAt: Date.now() };
+  await new Promise<void>((resolve) => {
+    area.set({ [REMANGA_BOOKMARK_TYPES_CACHE_KEY]: payload }, () => {
+      void chrome.runtime?.lastError;
+      resolve();
+    });
+  });
+}
+
+async function readRemangaTypesViaHiddenTab(): Promise<BookmarkType[]> {
+  let tabId: number | undefined;
+  try {
+    const tab = await chrome.tabs.create({ url: REMANGA_BOOKMARKS_URL, active: false });
+    if (typeof tab.id !== "number") return [];
+    tabId = tab.id;
+    const deadline = Date.now() + HIDDEN_TAB_POLL_DEADLINE_MS;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, HIDDEN_TAB_POLL_INTERVAL_MS));
+      const resp = await sendWithBridgeFallback<ReadRemangaBookmarkTypesResponse>(
+        tabId,
+        "remanga-bridge.js",
+        { type: READ_REMANGA_BOOKMARK_TYPES_MESSAGE_TYPE },
+      );
+      if (resp && Array.isArray(resp.types) && resp.types.length > 0) {
+        return resp.types;
+      }
+    }
+    return [];
+  } catch {
+    return [];
+  } finally {
+    if (typeof tabId === "number") {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch {
+        void chrome.runtime?.lastError;
+      }
+    }
+  }
+}
+
 async function getMangalibTokenViaBridge(): Promise<ReadMangalibTokenResponse & { reason?: "no-tab" | "no-token" }> {
   const allTabs = await chrome.tabs.query({});
   const tabs = allTabs.filter((t) => typeof t.url === "string" && t.url.startsWith("https://mangalib.me/"));
@@ -431,23 +532,14 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
 
     if (message.type === READ_REMANGA_BOOKMARK_TYPES_MESSAGE_TYPE) {
       void (async () => {
-        const allTabs = await chrome.tabs.query({});
-        const tabs = allTabs.filter(
-          (t) => typeof t.url === "string" && t.url.startsWith("https://remanga.org/"),
-        );
-        for (const tab of tabs) {
-          if (typeof tab.id !== "number") continue;
-          const resp = await sendWithBridgeFallback<ReadRemangaBookmarkTypesResponse>(
-            tab.id,
-            "remanga-bridge.js",
-            message,
-          );
-          if (resp && Array.isArray(resp.types) && resp.types.length > 0) {
-            sendResponse(resp);
-            return;
-          }
-        }
-        sendResponse({ types: [] } satisfies ReadRemangaBookmarkTypesResponse);
+        const types = await resolveRemangaBookmarkTypes({
+          readFromExistingTabs: readRemangaTypesFromExistingTabs,
+          readCached: readRemangaTypesCache,
+          writeCached: writeRemangaTypesCache,
+          openHiddenTabAndRead: readRemangaTypesViaHiddenTab,
+          now: () => Date.now(),
+        });
+        sendResponse({ types } satisfies ReadRemangaBookmarkTypesResponse);
       })();
       return true;
     }

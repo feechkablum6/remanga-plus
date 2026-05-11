@@ -110,6 +110,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `parser-server/scripts/` | Одноразовые разведочные скрипты (`senkuro-*`, `inkstory-*`) |
 | `mangalib-bridge.ts` | Content script на mangalib.me — читает `localStorage.auth.token.access_token`, проксирует API-запросы (Cloudflare блокирует chrome-extension origin → 403, нужен mangalib.me origin) |
 | `remanga-bridge.ts` | Content script на remanga.org — читает имена bookmark-категорий из DOM `[role="tab"][id*="trigger-"]` на странице `/user/bookmarks` (нет API-эндпоинта для имён) |
+| `bookmark-types-resolver.ts` | Чистый резолвер имён категорий: source-order `existing tabs → fresh cache (TTL 7d) → hidden tab /user/bookmarks (polling до 15s, потом close) → stale cache fallback`. Кэш в `chrome.storage.local` ключ `remangaBookmarkTypesCache`. Background передаёт chrome-API impls, логика тестируется без chrome |
 | `import-page.ts` + `import.html` | Страница импорта закладок MangaLib → Remanga; auth-check через background, реальный fetchExistingRemangaBookmarks + safety-guard в `orchestrator.execute` |
 | `import-mangalib/` | Клиенты MangaLib/Remanga, orchestrator, status-mapping, title-matcher, chapter-progress, state |
 
@@ -154,6 +155,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT держать listener-подписки в render-функциях попапа. Pattern: `renderX(doc, state)` чистая (idempotent — `replaceChildren`), `wireX(doc, handler)` цепляет listener один раз в `main()`. Иначе при `watchSettings` re-render будут дублирующиеся listeners.
 - DO NOT добавлять новый toggle в попап минуя `popup-categories.ts` — descriptor там же где label, без него `renderToggles` не знает что отрисовать.
 - DO NOT забывать обновлять подзаголовок-счётчик карточки в `formatCount`-функции `popup.ts` если меняется число тогглов в категории. Сам счётчик пересчитывается из `countCategoryToggles`, но русский plural нужно проверить (1 «настройка», 2-4 «настройки», 5+ «настроек», 11-14 «настроек»).
+- DO NOT ставить `display: flex/grid/block` на элемент с HTML-атрибутом `hidden` без сопутствующего `[hidden] { display: none }` — class-селектор перебивает UA-таблицу, `el.hidden = true` визуально ничего не сделает.
 
 ## Visuals (gpt-image-prompt + frontend-design)
 
