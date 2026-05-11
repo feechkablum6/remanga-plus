@@ -144,21 +144,28 @@ function wireSiteLinks(): void {
 export function wireResumeBanner(doc: Document): void {
   const banner = doc.querySelector<HTMLElement>("[data-resume-banner]");
   if (!banner) return;
-  banner.addEventListener("click", () => {
+  const action = banner.querySelector<HTMLElement>("[data-resume-action]");
+  const dismiss = banner.querySelector<HTMLElement>("[data-resume-dismiss]");
+  action?.addEventListener("click", () => {
     chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+  });
+  dismiss?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    banner.hidden = true;
   });
 }
 
 export function renderResumeBanner(doc: Document, state: ImportState | null): void {
   const banner = doc.querySelector<HTMLElement>("[data-resume-banner]");
   if (!banner) return;
+  const action = banner.querySelector<HTMLElement>("[data-resume-action]");
   if (!state || state.phase === "done") {
     banner.hidden = true;
-    banner.textContent = "";
+    if (action) action.textContent = "";
     return;
   }
   banner.hidden = false;
-  banner.textContent = "Прерван — продолжить";
+  if (action) action.textContent = "Прерван — продолжить";
 }
 
 function checkAuth(site: "mangalib" | "remanga"): Promise<AuthState> {

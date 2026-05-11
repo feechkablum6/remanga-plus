@@ -176,18 +176,46 @@
         font-size: 12px;
         color: var(--text-muted);
       }
+      .service__resume[hidden] {
+        display: none;
+      }
       .service__resume {
         margin-top: 10px;
         width: 100%;
-        padding: 10px 12px;
+        display: flex;
+        align-items: stretch;
         background: rgba(251, 191, 36, 0.12);
         color: #fbbf24;
         border: 1px solid rgba(251, 191, 36, 0.3);
         border-radius: 10px;
+        overflow: hidden;
+      }
+      .service__resume-action {
+        flex: 1;
+        padding: 10px 12px;
+        background: transparent;
+        color: inherit;
+        border: 0;
         font: inherit;
         font-size: 13px;
         cursor: pointer;
         text-align: left;
+      }
+      .service__resume-dismiss {
+        flex: 0 0 auto;
+        padding: 0 12px;
+        background: transparent;
+        color: inherit;
+        border: 0;
+        border-left: 1px solid rgba(251, 191, 36, 0.25);
+        font: inherit;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0.7;
+      }
+      .service__resume-dismiss:hover {
+        opacity: 1;
       }
 
       /* Server status row */
@@ -481,7 +509,10 @@
           </div>
 
           <p class="service__hint" data-auth-hint hidden></p>
-          <button class="service__resume" data-resume-banner type="button" hidden></button>
+          <div class="service__resume" data-resume-banner hidden>
+            <button class="service__resume-action" data-resume-action type="button"></button>
+            <button class="service__resume-dismiss" data-resume-dismiss type="button" aria-label="Скрыть">×</button>
+          </div>
         </section>
       </section>
 
