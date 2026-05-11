@@ -1,5 +1,53 @@
 # gpt-image-prompt log for "Remanga Reader Enhancer"
 
+## 2026-05-11 — Popup UX redesign (v0.6.0 ship)
+
+**Type:** UI exploration → final mockup → scale-up polish
+**Subject:** заменили линейный список настроек в `public/popup.html` на дашборд с 3 карточками-категориями (Сайт / Читалка / Premium Free), drill-down экранами по тапу на карточку, и компактным блоком «Сервис» (parser-server статус + clickable site-links + пилюля «Импорт →»).
+
+**Что сгенерили в ChatGPT Images 2.0 (batch-режим, по 5–8 файлов за один промпт):**
+
+1. **Первый batch** — 5 концептов лэйаута для outline-сравнения (320px-popups, отдельные PNG):
+   - Tabs сверху (горизонтальные вкладки)
+   - Sidebar слева (вертикальный icon column)
+   - **Dashboard cards (2×2 grid + drill-down)** ← выбран
+   - Минимум + ⚙ (compact main + drawer)
+   - Аккордеон + поиск
+
+2. **Второй batch (после выбора Dashboard)** — 8 вариаций карточки Premium Free и общей раскладки:
+   - PF drill-down с 3 настройками
+   - PF с мини-статистикой
+   - PF promo (off-state CTA)
+   - PF hero (full-width сверху)
+   - Сервис вместо Импорт+Сервер
+   - **3 карточки полной ширины** ← база финала
+   - PF с выбором провайдера
+   - PF в шапке, без карточки
+
+3. **Финал** — один PNG с главным экраном + drill-down PF. Anchored to selected mockup (attached as Image 1) so style stayed consistent.
+
+**Брендовая ключевая база для всех промптов** (см. `brand.md` и `tokens.md`):
+- Surface base #131416, elevated #18191B, border #27272A, border-soft rgba(64,64,67,0.5)
+- Text #FAFAFA / muted #8A8F9C, accent #3EDAE0 / soft rgba(62,218,224,0.12), danger #FF6B6B
+- Typography character: "Exo 2", body 13/14px, section headings 10/11px UPPERCASE tracked, popup title 14/16px semibold
+
+**Post-ship scale-up (commit e6a47aa):** после установки в реальный Chrome 320px popup воспринимался мельче чем на 1024px canvas мокапа. Bumped:
+- Popup width 320 → 360
+- Body 13 → 14, card title 13 → 16, subtitle 11 → 12, icon 36 → 44, card height 72 → 84
+- Toggle pill 32×18 (knob 14) → 44×26 (knob 20), label 13 → 15
+- Header monogram 24 → 30, title 14 → 16
+- Drill-down title 14 → 16, subsection heading 10 → 11
+- Service row 11 → 13, refresh icon 16 → 20, auth row 13 → 14, import pill 13 → 14 (padding bumped)
+
+**Out of scope для этого редизайна:** translation picker (Senkuro/Mangabuff/InkStory остаются как невидимый fallback в parser-server), статистика чтения, поиск по настройкам, drill-down мелких тулбар-настроек читалки.
+
+**Spec:** [docs/superpowers/specs/2026-05-11-popup-dashboard-redesign-design.md](../docs/superpowers/specs/2026-05-11-popup-dashboard-redesign-design.md)
+**Plan:** [docs/superpowers/plans/2026-05-11-popup-dashboard-redesign.md](../docs/superpowers/plans/2026-05-11-popup-dashboard-redesign.md)
+
+**Notes:** _empty_
+
+---
+
 ## 2026-05-09 — Brand priming + master extension icon (initial)
 
 **Type:** brand priming + browser extension icon (replaces existing red comic-book "R" icon)

@@ -97,7 +97,12 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `premium-free.ts` | Premium Free client: metadata extraction, response shapes, remanga read-state sync (`markRemangaChapterAsViewed` → `POST /api/activity/views/`) |
 | `premium-free-prefetch.ts` | PF prewarm: `prewarmPremiumFreeChapter(ref, resolver, { prewarmImage })` resolves a PF chapter and prewarms each page's `proxyUrl` via the in-memory `imageBlobCache` (NOT `<link rel=preload>` — PF images bypass HTTP cache by going through `chrome.runtime.sendMessage(PROXY_IMAGE_MESSAGE_TYPE)` → background → base64 → blob URL). Triggered (a) when next remanga chapter is paid via `prefetchNextChapter` `onPaidNextChapter` callback, (b) at PF stream root render to prewarm X+1, (c) after each stream entry add to chain X+2. |
 | `parser-server.ts` | Shared constants: URLs, message types, host names |
-| `popup-dismissal.ts` | Селекторы и эвристики автозакрытия попапов |
+| `popup.ts` | Тонкий orchestrator попапа расширения: загружает настройки, создаёт router, рендерит карточки + drill-down тогглы + сервис-блок |
+| `popup-router.ts` | Чистый state machine: текущий экран ("main" / "site" / "reader" / "premium-free") + listener pattern для DOM-подписки |
+| `popup-categories.ts` | Data-модуль: 3 категории (Сайт / Читалка / Premium Free) с descriptor-массивами тогглов; `accessor` указывает, в какое поле `settings.ts` мапится тоггл (scalar или header-button) |
+| `popup-service-status.ts` | Рендеринг строки parser-server: статус + conditional refresh-кнопка (скрыта при OK, видна при down/busy/checking) |
+| `popup-auth-row.ts` | Рендеринг строки авторизации MangaLib/Remanga: 3 независимых состояния (ok/bad/checking) на каждый сайт, helper hint под строкой, `title` tooltip на disabled кнопке «Импорт →» |
+| `popup-dismissal.ts` | Селекторы и эвристики автозакрытия попапов на сайте remanga.org (НЕ про `popup.html`) |
 | `parser-server/src/providers/` | `mangabuff.ts` (HTML scrape), `senkuro.ts` (GraphQL), `inkstory.ts` (REST `api.inkstory.net`) — все реализуют `ExternalSourceProvider` |
 | `parser-server/src/http/client.ts` | `HttpClient` — UA, timeout, retry на 500/502/503/504/429 с Retry-After |
 | `parser-server/src/resolve-chapter.ts` | Fallback-chain по `DEFAULT_PROVIDER_PRIORITY`: на provider_error/no_match продолжаем, на success — return; лучший failure по rank (`chapter_not_found > no_match > provider_error`) |
@@ -144,6 +149,11 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT полагаться на `chrome.tabs.query({url: "..."})` для match patterns — может не находить вкладки даже при наличии host_permission. `chrome.tabs.query({})` + JS filter по `t.url.startsWith(...)`.
 - DO NOT забывать про `chrome.scripting.executeScript` fallback при `chrome.tabs.sendMessage` — content scripts не пере-инжектируются автоматически в существующие вкладки после reload extension.
 - DO NOT забывать про переустановку расширения при изменении `permissions` / `host_permissions` / `content_scripts.matches` — Chrome не активирует новые declarations на reload.
+- DO NOT использовать `<a href target="_blank">` в попапе для открытия вкладки. Popup закрывается при клике, native navigation может не успеть — нужен `event.preventDefault()` + явный `chrome.tabs.create({url})`.
+- DO NOT добавлять `setInterval` без cleanup в `popup.ts` — Chrome убивает popup-процесс при закрытии, но это не повод плодить таймеры. Если нужен polling — один `setInterval` на весь lifecycle попапа.
+- DO NOT держать listener-подписки в render-функциях попапа. Pattern: `renderX(doc, state)` чистая (idempotent — `replaceChildren`), `wireX(doc, handler)` цепляет listener один раз в `main()`. Иначе при `watchSettings` re-render будут дублирующиеся listeners.
+- DO NOT добавлять новый toggle в попап минуя `popup-categories.ts` — descriptor там же где label, без него `renderToggles` не знает что отрисовать.
+- DO NOT забывать обновлять подзаголовок-счётчик карточки в `formatCount`-функции `popup.ts` если меняется число тогглов в категории. Сам счётчик пересчитывается из `countCategoryToggles`, но русский plural нужно проверить (1 «настройка», 2-4 «настройки», 5+ «настроек», 11-14 «настроек»).
 
 ## Visuals (gpt-image-prompt + frontend-design)
 
