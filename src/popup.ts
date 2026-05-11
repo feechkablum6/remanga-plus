@@ -1,63 +1,75 @@
 import {
   loadSettings,
   saveSettings,
-  type HeaderButtonKey,
+  watchSettings,
   type ReaderEnhancerSettings,
 } from "./settings.js";
+import {
+  createPopupRouter,
+  type PopupRouter,
+  type PopupScreen,
+} from "./popup-router.js";
+import {
+  CATEGORIES,
+  CATEGORY_KEYS,
+  countCategoryToggles,
+  type ToggleDescriptor,
+  type CategoryKey,
+  type SiteSubsection,
+} from "./popup-categories.js";
+import {
+  renderServerStatus,
+  wireRestartButton,
+  type ServerStatusState,
+} from "./popup-service-status.js";
 import {
   RESTART_PARSER_SERVER_MESSAGE_TYPE,
   STATUS_PARSER_SERVER_MESSAGE_TYPE,
   isParserServerStatus,
-  type ParserServerStatus,
 } from "./parser-server.js";
+import { renderAuthRow, type AuthState } from "./popup-auth-row.js";
 import {
   CHECK_AUTH_MESSAGE_TYPE,
   type CheckAuthRequest,
   type CheckAuthResponse,
 } from "./import-mangalib/messages.js";
-import { loadImportState } from "./import-mangalib/state.js";
+import { loadImportState, type ImportState } from "./import-mangalib/state.js";
+
+type CommitSettings = (next: ReaderEnhancerSettings) => Promise<void>;
 
 const STATUS_POLL_MS = 5000;
 
-const HEADER_BUTTON_LABELS: ReadonlyArray<[HeaderButtonKey, string]> = [
-  ["logo", "Логотип"],
-  ["catalog", "Каталог"],
-  ["tops", "Топы"],
-  ["forum", "Форум"],
-  ["ellipsis", "Троеточие"],
-  ["search", "Поиск"],
-  ["bookmarks", "Закладки"],
-  ["chat", "Чат"],
-  ["notifications", "Уведомления"],
-  ["avatar", "Профиль"],
-];
-
-const HOME_TOGGLES: ReadonlyArray<{
-  key: "hideHomeGameBanner" | "hideHomePromoBanner";
-  label: string;
-}> = [
-  { key: "hideHomeGameBanner", label: "Скрыть баннер игры" },
-  { key: "hideHomePromoBanner", label: "Скрыть промо-плашку Telegram" },
-];
-
-void main();
+if (typeof document !== "undefined") void main();
 
 async function main(): Promise<void> {
   const settings = await loadSettings();
+  const router = createPopupRouter();
 
   renderVersionChip();
-  renderHeaderToggles(settings);
-  renderHomeToggles(settings);
-  bindRestartButton();
-  startStatusPolling();
-  await wireImportSection();
+  wireScreenVisibility(document, router);
+  wireCardNavigation(document, router);
+  wireBackButtons(document, router);
+  renderCardSubtitles(document);
+
+  const commit: CommitSettings = async (next) => {
+    await saveSettings(next);
+  };
+  renderToggles(document, settings, commit);
+  watchSettings((next) => renderToggles(document, next, commit));
+
+  renderServerStatus(document, { kind: "checking" });
+  wireRestart();
+  startServerStatusPolling();
+  void wireAuthRow();
+  wireImportButton();
+  wireSiteLinks();
+  wireResumeBanner(document);
+  renderResumeBanner(document, await loadImportState());
 }
 
-function startStatusPolling(): void {
+function startServerStatusPolling(): void {
   void refreshServerStatus();
-  window.setInterval(() => {
-    void refreshServerStatus();
-  }, STATUS_POLL_MS);
+  setInterval(() => void refreshServerStatus(), STATUS_POLL_MS);
 }
 
 function refreshServerStatus(): Promise<void> {
@@ -66,27 +78,143 @@ function refreshServerStatus(): Promise<void> {
       { type: STATUS_PARSER_SERVER_MESSAGE_TYPE },
       (response: unknown) => {
         void chrome.runtime?.lastError;
-        renderServerStatus(
-          isParserServerStatus(response) ? response : { status: "down" },
-        );
+        renderServerStatus(document, mapStatus(response));
         resolve();
       },
     );
   });
 }
 
-function renderServerStatus(status: ParserServerStatus): void {
-  const root = document.querySelector<HTMLElement>("[data-server-status]");
-  const label = document.querySelector<HTMLElement>("[data-server-label]");
-  if (!root || !label) return;
+function mapStatus(response: unknown): ServerStatusState {
+  if (!isParserServerStatus(response)) return { kind: "down" };
+  return response.status === "ok"
+    ? { kind: "ok", port: response.port }
+    : { kind: "down" };
+}
 
-  if (status.status === "ok") {
-    root.dataset.state = "ok";
-    label.textContent = `Parser-server работает на :${status.port}`;
-  } else {
-    root.dataset.state = "down";
-    label.textContent = "Parser-server не запущен";
+function wireRestart(): void {
+  wireRestartButton(document, () => {
+    renderServerStatus(document, { kind: "busy" });
+    chrome.runtime.sendMessage(
+      { type: RESTART_PARSER_SERVER_MESSAGE_TYPE },
+      (response: unknown) => {
+        void chrome.runtime?.lastError;
+        if (isParserServerStatus(response) && response.status === "ok") {
+          renderServerStatus(document, { kind: "ok", port: response.port });
+        } else {
+          renderServerStatus(document, { kind: "down" });
+        }
+      },
+    );
+  });
+}
+
+async function wireAuthRow(): Promise<void> {
+  renderAuthRow(document, { mangalib: "checking", remanga: "checking" });
+  const [mangalib, remanga] = await Promise.all([
+    checkAuth("mangalib"),
+    checkAuth("remanga"),
+  ]);
+  renderAuthRow(document, { mangalib, remanga });
+}
+
+function wireImportButton(): void {
+  const btn = document.querySelector<HTMLButtonElement>("[data-import-button]");
+  btn?.addEventListener("click", () => {
+    if (btn.disabled) return;
+    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+  });
+}
+
+function wireSiteLinks(): void {
+  const links: Array<[string, string]> = [
+    ['[data-auth-link="mangalib"]', "https://mangalib.me/"],
+    ['[data-auth-link="remanga"]', "https://remanga.org/"],
+  ];
+  for (const [selector, url] of links) {
+    const link = document.querySelector<HTMLAnchorElement>(selector);
+    link?.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (link.dataset.state === "checking") return;
+      chrome.tabs.create({ url });
+    });
   }
+}
+
+export function wireResumeBanner(doc: Document): void {
+  const banner = doc.querySelector<HTMLElement>("[data-resume-banner]");
+  if (!banner) return;
+  banner.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+  });
+}
+
+export function renderResumeBanner(doc: Document, state: ImportState | null): void {
+  const banner = doc.querySelector<HTMLElement>("[data-resume-banner]");
+  if (!banner) return;
+  if (!state || state.phase === "done") {
+    banner.hidden = true;
+    banner.textContent = "";
+    return;
+  }
+  banner.hidden = false;
+  banner.textContent = "Прерван — продолжить";
+}
+
+function checkAuth(site: "mangalib" | "remanga"): Promise<AuthState> {
+  return new Promise((resolve) => {
+    const req: CheckAuthRequest = { type: CHECK_AUTH_MESSAGE_TYPE, site };
+    chrome.runtime.sendMessage(req, (response: unknown) => {
+      void chrome.runtime?.lastError;
+      if (response && typeof response === "object" && "signedIn" in response) {
+        resolve((response as CheckAuthResponse).signedIn ? "ok" : "bad");
+      } else {
+        resolve("bad");
+      }
+    });
+  });
+}
+
+export function wireScreenVisibility(doc: Document, router: PopupRouter): void {
+  const apply = (screen: PopupScreen): void => {
+    for (const section of doc.querySelectorAll<HTMLElement>("[data-screen]")) {
+      const key = section.dataset.screen as PopupScreen;
+      if (key === screen) section.removeAttribute("hidden");
+      else section.setAttribute("hidden", "");
+    }
+  };
+  apply(router.current());
+  router.subscribe(apply);
+}
+
+export function wireCardNavigation(doc: Document, router: PopupRouter): void {
+  for (const card of doc.querySelectorAll<HTMLElement>("[data-card]")) {
+    const key = card.dataset.card as PopupScreen;
+    card.addEventListener("click", () => router.navigate(key));
+  }
+}
+
+export function wireBackButtons(doc: Document, router: PopupRouter): void {
+  for (const btn of doc.querySelectorAll<HTMLElement>("[data-back]")) {
+    btn.addEventListener("click", () => router.back());
+  }
+}
+
+export function renderCardSubtitles(doc: Document): void {
+  for (const key of CATEGORY_KEYS) {
+    const el = doc.querySelector<HTMLElement>(`[data-card-subtitle="${key}"]`);
+    if (!el) continue;
+    el.textContent = formatCount(countCategoryToggles(key));
+  }
+}
+
+function formatCount(n: number): string {
+  const lastTwo = n % 100;
+  const last = n % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return `${n} настроек`;
+  if (last === 1) return `${n} настройка`;
+  if (last >= 2 && last <= 4) return `${n} настройки`;
+  return `${n} настроек`;
 }
 
 function renderVersionChip(): void {
@@ -96,210 +224,96 @@ function renderVersionChip(): void {
   if (version) chip.textContent = `v${version}`;
 }
 
-function renderHeaderToggles(settings: ReaderEnhancerSettings): void {
-  const group = document.querySelector<HTMLElement>(
-    '[data-toggle-group="hideHeaderButtons"]',
-  );
-  if (!group) return;
-
-  HEADER_BUTTON_LABELS.forEach(([key, label], index) => {
-    group.appendChild(
-      buildToggle({
-        label,
-        checked: settings.hideHeaderButtons[key],
-        delayMs: 180 + index * 25,
-        onChange: async (checked) => {
-          const current = await loadSettings();
-          current.hideHeaderButtons = {
-            ...current.hideHeaderButtons,
-            [key]: checked,
-          };
-          await saveSettings(current);
-        },
-      }),
-    );
-  });
+export function renderToggles(
+  doc: Document,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): void {
+  for (const key of CATEGORY_KEYS) {
+    const container = doc.querySelector<HTMLElement>(`[data-toggle-list="${key}"]`);
+    if (!container) continue;
+    container.replaceChildren(...buildToggles(doc, key, settings, commit));
+  }
 }
 
-function renderHomeToggles(settings: ReaderEnhancerSettings): void {
-  const group = document.querySelector<HTMLElement>(
-    '[data-toggle-group="home"]',
-  );
-  if (!group) return;
+function buildToggles(
+  doc: Document,
+  key: CategoryKey,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): Node[] {
+  const toggles = CATEGORIES[key].toggles;
+  const nodes: Node[] = [];
+  let lastSubsection: SiteSubsection | undefined = undefined;
 
-  HOME_TOGGLES.forEach(({ key, label }, index) => {
-    group.appendChild(
-      buildToggle({
-        label,
-        checked: settings[key],
-        delayMs: 250 + index * 25,
-        onChange: async (checked) => {
-          const current = await loadSettings();
-          current[key] = checked;
-          await saveSettings(current);
-        },
-      }),
-    );
-  });
+  for (const toggle of toggles) {
+    if (toggle.subsection && toggle.subsection !== lastSubsection) {
+      const heading = doc.createElement("h3");
+      heading.className = "drill-subheading";
+      heading.textContent = toggle.subsection;
+      nodes.push(heading);
+      lastSubsection = toggle.subsection;
+    }
+    nodes.push(buildToggleRow(doc, toggle, settings, commit));
+  }
+  return nodes;
 }
 
-function buildToggle(options: {
-  label: string;
-  checked: boolean;
-  delayMs?: number;
-  onChange: (checked: boolean) => void | Promise<void>;
-}): HTMLLabelElement {
-  const wrapper = document.createElement("label");
+function buildToggleRow(
+  doc: Document,
+  toggle: ToggleDescriptor,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): HTMLLabelElement {
+  const wrapper = doc.createElement("label");
   wrapper.className = "toggle";
-  if (typeof options.delayMs === "number") {
-    wrapper.style.animationDelay = `${options.delayMs}ms`;
+
+  const body = doc.createElement("span");
+  body.className = "toggle__body";
+
+  const labelText = doc.createElement("span");
+  labelText.className = "toggle__label";
+  labelText.textContent = toggle.label;
+  body.appendChild(labelText);
+
+  if (toggle.caption) {
+    const cap = doc.createElement("span");
+    cap.className = "toggle__caption";
+    cap.textContent = toggle.caption;
+    body.appendChild(cap);
   }
 
-  const text = document.createElement("span");
-  text.className = "toggle__label";
-  text.textContent = options.label;
-
-  const input = document.createElement("input");
+  const input = doc.createElement("input");
   input.type = "checkbox";
-  input.checked = options.checked;
+  input.checked = readToggleValue(settings, toggle);
 
-  const switchEl = document.createElement("span");
+  const switchEl = doc.createElement("span");
   switchEl.className = "toggle__switch";
 
   input.addEventListener("change", () => {
-    void options.onChange(input.checked);
+    const next = applyToggleChange(settings, toggle, input.checked);
+    void commit(next);
   });
 
-  wrapper.append(text, input, switchEl);
+  wrapper.append(body, input, switchEl);
   return wrapper;
 }
 
-function bindRestartButton(): void {
-  const button = document.querySelector<HTMLButtonElement>(
-    'button[data-action="restart-parser"]',
-  );
-  const status = document.querySelector<HTMLElement>("[data-status]");
-  if (!button || !status) return;
-
-  button.addEventListener("click", () => {
-    button.dataset.state = "busy";
-    status.textContent = "Перезапуск…";
-
-    chrome.runtime.sendMessage(
-      { type: RESTART_PARSER_SERVER_MESSAGE_TYPE },
-      (response: unknown) => {
-        const error = chrome.runtime?.lastError?.message;
-        if (error || !isReady(response)) {
-          button.dataset.state = "error";
-          status.textContent = error ?? describeFailure(response);
-          window.setTimeout(() => {
-            button.dataset.state = "";
-            status.textContent = "";
-          }, 3500);
-          return;
-        }
-
-        button.dataset.state = "";
-        status.textContent = "Готово";
-        const port = extractPort(response);
-        if (port !== null) {
-          renderServerStatus({ status: "ok", port });
-        }
-        window.setTimeout(() => {
-          status.textContent = "";
-          void refreshServerStatus();
-        }, 1500);
-      },
-    );
-  });
+function readToggleValue(s: ReaderEnhancerSettings, toggle: ToggleDescriptor): boolean {
+  if (toggle.accessor.kind === "scalar") return s[toggle.accessor.key];
+  return s.hideHeaderButtons[toggle.accessor.key];
 }
 
-function extractPort(response: unknown): number | null {
-  if (
-    response &&
-    typeof response === "object" &&
-    "port" in response &&
-    typeof (response as { port: unknown }).port === "number"
-  ) {
-    return (response as { port: number }).port;
+function applyToggleChange(
+  s: ReaderEnhancerSettings,
+  toggle: ToggleDescriptor,
+  next: boolean,
+): ReaderEnhancerSettings {
+  if (toggle.accessor.kind === "scalar") {
+    return { ...s, [toggle.accessor.key]: next };
   }
-  return null;
-}
-
-function isReady(response: unknown): boolean {
-  return (
-    response !== null &&
-    typeof response === "object" &&
-    "status" in response &&
-    (response as { status: unknown }).status === "ready"
-  );
-}
-
-function describeFailure(response: unknown): string {
-  if (
-    response &&
-    typeof response === "object" &&
-    "detail" in response &&
-    typeof (response as { detail: unknown }).detail === "string"
-  ) {
-    return (response as { detail: string }).detail;
-  }
-  return "Не удалось перезапустить parser-server";
-}
-
-async function wireImportSection(): Promise<void> {
-  const ml = document.querySelector<HTMLElement>("[data-auth-mangalib]");
-  const rm = document.querySelector<HTMLElement>("[data-auth-remanga]");
-  const btn = document.querySelector<HTMLButtonElement>("[data-import-button]");
-  const banner = document.querySelector<HTMLElement>("[data-resume-banner]");
-  if (!ml || !rm || !btn) return;
-
-  const reasonText = (site: "mangalib" | "remanga", reason: string | undefined): string => {
-    if (reason === "no-permission") return "✗ переустановите расширение";
-    if (reason === "no-tab") return site === "mangalib" ? "✗ откройте mangalib.me" : "✗ откройте remanga.org";
-    if (reason === "no-token") return "✗ войдите на сайт";
-    if (reason === "unauthorized") return "✗ войдите снова";
-    if (reason === "network") return "✗ нет сети";
-    return "✗ не авторизован";
+  return {
+    ...s,
+    hideHeaderButtons: { ...s.hideHeaderButtons, [toggle.accessor.key]: next },
   };
-  const setSpan = (site: "mangalib" | "remanga", el: HTMLElement, r: CheckAuthResponse | null) => {
-    if (r?.signedIn) { el.textContent = `✓ ${r.username ?? "вошли"}`; el.dataset.state = "ok"; el.title = ""; }
-    else {
-      let text = reasonText(site, r?.reason);
-      if (r?.debug && (r.debug.status || r.debug.tokenLen)) {
-        const parts: string[] = [];
-        if (typeof r.debug.status === "number") parts.push(`HTTP ${r.debug.status}`);
-        if (typeof r.debug.tokenLen === "number") parts.push(`token ${r.debug.tokenLen}`);
-        if (parts.length) text += ` · ${parts.join(", ")}`;
-      }
-      el.textContent = text;
-      el.dataset.state = "bad";
-    }
-  };
-  const ask = (site: "mangalib" | "remanga") => new Promise<CheckAuthResponse | null>((res) => {
-    const req: CheckAuthRequest = { type: CHECK_AUTH_MESSAGE_TYPE, site };
-    chrome.runtime.sendMessage(req, (resp: unknown) => {
-      void chrome.runtime?.lastError;
-      res(resp && typeof resp === "object" && "signedIn" in resp ? (resp as CheckAuthResponse) : null);
-    });
-  });
-
-  const [m, r] = await Promise.all([ask("mangalib"), ask("remanga")]);
-  setSpan("mangalib", ml, m); setSpan("remanga", rm, r);
-  btn.disabled = !(m?.signedIn && r?.signedIn);
-  if (btn.disabled) btn.title = "Сначала войдите в оба сайта";
-  btn.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
-  });
-
-  if (banner) {
-    const state = await loadImportState();
-    if (state && state.phase !== "done") {
-      banner.hidden = false;
-      banner.textContent = `Прерванный импорт (${state.phase}). Открыть страницу импорта.`;
-      banner.addEventListener("click", () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
-      });
-    }
-  }
 }

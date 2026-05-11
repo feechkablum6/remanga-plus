@@ -31,41 +31,24 @@
       }
 
       @keyframes rre-fade-up {
-        from {
-          opacity: 0;
-          transform: translateY(6px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
       }
 
       @keyframes rre-fade-in {
-        from {
-          opacity: 0;
-        }
-        to {
-          opacity: 1;
-        }
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
 
       @keyframes rre-spin {
-        to {
-          transform: rotate(360deg);
-        }
+        to { transform: rotate(360deg); }
       }
 
-      html,
-      body {
+      html, body {
         margin: 0;
         padding: 0;
         background:
-          radial-gradient(
-            120% 80% at 0% 0%,
-            rgba(62, 218, 224, 0.06) 0%,
-            transparent 55%
-          ),
+          radial-gradient(120% 80% at 0% 0%, rgba(62, 218, 224, 0.06) 0%, transparent 55%),
           var(--bg);
         color: var(--text);
         font-family: "Exo 2", system-ui, -apple-system, sans-serif;
@@ -74,15 +57,15 @@
         overflow-x: hidden;
       }
 
+      /* Header */
       .header {
-        padding: 16px 18px 12px;
+        padding: 14px 14px 12px;
         display: flex;
         align-items: center;
         gap: 10px;
         border-bottom: 1px solid var(--border-soft);
         animation: rre-fade-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
       }
-
       .header__mark {
         width: 24px;
         height: 24px;
@@ -91,14 +74,12 @@
         flex-shrink: 0;
         box-shadow: 0 0 0 1px var(--border);
       }
-
       .header__title {
         font-weight: 600;
         font-size: 14px;
         letter-spacing: 0.01em;
         flex: 1;
       }
-
       .header__chip {
         font-size: 9px;
         text-transform: uppercase;
@@ -110,54 +91,251 @@
         background: var(--accent-soft);
       }
 
-      .section {
-        position: relative;
-        padding: 14px 18px 8px 18px;
-        border-bottom: 1px solid var(--border-soft);
-        animation: rre-fade-up 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-      }
+      /* Screens (only one visible at a time) */
+      .screens { position: relative; }
+      .screen { padding: 0; }
+      .screen[hidden] { display: none; }
 
-      .section:nth-of-type(1) {
-        animation-delay: 60ms;
+      /* Cards */
+      .cards {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 14px 12px;
       }
-      .section:nth-of-type(2) {
-        animation-delay: 130ms;
-      }
-
-      .section:last-of-type {
-        border-bottom: none;
-      }
-
-      .section__heading {
+      .card {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 12px;
+        width: 100%;
+        padding: 14px;
+        min-height: 72px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+        transition: background 140ms ease, border-color 140ms ease;
+      }
+      .card:hover {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(62, 218, 224, 0.3);
+      }
+      .card__icon {
+        width: 36px;
+        height: 36px;
+        color: var(--accent);
+        flex-shrink: 0;
+      }
+      .card__body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .card__title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .card__subtitle {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .card__chevron {
+        color: var(--text-muted);
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      /* Service block */
+      .service {
+        padding: 14px 14px 14px;
+        border-top: 1px solid var(--border-soft);
+        margin-top: 4px;
+      }
+      .service__heading {
         text-transform: uppercase;
         font-size: 10px;
         letter-spacing: 0.14em;
         color: var(--text-muted);
-        margin: 0 0 12px;
+        margin: 0 0 10px;
+        font-weight: 600;
+      }
+      .service__row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
+      }
+      .service__hint {
+        margin: 4px 0 0;
+        padding: 0;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .service__resume {
+        margin-top: 8px;
+        width: 100%;
+        padding: 8px;
+        background: rgba(251, 191, 36, 0.12);
+        color: #fbbf24;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        border-radius: 8px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      /* Server status row */
+      .server-status {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-feature-settings: "tnum";
+      }
+      .server-status__dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        flex-shrink: 0;
+        transition: background 200ms ease, box-shadow 200ms ease;
+      }
+      .server-status[data-state="ok"] .server-status__dot {
+        background: var(--accent);
+        box-shadow: 0 0 0 3px rgba(62, 218, 224, 0.16);
+      }
+      .server-status[data-state="ok"] .server-status__label { color: var(--text); }
+      .server-status[data-state="down"] .server-status__dot {
+        background: var(--danger);
+        box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.16);
+      }
+      .server-status[data-state="down"] .server-status__label { color: var(--danger); }
+      .server-status__label { flex: 1; }
+      .server-status__restart {
+        background: transparent;
+        border: 0;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+        transition: opacity 120ms ease, color 120ms ease;
+      }
+      .server-status__restart[hidden] { display: none; }
+      .server-status__restart:hover { color: var(--accent); }
+      .server-status__restart[data-state="busy"] .server-status__icon {
+        animation: rre-spin 900ms linear infinite;
+      }
+      .server-status__icon { width: 16px; height: 16px; display: block; }
+
+      /* Auth row */
+      .auth-row {
+        font-size: 13px;
+        flex-wrap: wrap;
+      }
+      .auth-row__site {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .auth-row__icon {
+        width: 14px;
+        height: 14px;
+        display: inline-block;
+        font-weight: 700;
+        font-size: 12px;
+        line-height: 14px;
+        text-align: center;
+      }
+      .auth-row__icon[data-state="ok"]::before {
+        content: "✓";
+        color: #4ade80;
+      }
+      .auth-row__icon[data-state="bad"]::before {
+        content: "✗";
+        color: var(--danger);
+      }
+      .auth-row__icon[data-state="checking"]::before {
+        content: "…";
+        color: var(--text-muted);
+      }
+      .auth-row__name {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .auth-row__name[data-state="bad"] { color: var(--text-muted); }
+      .auth-row__name[data-state="checking"] {
+        color: var(--text-muted);
+        pointer-events: none;
+      }
+      .auth-row__separator { color: var(--text-muted); }
+      .auth-row__import {
+        margin-left: auto;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border: 1px solid rgba(62, 218, 224, 0.3);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 120ms ease;
+      }
+      .auth-row__import:hover:not(:disabled) {
+        background: rgba(62, 218, 224, 0.18);
+      }
+      .auth-row__import:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      /* Drill-down nav */
+      .drill-nav {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .drill-nav__back {
+        background: transparent;
+        border: 0;
+        color: var(--accent);
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 4px 0;
+      }
+      .drill-nav__title {
+        margin: 0;
+        flex: 1;
+        text-align: center;
+        font-size: 14px;
         font-weight: 600;
       }
 
-      .section__index {
-        font-feature-settings: "tnum";
-        color: var(--accent);
-        opacity: 0.7;
-        font-weight: 700;
+      /* Drill body (toggle list) */
+      .drill-body {
+        padding: 10px 14px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
-
-      .section__heading::after {
-        content: "";
-        flex: 1;
-        height: 1px;
-        background: linear-gradient(
-          to right,
-          var(--border-soft) 0%,
-          transparent 100%
-        );
+      .drill-subheading {
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        color: var(--text-muted);
+        margin: 12px 0 6px;
+        font-weight: 600;
       }
+      .drill-subheading:first-child { margin-top: 0; }
 
+      /* Toggle (reused from old popup, with caption support) */
       .toggle {
         display: flex;
         align-items: center;
@@ -170,20 +348,22 @@
         animation: rre-fade-in 260ms ease both;
         transition: background-color 140ms ease;
       }
-
-      .toggle:hover {
-        background: rgba(255, 255, 255, 0.03);
+      .toggle:hover { background: rgba(255, 255, 255, 0.03); }
+      .toggle__body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
       }
-
       .toggle__label {
         font-size: 13px;
         transition: color 140ms ease;
       }
-
-      .toggle:hover .toggle__label {
-        color: var(--accent);
+      .toggle:hover .toggle__label { color: var(--accent); }
+      .toggle__caption {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
       }
-
       .toggle__switch {
         position: relative;
         width: 32px;
@@ -193,7 +373,6 @@
         transition: background 160ms ease;
         flex-shrink: 0;
       }
-
       .toggle__switch::after {
         content: "";
         position: absolute;
@@ -203,211 +382,22 @@
         height: 14px;
         border-radius: 50%;
         background: var(--text);
-        transition: transform 130ms cubic-bezier(0.2, 0.8, 0.2, 1),
-          background 100ms ease;
+        transition: transform 130ms cubic-bezier(0.2, 0.8, 0.2, 1), background 100ms ease;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
       }
-
       .toggle input {
         position: absolute;
         opacity: 0;
         pointer-events: none;
       }
-
-      .toggle input:checked + .toggle__switch {
-        background: var(--accent);
-      }
-
+      .toggle input:checked + .toggle__switch { background: var(--accent); }
       .toggle input:checked + .toggle__switch::after {
         transform: translateX(14px);
         background: var(--bg);
       }
 
-      .actions {
-        padding: 14px 18px 18px;
-        animation: rre-fade-up 360ms cubic-bezier(0.2, 0.8, 0.2, 1) 200ms both;
-      }
-
-      .server-status {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 0 4px 10px;
-        font-size: 11px;
-        color: var(--text-muted);
-        font-feature-settings: "tnum";
-      }
-
-      .server-status__dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--text-muted);
-        flex-shrink: 0;
-        transition: background 200ms ease, box-shadow 200ms ease;
-      }
-
-      .server-status[data-state="ok"] .server-status__dot {
-        background: var(--accent);
-        box-shadow: 0 0 0 3px rgba(62, 218, 224, 0.16);
-      }
-
-      .server-status[data-state="ok"] .server-status__label {
-        color: var(--text);
-      }
-
-      .server-status[data-state="down"] .server-status__dot {
-        background: var(--danger);
-        box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.16);
-      }
-
-      .server-status[data-state="down"] .server-status__label {
-        color: var(--danger);
-      }
-
-      .button {
-        position: relative;
-        width: 100%;
-        background: var(--accent-soft);
-        color: var(--accent);
-        border: 1px solid rgba(62, 218, 224, 0.3);
-        border-radius: 999px;
-        padding: 10px 14px;
-        font-family: inherit;
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        overflow: hidden;
-        transition: background 140ms ease, transform 120ms ease,
-          border-color 140ms ease;
-      }
-
-      .button::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(
-          110deg,
-          transparent 30%,
-          rgba(62, 218, 224, 0.14) 50%,
-          transparent 70%
-        );
-        transform: translateX(-120%);
-        transition: transform 600ms ease;
-        pointer-events: none;
-      }
-
-      .button:hover {
-        background: rgba(62, 218, 224, 0.18);
-        border-color: rgba(62, 218, 224, 0.5);
-      }
-
-      .button:hover::before {
-        transform: translateX(120%);
-      }
-
-      .button:active {
-        transform: translateY(1px);
-      }
-
-      .button[data-state="busy"] {
-        pointer-events: none;
-      }
-
-      .button[data-state="busy"] .button__icon {
-        animation: rre-spin 900ms linear infinite;
-      }
-
-      .button[data-state="error"] {
-        color: var(--danger);
-        border-color: rgba(255, 107, 107, 0.4);
-        background: rgba(255, 107, 107, 0.12);
-      }
-
-      .button__icon {
-        width: 14px;
-        height: 14px;
-      }
-
-      .status {
-        margin-top: 8px;
-        font-size: 11px;
-        color: var(--text-muted);
-        text-align: center;
-        min-height: 14px;
-        transition: color 160ms ease, opacity 200ms ease;
-      }
-
-      .status:empty {
-        opacity: 0;
-      }
-
-      .import-section {
-        margin-top: 16px;
-        padding: 12px;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-      }
-
-      .import-section h2 {
-        font-size: 14px;
-        margin: 0 0 8px;
-        color: var(--text-muted);
-        font-weight: 600;
-      }
-
-      .auth-row {
-        display: flex;
-        justify-content: space-between;
-        font-size: 13px;
-        padding: 4px 0;
-      }
-
-      .auth-row span[data-state="ok"] {
-        color: #4ade80;
-      }
-
-      .auth-row span[data-state="bad"] {
-        color: #ef4444;
-      }
-
-      .import-section button.primary {
-        width: 100%;
-        margin-top: 8px;
-        background: var(--accent-soft);
-        color: var(--accent);
-        border: 1px solid rgba(62, 218, 224, 0.3);
-        border-radius: 999px;
-        padding: 8px 14px;
-        font-family: inherit;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .import-section button.primary:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      [data-resume-banner] {
-        margin-top: 8px;
-        padding: 8px;
-        background: rgba(251, 191, 36, 0.12);
-        border-radius: 8px;
-        font-size: 12px;
-        cursor: pointer;
-      }
-
       @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
+        *, *::before, *::after {
           animation-duration: 0.01ms !important;
           animation-iteration-count: 1 !important;
           transition-duration: 0.01ms !important;
@@ -418,53 +408,105 @@
   <body>
     <header class="header">
       <img class="header__mark" src="icons/icon-128.png" alt="" />
-      <span class="header__title">Remanga Enhancer</span>
-      <span class="header__chip">v0.3</span>
+      <span class="header__title">Remanga Plus</span>
+      <span class="header__chip">v0.6.0</span>
     </header>
 
-    <section class="section" data-section="header-buttons">
-      <h2 class="section__heading">
-        <span class="section__index">01</span>
-        Шапка сайта
-      </h2>
-      <div data-toggle-group="hideHeaderButtons"></div>
-    </section>
+    <main class="screens">
+      <section class="screen" data-screen="main">
+        <div class="cards">
+          <button class="card" data-card="site" type="button">
+            <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            <span class="card__body">
+              <span class="card__title">Сайт</span>
+              <span class="card__subtitle" data-card-subtitle="site"></span>
+            </span>
+            <span class="card__chevron" aria-hidden="true">›</span>
+          </button>
 
-    <section class="section" data-section="home">
-      <h2 class="section__heading">
-        <span class="section__index">02</span>
-        Главный экран
-      </h2>
-      <div data-toggle-group="home"></div>
-    </section>
+          <button class="card" data-card="reader" type="button">
+            <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+            </svg>
+            <span class="card__body">
+              <span class="card__title">Читалка</span>
+              <span class="card__subtitle" data-card-subtitle="reader"></span>
+            </span>
+            <span class="card__chevron" aria-hidden="true">›</span>
+          </button>
 
-    <section class="actions">
-      <div class="server-status" data-server-status>
-        <span class="server-status__dot" data-server-dot></span>
-        <span class="server-status__label" data-server-label>Проверка…</span>
-      </div>
-      <button class="button" data-action="restart-parser">
-        <svg class="button__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M4 12a8 8 0 0 1 13.66-5.66M20 12a8 8 0 0 1-13.66 5.66M16 4v4h4M8 20v-4H4"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        Перезапустить parser-server
-      </button>
-      <div class="status" data-status></div>
-    </section>
+          <button class="card" data-card="premium-free" type="button">
+            <svg class="card__icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+              <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
+            </svg>
+            <span class="card__body">
+              <span class="card__title">Premium Free</span>
+              <span class="card__subtitle" data-card-subtitle="premium-free"></span>
+            </span>
+            <span class="card__chevron" aria-hidden="true">›</span>
+          </button>
+        </div>
 
-    <section data-import-section class="import-section">
-      <h2>Импорт закладок из MangaLib</h2>
-      <div class="auth-row"><span>MangaLib:</span> <span data-auth-mangalib data-state="checking">проверяю…</span></div>
-      <div class="auth-row"><span>Remanga:</span> <span data-auth-remanga data-state="checking">проверяю…</span></div>
-      <button class="primary" data-import-button disabled>Импорт закладок из MangaLib</button>
-      <div data-resume-banner hidden></div>
-    </section>
+        <section class="service" data-service-block>
+          <h2 class="service__heading">СЕРВИС</h2>
+
+          <div class="service__row server-status" data-server-status>
+            <span class="server-status__dot" data-server-dot></span>
+            <span class="server-status__label" data-server-label>Проверка…</span>
+            <button class="server-status__restart" data-server-restart type="button" hidden aria-label="Перезапустить parser-server">
+              <svg class="server-status__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 12a8 8 0 0 1 13.66-5.66M20 12a8 8 0 0 1-13.66 5.66M16 4v4h4M8 20v-4H4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="service__row auth-row" data-auth-row>
+            <span class="auth-row__site" data-auth-mangalib>
+              <span class="auth-row__icon" data-auth-icon="mangalib"></span>
+              <a class="auth-row__name" data-auth-link="mangalib" href="https://mangalib.me/" target="_blank" rel="noopener noreferrer">MangaLib</a>
+            </span>
+            <span class="auth-row__separator">·</span>
+            <span class="auth-row__site" data-auth-remanga>
+              <span class="auth-row__icon" data-auth-icon="remanga"></span>
+              <a class="auth-row__name" data-auth-link="remanga" href="https://remanga.org/" target="_blank" rel="noopener noreferrer">Remanga</a>
+            </span>
+            <button class="auth-row__import" data-import-button type="button" disabled>Импорт →</button>
+          </div>
+
+          <p class="service__hint" data-auth-hint hidden></p>
+          <button class="service__resume" data-resume-banner type="button" hidden></button>
+        </section>
+      </section>
+
+      <section class="screen" data-screen="site" hidden>
+        <nav class="drill-nav">
+          <button class="drill-nav__back" data-back="site" type="button">‹ Назад</button>
+          <h2 class="drill-nav__title">Сайт</h2>
+        </nav>
+        <div class="drill-body" data-toggle-list="site"></div>
+      </section>
+
+      <section class="screen" data-screen="reader" hidden>
+        <nav class="drill-nav">
+          <button class="drill-nav__back" data-back="reader" type="button">‹ Назад</button>
+          <h2 class="drill-nav__title">Читалка</h2>
+        </nav>
+        <div class="drill-body" data-toggle-list="reader"></div>
+      </section>
+
+      <section class="screen" data-screen="premium-free" hidden>
+        <nav class="drill-nav">
+          <button class="drill-nav__back" data-back="premium-free" type="button">‹ Назад</button>
+          <h2 class="drill-nav__title">Premium Free</h2>
+        </nav>
+        <div class="drill-body" data-toggle-list="premium-free"></div>
+      </section>
+    </main>
 
     <script src="popup.js"></script>
   </body>
