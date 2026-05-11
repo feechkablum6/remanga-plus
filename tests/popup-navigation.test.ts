@@ -54,6 +54,6 @@ test("card subtitles use Russian plural forms", () => {
   const { dom } = setup();
   const doc = dom.window.document;
   assert.equal(doc.querySelector('[data-card-subtitle="site"]')?.textContent, "12 настроек");
-  assert.equal(doc.querySelector('[data-card-subtitle="reader"]')?.textContent, "6 настроек");
-  assert.equal(doc.querySelector('[data-card-subtitle="premium-free"]')?.textContent, "2 настройки");
+  assert.equal(doc.querySelector('[data-card-subtitle="reader"]')?.textContent, "8 настроек");
+  assert.equal(doc.querySelector('[data-card-subtitle="premium-free"]')?.textContent, "3 настройки");
 });

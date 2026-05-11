@@ -29,12 +29,12 @@ test("Сайт has 12 toggles (10 header buttons + 1 home banner + 1 promo banne
   assert.equal(countCategoryToggles("site"), 12);
 });
 
-test("Читалка has 6 toggles", () => {
-  assert.equal(countCategoryToggles("reader"), 6);
+test("Читалка has 8 toggles (5 visual + 3 popup auto-dismiss)", () => {
+  assert.equal(countCategoryToggles("reader"), 8);
 });
 
-test("Premium Free has 2 toggles (no show-progress)", () => {
-  assert.equal(countCategoryToggles("premium-free"), 2);
+test("Premium Free has 3 toggles (режим + префетч + прогресс)", () => {
+  assert.equal(countCategoryToggles("premium-free"), 3);
 });
 
 test("Сайт toggles include all 10 header button keys with Russian labels", () => {
@@ -60,21 +60,27 @@ test("Сайт toggles are split into two subsections", () => {
   assert.deepEqual(sorted, ["ГЛАВНАЯ СТРАНИЦА", "КНОПКИ ШАПКИ"]);
 });
 
-test("Читалка toggles match the 6 spec labels", () => {
+test("Читалка toggles match the 8 spec labels in display order", () => {
   const labels = CATEGORIES.reader.toggles.map((t) => t.label);
   assert.deepEqual(labels, [
     "Скрыть шапку сайта в читалке",
     "Скрыть правую панель",
-    "Скрыть счётчик страниц",
     "Улучшить меню настроек",
     "Скрыть комментарии",
     "Плотный фид глав",
+    "Авто-скрывать подсказки",
+    "Авто-скрывать подарки и промо",
+    "Авто-скрывать прочие всплывающие окна",
   ]);
 });
 
-test("Premium Free toggles are exactly: режим + префетч", () => {
+test("Premium Free toggles are: режим + префетч + прогресс", () => {
   const labels = CATEGORIES["premium-free"].toggles.map((t) => t.label);
-  assert.deepEqual(labels, ["Premium Free режим", "Префетч следующей главы"]);
+  assert.deepEqual(labels, [
+    "Premium Free режим",
+    "Префетч следующей главы",
+    "Показывать прогресс загрузки",
+  ]);
 });
 
 test("Premium Free 'режим' toggle has a caption from spec", () => {
@@ -82,13 +88,40 @@ test("Premium Free 'режим' toggle has a caption from spec", () => {
   assert.equal(main.caption, "Бесплатный доступ к платным главам");
 });
 
-test("show-progress is NOT in any toggle list", () => {
-  for (const key of CATEGORY_KEYS) {
-    for (const toggle of CATEGORIES[key].toggles) {
-      assert.ok(
-        !toggle.label.toLowerCase().includes("прогресс"),
-        `unexpected 'прогресс' in toggle: ${toggle.label}`,
-      );
+test("Auto-dismiss toggles in Читалка sit under АВТО-СКРЫТИЯ subsection", () => {
+  const autoDismiss = CATEGORIES.reader.toggles.filter((t) =>
+    t.label.startsWith("Авто-скрывать"),
+  );
+  assert.equal(autoDismiss.length, 3);
+  for (const toggle of autoDismiss) {
+    assert.equal(toggle.subsection, "АВТО-СКРЫТИЯ");
+  }
+});
+
+test("Auto-dismiss toggles use popup-kind accessor with correct keys", () => {
+  const byLabel = new Map(CATEGORIES.reader.toggles.map((t) => [t.label, t]));
+  const cases: Array<[string, "hints" | "giftsPromo" | "otherNonBlocking"]> = [
+    ["Авто-скрывать подсказки", "hints"],
+    ["Авто-скрывать подарки и промо", "giftsPromo"],
+    ["Авто-скрывать прочие всплывающие окна", "otherNonBlocking"],
+  ];
+  for (const [label, key] of cases) {
+    const toggle = byLabel.get(label);
+    assert.ok(toggle, `missing toggle: ${label}`);
+    assert.equal(toggle.accessor.kind, "popup");
+    if (toggle.accessor.kind === "popup") {
+      assert.equal(toggle.accessor.key, key);
     }
+  }
+});
+
+test("Premium Free 'прогресс' toggle wired to showPremiumFreeProgress", () => {
+  const toggle = CATEGORIES["premium-free"].toggles.find(
+    (t) => t.label === "Показывать прогресс загрузки",
+  );
+  assert.ok(toggle);
+  assert.equal(toggle.accessor.kind, "scalar");
+  if (toggle.accessor.kind === "scalar") {
+    assert.equal(toggle.accessor.key, "showPremiumFreeProgress");
   }
 });

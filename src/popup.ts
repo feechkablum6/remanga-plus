@@ -13,6 +13,8 @@ import {
   CATEGORIES,
   CATEGORY_KEYS,
   countCategoryToggles,
+  readToggleValue,
+  applyToggleChange,
   type ToggleDescriptor,
   type CategoryKey,
   type SiteSubsection,
@@ -306,21 +308,3 @@ function buildToggleRow(
   return wrapper;
 }
 
-function readToggleValue(s: ReaderEnhancerSettings, toggle: ToggleDescriptor): boolean {
-  if (toggle.accessor.kind === "scalar") return s[toggle.accessor.key];
-  return s.hideHeaderButtons[toggle.accessor.key];
-}
-
-function applyToggleChange(
-  s: ReaderEnhancerSettings,
-  toggle: ToggleDescriptor,
-  next: boolean,
-): ReaderEnhancerSettings {
-  if (toggle.accessor.kind === "scalar") {
-    return { ...s, [toggle.accessor.key]: next };
-  }
-  return {
-    ...s,
-    hideHeaderButtons: { ...s.hideHeaderButtons, [toggle.accessor.key]: next },
-  };
-}

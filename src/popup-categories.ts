@@ -1,8 +1,15 @@
-import type { ReaderEnhancerSettings, HeaderButtonKey } from "./settings.js";
+import type {
+  ReaderEnhancerSettings,
+  HeaderButtonKey,
+  PopupSettingKey,
+} from "./settings.js";
 
 export type CategoryKey = "site" | "reader" | "premium-free";
 
-export type SiteSubsection = "КНОПКИ ШАПКИ" | "ГЛАВНАЯ СТРАНИЦА";
+export type SiteSubsection =
+  | "КНОПКИ ШАПКИ"
+  | "ГЛАВНАЯ СТРАНИЦА"
+  | "АВТО-СКРЫТИЯ";
 
 export type ToggleAccessor =
   | {
@@ -19,9 +26,11 @@ export type ToggleAccessor =
         | "tightenChapterFeed"
         | "premiumFree"
         | "prefetchNextChapter"
+        | "showPremiumFreeProgress"
       >;
     }
-  | { kind: "header-button"; key: HeaderButtonKey };
+  | { kind: "header-button"; key: HeaderButtonKey }
+  | { kind: "popup"; key: PopupSettingKey };
 
 export type ToggleDescriptor = {
   label: string;
@@ -72,10 +81,24 @@ const siteToggles: ReadonlyArray<ToggleDescriptor> = [
 const readerToggles: ReadonlyArray<ToggleDescriptor> = [
   { label: "Скрыть шапку сайта в читалке", accessor: { kind: "scalar", key: "hideHeader" } },
   { label: "Скрыть правую панель", accessor: { kind: "scalar", key: "hideRightRail" } },
-  { label: "Скрыть счётчик страниц", accessor: { kind: "scalar", key: "hidePageCounter" } },
   { label: "Улучшить меню настроек", accessor: { kind: "scalar", key: "enhanceSettingsMenu" } },
   { label: "Скрыть комментарии", accessor: { kind: "scalar", key: "hideCommentsSection" } },
   { label: "Плотный фид глав", accessor: { kind: "scalar", key: "tightenChapterFeed" } },
+  {
+    label: "Авто-скрывать подсказки",
+    accessor: { kind: "popup", key: "hints" },
+    subsection: "АВТО-СКРЫТИЯ",
+  },
+  {
+    label: "Авто-скрывать подарки и промо",
+    accessor: { kind: "popup", key: "giftsPromo" },
+    subsection: "АВТО-СКРЫТИЯ",
+  },
+  {
+    label: "Авто-скрывать прочие всплывающие окна",
+    accessor: { kind: "popup", key: "otherNonBlocking" },
+    subsection: "АВТО-СКРЫТИЯ",
+  },
 ];
 
 const premiumFreeToggles: ReadonlyArray<ToggleDescriptor> = [
@@ -87,6 +110,10 @@ const premiumFreeToggles: ReadonlyArray<ToggleDescriptor> = [
   {
     label: "Префетч следующей главы",
     accessor: { kind: "scalar", key: "prefetchNextChapter" },
+  },
+  {
+    label: "Показывать прогресс загрузки",
+    accessor: { kind: "scalar", key: "showPremiumFreeProgress" },
   },
 ];
 
@@ -100,3 +127,39 @@ export const CATEGORIES: Record<CategoryKey, CategoryMeta> = {
 
 export const countCategoryToggles = (key: CategoryKey): number =>
   CATEGORIES[key].toggles.length;
+
+export const getReaderDrawerToggles = (): ReadonlyArray<ToggleDescriptor> => [
+  ...CATEGORIES.reader.toggles,
+  ...CATEGORIES["premium-free"].toggles,
+];
+
+export const readToggleValue = (
+  settings: ReaderEnhancerSettings,
+  toggle: ToggleDescriptor,
+): boolean => {
+  const a = toggle.accessor;
+  if (a.kind === "scalar") return settings[a.key];
+  if (a.kind === "header-button") return settings.hideHeaderButtons[a.key];
+  return settings.hidePopups[a.key];
+};
+
+export const applyToggleChange = (
+  settings: ReaderEnhancerSettings,
+  toggle: ToggleDescriptor,
+  next: boolean,
+): ReaderEnhancerSettings => {
+  const a = toggle.accessor;
+  if (a.kind === "scalar") {
+    return { ...settings, [a.key]: next };
+  }
+  if (a.kind === "header-button") {
+    return {
+      ...settings,
+      hideHeaderButtons: { ...settings.hideHeaderButtons, [a.key]: next },
+    };
+  }
+  return {
+    ...settings,
+    hidePopups: { ...settings.hidePopups, [a.key]: next },
+  };
+};

@@ -45,6 +45,13 @@ import {
   isLikelyCornerCloseButton,
 } from "./popup-dismissal";
 import {
+  getReaderDrawerToggles,
+  readToggleValue,
+  applyToggleChange,
+  type ToggleAccessor,
+  type ToggleDescriptor,
+} from "./popup-categories";
+import {
   prefetchNextChapter as prefetchRemangaNextChapter,
   type PaidNextChapterMeta,
 } from "./chapter-prefetch";
@@ -325,97 +332,31 @@ const syncPremiumFreeChapterAsViewed = (chapterId: number | undefined): void => 
   });
 };
 
-const primaryToggleDefinitions: ToggleDefinition[] = [
-  {
-    id: "hide-header",
-    label: "Скрывать верхнюю панель",
-    value: (settings) => settings.hideHeader,
-    toggle: (settings) => {
-      settings.hideHeader = !settings.hideHeader;
-    },
+const toKebabCase = (value: string): string =>
+  value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+
+const toggleIdFromAccessor = (accessor: ToggleAccessor): string => {
+  if (accessor.kind === "popup") return `hide-popup-${toKebabCase(accessor.key)}`;
+  if (accessor.kind === "header-button") return `header-button-${toKebabCase(accessor.key)}`;
+  return toKebabCase(accessor.key);
+};
+
+const definitionFromDescriptor = (descriptor: ToggleDescriptor): ToggleDefinition => ({
+  id: toggleIdFromAccessor(descriptor.accessor),
+  label: descriptor.label,
+  value: (settings) => readToggleValue(settings, descriptor),
+  toggle: (settings) => {
+    const next = applyToggleChange(
+      settings,
+      descriptor,
+      !readToggleValue(settings, descriptor),
+    );
+    Object.assign(settings, next);
   },
-  {
-    id: "hide-right-rail",
-    label: "Скрывать боковую панель",
-    value: (settings) => settings.hideRightRail,
-    toggle: (settings) => {
-      settings.hideRightRail = !settings.hideRightRail;
-    },
-  },
-  {
-    id: "enhance-settings-menu",
-    label: "Улучшить меню настроек",
-    value: (settings) => settings.enhanceSettingsMenu,
-    toggle: (settings) => {
-      settings.enhanceSettingsMenu = !settings.enhanceSettingsMenu;
-    },
-  },
-  {
-    id: "hide-comments-section",
-    label: "Скрывать блок комментариев",
-    value: (settings) => settings.hideCommentsSection,
-    toggle: (settings) => {
-      settings.hideCommentsSection = !settings.hideCommentsSection;
-    },
-  },
-  {
-    id: "premium-free",
-    label: "Premium Free",
-    value: (settings) => settings.premiumFree,
-    toggle: (settings) => {
-      settings.premiumFree = !settings.premiumFree;
-    },
-  },
-  {
-    id: "prefetch-next-chapter",
-    label: "Предзагружать следующую главу",
-    value: (settings) => settings.prefetchNextChapter,
-    toggle: (settings) => {
-      settings.prefetchNextChapter = !settings.prefetchNextChapter;
-    },
-  },
-  {
-    id: "show-premium-free-progress",
-    label: "Показывать прогресс загрузки Premium Free",
-    value: (settings) => settings.showPremiumFreeProgress,
-    toggle: (settings) => {
-      settings.showPremiumFreeProgress = !settings.showPremiumFreeProgress;
-    },
-  },
-  {
-    id: "tighten-chapter-feed",
-    label: "Убрать пустоту между главами",
-    value: (settings) => settings.tightenChapterFeed,
-    toggle: (settings) => {
-      settings.tightenChapterFeed = !settings.tightenChapterFeed;
-    },
-  },
-  {
-    id: "hide-popup-hints",
-    label: "Авто-скрывать подсказки",
-    value: (settings) => settings.hidePopups.hints,
-    toggle: (settings) => {
-      settings.hidePopups.hints = !settings.hidePopups.hints;
-    },
-  },
-  {
-    id: "hide-popup-gifts",
-    label: "Авто-скрывать подарки и промо",
-    value: (settings) => settings.hidePopups.giftsPromo,
-    toggle: (settings) => {
-      settings.hidePopups.giftsPromo = !settings.hidePopups.giftsPromo;
-    },
-  },
-  {
-    id: "hide-popup-other",
-    label: "Авто-скрывать прочие всплывающие окна",
-    value: (settings) => settings.hidePopups.otherNonBlocking,
-    toggle: (settings) => {
-      settings.hidePopups.otherNonBlocking =
-        !settings.hidePopups.otherNonBlocking;
-    },
-  },
-];
+});
+
+const primaryToggleDefinitions: ToggleDefinition[] =
+  getReaderDrawerToggles().map(definitionFromDescriptor);
 
 const rightRailToggleDefinitions: ToggleDefinition[] = [
   {

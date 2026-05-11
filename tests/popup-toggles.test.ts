@@ -29,16 +29,51 @@ test("site drill-down has two subsection headings", () => {
   assert.deepEqual(texts, ["КНОПКИ ШАПКИ", "ГЛАВНАЯ СТРАНИЦА"]);
 });
 
-test("reader drill-down has 6 toggles", () => {
+test("reader drill-down has 8 toggles", () => {
   const { dom } = setup();
   const list = dom.window.document.querySelector('[data-toggle-list="reader"]');
-  assert.equal(list?.querySelectorAll(".toggle").length, 6);
+  assert.equal(list?.querySelectorAll(".toggle").length, 8);
 });
 
-test("premium-free drill-down has 2 toggles", () => {
+test("reader drill-down has АВТО-СКРЫТИЯ subsection heading", () => {
+  const { dom } = setup();
+  const list = dom.window.document.querySelector('[data-toggle-list="reader"]');
+  const headings = list?.querySelectorAll(".drill-subheading");
+  const texts = [...(headings ?? [])].map((h) => h.textContent);
+  assert.deepEqual(texts, ["АВТО-СКРЫТИЯ"]);
+});
+
+test("premium-free drill-down has 3 toggles", () => {
   const { dom } = setup();
   const list = dom.window.document.querySelector('[data-toggle-list="premium-free"]');
-  assert.equal(list?.querySelectorAll(".toggle").length, 2);
+  assert.equal(list?.querySelectorAll(".toggle").length, 3);
+});
+
+test("toggling 'auto-dismiss hints' commits hidePopups.hints = true", async () => {
+  const dom = new JSDOM(html);
+  const settings = cloneSettings(DEFAULT_SETTINGS);
+  let committed: ReaderEnhancerSettings | null = null;
+  renderToggles(dom.window.document, settings, async (next) => {
+    committed = next;
+  });
+  const list = dom.window.document.querySelector('[data-toggle-list="reader"]');
+  const toggles = list?.querySelectorAll(".toggle") ?? [];
+  // first auto-dismiss toggle = "Авто-скрывать подсказки" (index 5: after 5 visual toggles)
+  const labelEls = list?.querySelectorAll(".toggle__label") ?? [];
+  let hintsIndex = -1;
+  for (let i = 0; i < labelEls.length; i++) {
+    if (labelEls[i].textContent === "Авто-скрывать подсказки") {
+      hintsIndex = i;
+      break;
+    }
+  }
+  assert.notEqual(hintsIndex, -1, "hints toggle not found");
+  const input = toggles[hintsIndex].querySelector('input[type="checkbox"]') as HTMLInputElement;
+  input.checked = true;
+  input.dispatchEvent(new dom.window.Event("change"));
+  await Promise.resolve();
+  assert.ok(committed !== null);
+  assert.equal((committed as ReaderEnhancerSettings).hidePopups.hints, true);
 });
 
 test("premium-free first toggle has caption", () => {
