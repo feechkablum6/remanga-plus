@@ -490,6 +490,37 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       return false;
     }
 
+    if (message.type === "rre/get-remanga-token") {
+      void (async () => {
+        const token = await getRemangaToken();
+        sendResponse(token);
+      })();
+      return true;
+    }
+
+    if (message.type === "rre/get-remanga-user-id") {
+      void (async () => {
+        const token = await getRemangaToken();
+        if (!token) { sendResponse(null); return; }
+        try {
+          const r = await fetch("https://api.remanga.org/api/v2/users/current/", {
+            credentials: "omit",
+            headers: {
+              Authorization: "bearer " + token,
+              Accept: "application/json",
+            },
+          });
+          if (!r.ok) { sendResponse(null); return; }
+          const body = (await r.json()) as { id?: number };
+          sendResponse(typeof body.id === "number" ? body.id : null);
+        } catch {
+          sendResponse(null);
+        }
+      })();
+      return true;
+    }
+
+
     if (message.type === ENSURE_PARSER_SERVER_MESSAGE_TYPE) {
       void ensureParserServer().then(sendResponse);
       return true;
