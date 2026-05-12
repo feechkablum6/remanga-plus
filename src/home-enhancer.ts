@@ -1,4 +1,5 @@
 import type { HeaderButtonKey, ReaderEnhancerSettings } from "./settings.js";
+import { extractDirFromHref, getFilteredDirs } from "./bookmark-filter.js";
 
 export const HEADER_BUTTON_KEYS: readonly HeaderButtonKey[] = [
   "logo",
@@ -41,6 +42,7 @@ const GAME_BANNER_SELECTOR = "div.fixed.bottom-8.right-8.z-100";
 export function applyHomeEnhancements(
   root: ParentNode,
   settings: ReaderEnhancerSettings,
+  filteredDirs: Set<string> | null,
 ): void {
   const header =
     (root as Element).querySelector?.(
@@ -49,6 +51,7 @@ export function applyHomeEnhancements(
   applyHeaderButtons(header as ParentNode, settings);
   applyGameBanner(root, settings);
   applyPromoBanner(root, settings);
+  applyBookmarkFilter(root, settings, filteredDirs);
 }
 
 function applyHeaderButtons(
@@ -112,6 +115,39 @@ function applyPromoBanner(
   candidates.forEach((el) => {
     setHidden(el, "promo-banner", settings.hideHomePromoBanner);
   });
+}
+
+function applyBookmarkFilter(
+  root: ParentNode,
+  settings: ReaderEnhancerSettings,
+  filteredDirs: Set<string> | null,
+): void {
+  if (!settings.filterHomeBookmarks || !filteredDirs || filteredDirs.size === 0) {
+    clearBookmarkFilter(root);
+    return;
+  }
+
+  const links = (root as Element).querySelectorAll?.('a[href^="/manga/"]') ?? [];
+  for (const link of links) {
+    if (!(link instanceof HTMLAnchorElement)) continue;
+    const dir = extractDirFromHref(link.href);
+    if (!dir) continue;
+
+    if (filteredDirs.has(dir)) {
+      setHidden(link, "bookmark-filter", true);
+    } else {
+      setHidden(link, "bookmark-filter", false);
+    }
+  }
+}
+
+function clearBookmarkFilter(root: ParentNode): void {
+  const links = (root as Element).querySelectorAll?.('[data-rre-home-hidden="bookmark-filter"]') ?? [];
+  for (const link of links) {
+    if (link instanceof HTMLElement) {
+      setHidden(link, "bookmark-filter", false);
+    }
+  }
 }
 
 function setHidden(

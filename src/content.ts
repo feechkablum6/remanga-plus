@@ -19,6 +19,12 @@ import {
   resetPrefetchDedup,
 } from "./chapter-prefetch";
 import { applyHomeEnhancements } from "./home-enhancer";
+import {
+  LOAD_HOME_BOOKMARKS_MESSAGE_TYPE,
+  isHomePage,
+  getFilteredDirs,
+  type LoadHomeBookmarksResponse,
+} from "./bookmark-filter.js";
 
 declare global {
   interface Window {
@@ -42,6 +48,7 @@ async function bootstrap(): Promise<void> {
   const settledRefreshHandles = new Set<number>();
   let lastUrl = window.location.href;
   let lastTitleDir: string | null = null;
+  let homeBookmarkDirs: Record<string, string[]> | null = null;
 
   const triggerPrefetchForCurrentUrl = () => {
     if (!currentSettings.prefetchNextChapter) return;
@@ -64,7 +71,11 @@ async function bootstrap(): Promise<void> {
   };
 
   const runRefresh = () => {
-    applyHomeEnhancements(document, currentSettings);
+    const filteredDirs = homeBookmarkDirs && currentSettings.filterHomeBookmarks
+      ? getFilteredDirs(homeBookmarkDirs, currentSettings.filterBookmarkCategories)
+      : null;
+
+    applyHomeEnhancements(document, currentSettings, filteredDirs);
 
     if (!isReaderPage()) {
       clearEnhancerArtifacts();
@@ -76,6 +87,26 @@ async function bootstrap(): Promise<void> {
       settings: currentSettings,
       commitSettings,
     });
+  };
+
+  const requestBookmarkDirs = () => {
+    if (!currentSettings.filterHomeBookmarks) {
+      homeBookmarkDirs = null;
+      return;
+    }
+
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) return;
+
+    chrome.runtime.sendMessage(
+      { type: LOAD_HOME_BOOKMARKS_MESSAGE_TYPE },
+      (response: unknown) => {
+        void chrome.runtime?.lastError;
+        if (response && typeof response === "object" && "dirs" in response) {
+          homeBookmarkDirs = (response as LoadHomeBookmarksResponse).dirs;
+          requestRefresh();
+        }
+      },
+    );
   };
 
   const requestRefresh = () => {
@@ -219,15 +250,20 @@ async function bootstrap(): Promise<void> {
 
   watchSettings((nextSettings) => {
     const previousPremiumFree = currentSettings.premiumFree;
+    const previousFilterHomeBookmarks = currentSettings.filterHomeBookmarks;
     currentSettings = nextSettings;
     if (!previousPremiumFree && currentSettings.premiumFree) {
       requestParserServerWarmup(currentSettings);
+    }
+    if (!previousFilterHomeBookmarks && currentSettings.filterHomeBookmarks) {
+      requestBookmarkDirs();
     }
     requestRefresh();
   });
 
   requestParserServerWarmup(currentSettings);
   requestRefresh();
+  requestBookmarkDirs();
 }
 
 function shouldRefreshForMutation(mutation: MutationRecord): boolean {
