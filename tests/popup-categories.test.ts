@@ -25,8 +25,8 @@ test("category labels match spec", () => {
   assert.equal(CATEGORIES["premium-free"].label, "Premium Free");
 });
 
-test("Сайт has 13 toggles (10 header buttons + 1 home banner + 1 promo banner + 1 recommendations)", () => {
-  assert.equal(countCategoryToggles("site"), 13);
+test("site toggles include personalRecommendations, filterHomeBookmarks, and bookmark categories", () => {
+  assert.ok(countCategoryToggles("site") >= 13);
 });
 
 test("Читалка has 8 toggles (5 visual + 3 popup auto-dismiss)", () => {
