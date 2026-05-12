@@ -45,7 +45,7 @@ test("applyHomeEnhancements hides each header button when its toggle is true", (
     const settings = mergeSettings({
       hideHeaderButtons: { forum: true, chat: true },
     });
-    applyHomeEnhancements(root, settings);
+    applyHomeEnhancements(root, settings, null);
 
     const forum = root.querySelector('a[href*="/forum"]') as HTMLElement;
     const chat = root.querySelector('a[href="/chat"]') as HTMLElement;
@@ -62,11 +62,11 @@ test("applyHomeEnhancements hides each header button when its toggle is true", (
 test("applyHomeEnhancements restores element when toggle becomes false", () => {
   const { root, cleanup } = buildHeader();
   try {
-    applyHomeEnhancements(root, mergeSettings({ hideHeaderButtons: { forum: true } }));
+    applyHomeEnhancements(root, mergeSettings({ hideHeaderButtons: { forum: true } }), null);
     const forum = root.querySelector('a[href*="/forum"]') as HTMLElement;
     assert.equal(forum.style.display, "none");
 
-    applyHomeEnhancements(root, mergeSettings({}));
+    applyHomeEnhancements(root, mergeSettings({}), null);
     assert.notEqual(forum.style.display, "none");
   } finally {
     cleanup();
@@ -76,7 +76,7 @@ test("applyHomeEnhancements restores element when toggle becomes false", () => {
 test("applyHomeEnhancements hides game banner when hideHomeGameBanner = true", () => {
   const { root, cleanup } = buildHeader();
   try {
-    applyHomeEnhancements(root, mergeSettings({ hideHomeGameBanner: true }));
+    applyHomeEnhancements(root, mergeSettings({ hideHomeGameBanner: true }), null);
     const banner = root.querySelector('div.fixed.bottom-8.right-8.z-100') as HTMLElement;
     assert.equal(banner.style.display, "none");
   } finally {
@@ -111,7 +111,7 @@ const buildPromoBanner = (): { root: HTMLElement; cleanup: () => void } => {
 test("applyHomeEnhancements hides telegram promo banner when hideHomePromoBanner = true", () => {
   const { root, cleanup } = buildPromoBanner();
   try {
-    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }), null);
     const banner = root.querySelector("[data-promo-host]") as HTMLElement;
     assert.equal(banner.style.display, "none");
   } finally {
@@ -122,7 +122,7 @@ test("applyHomeEnhancements hides telegram promo banner when hideHomePromoBanner
 test("applyHomeEnhancements leaves telegram promo banner visible when toggle is false", () => {
   const { root, cleanup } = buildPromoBanner();
   try {
-    applyHomeEnhancements(root, mergeSettings({}));
+    applyHomeEnhancements(root, mergeSettings({}), null);
     const banner = root.querySelector("[data-promo-host]") as HTMLElement;
     assert.notEqual(banner.style.display, "none");
   } finally {
@@ -133,11 +133,11 @@ test("applyHomeEnhancements leaves telegram promo banner visible when toggle is 
 test("applyHomeEnhancements restores promo banner when toggle becomes false", () => {
   const { root, cleanup } = buildPromoBanner();
   try {
-    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }), null);
     const banner = root.querySelector("[data-promo-host]") as HTMLElement;
     assert.equal(banner.style.display, "none");
 
-    applyHomeEnhancements(root, mergeSettings({}));
+    applyHomeEnhancements(root, mergeSettings({}), null);
     assert.notEqual(banner.style.display, "none");
   } finally {
     cleanup();
@@ -154,7 +154,7 @@ test("applyHomeEnhancements does not hide unrelated containers when toggle is on
   `;
   document.body.appendChild(root);
   try {
-    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }), null);
     const other = root.querySelector("[data-other]") as HTMLElement;
     assert.notEqual(other.style.display, "none");
   } finally {
@@ -165,7 +165,7 @@ test("applyHomeEnhancements does not hide unrelated containers when toggle is on
 test("applyHomeEnhancements hides only the smallest promo container, not main page wrapper", () => {
   const { root, cleanup } = buildPromoBanner();
   try {
-    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }));
+    applyHomeEnhancements(root, mergeSettings({ hideHomePromoBanner: true }), null);
     const banner = root.querySelector("[data-promo-host]") as HTMLElement;
     const main = root.querySelector("main") as HTMLElement;
     assert.equal(banner.style.display, "none");
@@ -187,7 +187,7 @@ test("applyHomeEnhancements hides logo, search, bookmarks, ellipsis, avatar when
         avatar: true,
       },
     });
-    applyHomeEnhancements(root, settings);
+    applyHomeEnhancements(root, settings, null);
 
     const logo = root.querySelector('a[data-sentry-component="LogoButton"]') as HTMLElement;
     const search = root.querySelector('[data-sentry-component="SearchButton"]') as HTMLElement;
