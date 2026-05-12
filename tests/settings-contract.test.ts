@@ -189,3 +189,22 @@ test("cloneSettings makes independent copy of hideHeaderButtons", () => {
   copy.hideHeaderButtons.forum = false;
   assert.equal(original.hideHeaderButtons.forum, true);
 });
+
+test("DEFAULT_SETTINGS includes personalRecommendations defaulting to true", () => {
+  assert.equal(DEFAULT_SETTINGS.personalRecommendations, true);
+});
+
+test("cloneSettings copies personalRecommendations", () => {
+  const s = cloneSettings({ ...DEFAULT_SETTINGS, personalRecommendations: false });
+  assert.equal(s.personalRecommendations, false);
+});
+
+test("mergeSettings falls back to default personalRecommendations", () => {
+  const s = mergeSettings({});
+  assert.equal(s.personalRecommendations, true);
+});
+
+test("mergeSettings uses provided personalRecommendations", () => {
+  const s = mergeSettings({ personalRecommendations: false });
+  assert.equal(s.personalRecommendations, false);
+});
