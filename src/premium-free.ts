@@ -214,6 +214,7 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   senkuro: "Senkuro",
   inkstory: "InkStory",
   teletype: "Teletype",
+  usagi: "Usagi",
 };
 
 const displayProviderName = (provider: string): string =>

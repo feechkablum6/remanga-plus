@@ -10,6 +10,7 @@ import { InkstoryProvider } from "./providers/inkstory.js";
 import { MangabuffProvider } from "./providers/mangabuff.js";
 import { SenkuroProvider } from "./providers/senkuro.js";
 import { TeletypeProvider } from "./providers/teletype.js";
+import { UsagiProvider } from "./providers/usagi.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { ResolveSessionStore } from "./resolve-session.js";
 import { registerChapterResolveRoute } from "./routes/chapters.js";
@@ -56,6 +57,7 @@ export function buildApp(config: AppConfig) {
   registry.register(new SenkuroProvider(httpClient));
   registry.register(new InkstoryProvider(httpClient));
   registry.register(new TeletypeProvider(httpClient));
+  registry.register(new UsagiProvider(httpClient));
 
   // Setup session store
   const sessionStore = new ResolveSessionStore();
