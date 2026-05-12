@@ -45,12 +45,14 @@ export type ReaderEnhancerSettings = {
   hideHomeGameBanner: boolean;
   hideHomePromoBanner: boolean;
   personalRecommendations: boolean;
+  filterHomeBookmarks: boolean;
+  filterBookmarkCategories: Record<string, boolean>;
 };
 
 type PartialSettings = Partial<
   Omit<
     ReaderEnhancerSettings,
-    "hideToolbarButtons" | "hidePopups" | "hideSettingsMenuItems" | "hideHeaderButtons"
+    "hideToolbarButtons" | "hidePopups" | "hideSettingsMenuItems" | "hideHeaderButtons" | "filterBookmarkCategories"
   >
 > & {
   hideBuyChapterBanner?: boolean;
@@ -58,6 +60,7 @@ type PartialSettings = Partial<
   hideSettingsMenuItems?: Partial<Record<SettingsMenuItemKey, boolean>>;
   hidePopups?: Partial<Record<PopupSettingKey, boolean>>;
   hideHeaderButtons?: Partial<Record<HeaderButtonKey, boolean>>;
+  filterBookmarkCategories?: Partial<Record<string, boolean>>;
 };
 
 const createDefaultSettingsMenuItems = (): Record<SettingsMenuItemKey, boolean> =>
@@ -107,6 +110,8 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
   hideHomeGameBanner: false,
   hideHomePromoBanner: false,
   personalRecommendations: true,
+  filterHomeBookmarks: false,
+  filterBookmarkCategories: {},
 };
 
 export const cloneSettings = (
@@ -130,6 +135,8 @@ export const cloneSettings = (
   hideHomeGameBanner: settings.hideHomeGameBanner,
   hideHomePromoBanner: settings.hideHomePromoBanner,
   personalRecommendations: settings.personalRecommendations,
+  filterHomeBookmarks: settings.filterHomeBookmarks,
+  filterBookmarkCategories: { ...settings.filterBookmarkCategories },
 });
 
 export const mergeSettings = (
@@ -181,6 +188,14 @@ export const mergeSettings = (
     partialSettings?.hideHomePromoBanner ?? DEFAULT_SETTINGS.hideHomePromoBanner,
   personalRecommendations:
     partialSettings?.personalRecommendations ?? DEFAULT_SETTINGS.personalRecommendations,
+  filterHomeBookmarks:
+    partialSettings?.filterHomeBookmarks ?? DEFAULT_SETTINGS.filterHomeBookmarks,
+  filterBookmarkCategories: Object.fromEntries(
+    Object.entries({
+      ...DEFAULT_SETTINGS.filterBookmarkCategories,
+      ...partialSettings?.filterBookmarkCategories,
+    }).filter(([, v]) => typeof v === "boolean"),
+  ) as Record<string, boolean>,
 });
 
 const getStorageArea = (): chrome.storage.SyncStorageArea | null =>
