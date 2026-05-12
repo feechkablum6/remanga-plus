@@ -17,7 +17,7 @@ import {
   type MangalibResponse,
   type MangalibTokenProvider,
 } from "./import-mangalib/mangalib-client.js";
-import { fetchRemangaAuthStatus } from "./import-mangalib/remanga-client.js";
+import { fetchRemangaBookmarkTypes, fetchRemangaAuthStatus } from "./import-mangalib/remanga-client.js";
 import {
   MANGALIB_PROXIED_FETCH_MESSAGE_TYPE,
   READ_MANGALIB_TOKEN_MESSAGE_TYPE,
@@ -34,6 +34,14 @@ import {
   type BookmarkType,
   type CachedBookmarkTypes,
 } from "./bookmark-types-resolver.js";
+import {
+  BOOKMARK_CATEGORIES,
+  HOME_BOOKMARKS_CACHE_KEY,
+  HOME_BOOKMARKS_CACHE_TTL_MS,
+  LOAD_HOME_BOOKMARKS_MESSAGE_TYPE,
+  type HomeBookmarksCache,
+  type LoadHomeBookmarksResponse,
+} from "./bookmark-filter.js";
 
 const HEALTHCHECK_TIMEOUT_MS = 3_000;
 const HEALTHCHECK_MAX_ATTEMPTS = 5;
@@ -484,6 +492,89 @@ async function getRemangaToken(): Promise<string | null> {
   return readRemangaAuthToken(cookieHeader);
 }
 
+const REMANGA_API = "https://api.remanga.org";
+
+async function readHomeBookmarksCache(): Promise<HomeBookmarksCache | null> {
+  const area = chrome.storage?.local;
+  if (!area) return null;
+  return new Promise<HomeBookmarksCache | null>((resolve) => {
+    area.get(HOME_BOOKMARKS_CACHE_KEY, (items) => {
+      void chrome.runtime?.lastError;
+      const raw = items?.[HOME_BOOKMARKS_CACHE_KEY] as HomeBookmarksCache | undefined;
+      if (!raw || typeof raw.updatedAt !== "number" || typeof raw.userId !== "number") {
+        resolve(null);
+        return;
+      }
+      resolve(raw);
+    });
+  });
+}
+
+async function writeHomeBookmarksCache(cache: HomeBookmarksCache): Promise<void> {
+  const area = chrome.storage?.local;
+  if (!area) return;
+  await new Promise<void>((resolve) => {
+    area.set({ [HOME_BOOKMARKS_CACHE_KEY]: cache }, () => {
+      void chrome.runtime?.lastError;
+      resolve();
+    });
+  });
+}
+
+async function loadHomeBookmarks(): Promise<Record<string, string[]>> {
+  const cached = await readHomeBookmarksCache();
+  if (cached && Date.now() - cached.updatedAt < HOME_BOOKMARKS_CACHE_TTL_MS) {
+    return cached.dirs;
+  }
+
+  const token = await getRemangaToken();
+  if (!token) return cached?.dirs ?? {};
+
+  const authStatus = await fetchRemangaAuthStatus(async () => token);
+  if (!authStatus.signedIn || typeof authStatus.userId !== "number") {
+    return cached?.dirs ?? {};
+  }
+  const userId = authStatus.userId;
+
+  const remangaTokenProvider = async () => token;
+  const bookmarkTypes = await fetchRemangaBookmarkTypes(remangaTokenProvider);
+  const nameToKey = new Map<string, string>();
+  for (const cat of BOOKMARK_CATEGORIES) {
+    nameToKey.set(cat.name.toLowerCase(), cat.key);
+  }
+  const idToKey = new Map<number, string>();
+  for (const bt of bookmarkTypes) {
+    const key = nameToKey.get(bt.name.toLowerCase());
+    if (key) idToKey.set(bt.id, key);
+  }
+
+  const dirs: Record<string, string[]> = {};
+  let page = 1;
+  for (;;) {
+    const u = `${REMANGA_API}/api/v2/users/${userId}/bookmarks/?page=${page}`;
+    const r = await fetch(u, { credentials: "omit", headers: { Authorization: "bearer " + token, Accept: "application/json" } });
+    if (!r.ok) break;
+    const body = await r.json() as { next?: number | null; results?: Array<{ title?: { id?: number; dir?: string }; type?: number }> };
+    if (!body || !Array.isArray(body.results)) break;
+    for (const row of body.results) {
+      const dir = row.title?.dir;
+      const typeId = row.type;
+      if (typeof dir === "string" && typeof typeId === "number") {
+        const key = idToKey.get(typeId);
+        if (key) {
+          if (!dirs[dir]) dirs[dir] = [];
+          if (!dirs[dir].includes(key)) dirs[dir].push(key);
+        }
+      }
+    }
+    if (!body.next || body.next <= page) break;
+    page = body.next;
+  }
+
+  await writeHomeBookmarksCache({ dirs, userId, updatedAt: Date.now() });
+  return dirs;
+}
+
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (!message || typeof message !== "object" || !("type" in message)) {
@@ -516,6 +607,14 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
         } catch {
           sendResponse(null);
         }
+      })();
+      return true;
+    }
+
+    if (message.type === LOAD_HOME_BOOKMARKS_MESSAGE_TYPE) {
+      void (async () => {
+        const dirs = await loadHomeBookmarks();
+        sendResponse({ dirs } satisfies LoadHomeBookmarksResponse);
       })();
       return true;
     }
