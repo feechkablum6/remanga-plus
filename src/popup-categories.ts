@@ -26,8 +26,9 @@ export type ToggleAccessor =
         | "tightenChapterFeed"
         | "premiumFree"
         | "prefetchNextChapter"
-        | "showPremiumFreeProgress"
-      >;
+      | "showPremiumFreeProgress"
+      | "personalRecommendations"
+    >;
     }
   | { kind: "header-button"; key: HeaderButtonKey }
   | { kind: "popup"; key: PopupSettingKey };
@@ -74,6 +75,12 @@ const siteToggles: ReadonlyArray<ToggleDescriptor> = [
   {
     label: "Скрыть промо-плашку Telegram",
     accessor: { kind: "scalar", key: "hideHomePromoBanner" },
+    subsection: "ГЛАВНАЯ СТРАНИЦА",
+  },
+  {
+    label: "Персональные рекомендации",
+    caption: "Заменить рекомендации на главной с учётом ваших закладок",
+    accessor: { kind: "scalar", key: "personalRecommendations" },
     subsection: "ГЛАВНАЯ СТРАНИЦА",
   },
 ];
