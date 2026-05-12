@@ -104,8 +104,9 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `popup-auth-row.ts` | Рендеринг строки авторизации MangaLib/Remanga: 3 независимых состояния (ok/bad/checking) на каждый сайт, helper hint под строкой, `title` tooltip на disabled кнопке «Импорт →» |
 | `popup-dismissal.ts` | Селекторы и эвристики автозакрытия попапов на сайте remanga.org (НЕ про `popup.html`) |
 | `parser-server/src/providers/` | `mangabuff.ts` (HTML scrape), `senkuro.ts` (GraphQL), `inkstory.ts` (REST `api.inkstory.net`) — все реализуют `ExternalSourceProvider` |
-| `parser-server/src/http/client.ts` | `HttpClient` — UA, timeout, retry на 500/502/503/504/429 с Retry-After |
-| `parser-server/src/resolve-chapter.ts` | Fallback-chain по `DEFAULT_PROVIDER_PRIORITY`: на provider_error/no_match продолжаем, на success — return; лучший failure по rank (`chapter_not_found > no_match > provider_error`) |
+| `parser-server/src/http/client.ts` | `HttpClient` — UA, timeout (no retries; maxRetries removed) |
+| `parser-server/src/resolve-chapter.ts` | Параллельный резолв всех провайдеров через `Promise.all` + AbortController; progress callbacks; лучший failure по rank |
+| `parser-server/src/resolve-session.ts` | `ResolveSessionStore` — in-memory сессии для async resolve (POST → 202 → polling → result) |
 | `parser-server/fixtures/` | Живые JSON/HTML ответы провайдеров для тестов (НЕ путать с `tests/fixtures/` у Mangabuff) |
 | `parser-server/scripts/` | Одноразовые разведочные скрипты (`senkuro-*`, `inkstory-*`) |
 | `mangalib-bridge.ts` | Content script на mangalib.me — читает `localStorage.auth.token.access_token`, проксирует API-запросы (Cloudflare блокирует chrome-extension origin → 403, нужен mangalib.me origin) |
@@ -134,7 +135,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT клонировать rail-кнопки в fixed-position hover-triggered overlay поверх читалки.
 - DO NOT удалять поле `"key"` из `public/manifest.json` или `dist/manifest.json`.
 - DO NOT устанавливать `emptyOutDir: true` в `vite.config.ts` / `vite.background.config.ts`.
-- DO NOT `return` failure внутри цикла по `providerPriority` — сломаешь fallback. `continue` + `recordFailure`.
+- DO NOT `return` failure из `resolveWithProvider` при `signal.aborted` — это cancel, не провайдерная ошибка. Возвращай `createFailureResult("provider_error", ...)`.
 - DO NOT слать URL в `parseChapter` у Senkuro/InkStory напрямую — провайдер ждёт slug/UUID, URL парсится через `extractChapterSlug`/`extractChapterUuid`.
 - DO NOT `first: 10000` у Senkuro `mangaChapters` — сервер 400. Пагинация `first: 100` + `after: endCursor`.
 - DO NOT использовать `/v2/branches?book=X` у InkStory как authoritative список — там top-20 с editorsChoice. Группировать chapters по `branchId` из `/v2/chapters?bookId=`.
@@ -156,6 +157,8 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT добавлять новый toggle в попап минуя `popup-categories.ts` — descriptor там же где label, без него `renderToggles` не знает что отрисовать.
 - DO NOT забывать обновлять подзаголовок-счётчик карточки в `formatCount`-функции `popup.ts` если меняется число тогглов в категории. Сам счётчик пересчитывается из `countCategoryToggles`, но русский plural нужно проверить (1 «настройка», 2-4 «настройки», 5+ «настроек», 11-14 «настроек»).
 - DO NOT ставить `display: flex/grid/block` на элемент с HTML-атрибутом `hidden` без сопутствующего `[hidden] { display: none }` — class-селектор перебивает UA-таблицу, `el.hidden = true` визуально ничего не сделает.
+- DO NOT использовать синхронный POST /api/chapters/resolve — только асинхронная модель (202 → polling → result).
+- DO NOT добавлять ретраи в HttpClient — ошибка = мгновенный failed провайдера.
 
 ## Visuals (gpt-image-prompt + frontend-design)
 

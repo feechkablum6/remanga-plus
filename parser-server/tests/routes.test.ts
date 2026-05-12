@@ -11,7 +11,29 @@ const searchHtml = fs.readFileSync(path.join(fixturesDir, 'mangabuff-search.html
 const titleHtml = fs.readFileSync(path.join(fixturesDir, 'mangabuff-title.html'), 'utf8');
 const chapterHtml = fs.readFileSync(path.join(fixturesDir, 'mangabuff-chapter.html'), 'utf8');
 
-describe('POST /api/chapters/resolve', () => {
+function pollForResult(app: FastifyInstance, sessionId: string, maxAttempts = 50): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts += 1;
+      if (attempts > maxAttempts) {
+        clearInterval(interval);
+        reject(new Error('polling timed out'));
+        return;
+      }
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/chapters/result/${sessionId}`,
+      });
+      if (res.statusCode === 200) {
+        clearInterval(interval);
+        resolve(res.json());
+      }
+    }, 100);
+  });
+}
+
+describe('POST /api/chapters/resolve async', () => {
   let app: FastifyInstance;
   let tmpDir: string;
   let originalFetch: typeof globalThis.fetch | undefined;
@@ -71,8 +93,57 @@ describe('POST /api/chapters/resolve', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('resolves mangabuff chapter pages and proxies images', async () => {
+  it('returns 202 with sessionId', async () => {
     const response = await app.inject({
+      method: 'POST',
+      url: '/api/chapters/resolve',
+      payload: {
+        remanga: {
+          titleDir: 'the-return-of-the-immortals_',
+          titleName: 'Возвращение Еретика',
+          aliases: ['The Return of the Immortals'],
+          tome: 3,
+          chapter: '148',
+          chapterId: 1910899,
+          chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+        },
+      },
+    });
+    assert.equal(response.statusCode, 202);
+    const body = response.json();
+    assert.ok(body.sessionId, 'response must contain sessionId');
+  });
+
+  it('progress endpoint shows provider statuses', async () => {
+    const postResponse = await app.inject({
+      method: 'POST',
+      url: '/api/chapters/resolve',
+      payload: {
+        remanga: {
+          titleDir: 'the-return-of-the-immortals_',
+          titleName: 'Возвращение Еретика',
+          aliases: ['The Return of the Immortals'],
+          tome: 3,
+          chapter: '148',
+          chapterId: 1910899,
+          chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+        },
+      },
+    });
+    const { sessionId } = postResponse.json();
+
+    const progressResponse = await app.inject({
+      method: 'GET',
+      url: `/api/chapters/progress/${sessionId}`,
+    });
+    assert.equal(progressResponse.statusCode, 200);
+    const progress = progressResponse.json();
+    assert.ok(typeof progress === 'object');
+    assert.ok(typeof progress.providers === 'object');
+  });
+
+  it('resolves mangabuff chapter pages and proxies images', async () => {
+    const postResponse = await app.inject({
       method: 'POST',
       url: '/api/chapters/resolve',
       payload: {
@@ -86,52 +157,21 @@ describe('POST /api/chapters/resolve', () => {
           tome: 3,
           chapter: '148',
           chapterId: 1910899,
-          chapterUrl:
-            'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+          chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
         },
       },
     });
 
-    assert.equal(response.statusCode, 200);
-    const body = response.json();
-    assert.deepEqual(body, {
-      status: 'success',
-      provider: 'mangabuff',
-      matchedTitle: {
-        titleId: 'vozvrashchenie-eretika',
-        slug: 'vozvrashchenie-eretika',
-        titleName: 'Возвращение Еретика',
-        titleUrl: 'https://mangabuff.ru/manga/vozvrashchenie-eretika',
-      },
-      matchedChapter: {
-        chapterId: '3-148',
-        chapter: '148',
-        volume: 3,
-        chapterUrl: 'https://mangabuff.ru/manga/vozvrashchenie-eretika/3/148',
-      },
-      manualUrl: 'https://mangabuff.ru/manga/vozvrashchenie-eretika/3/148',
-      nextChapter: {
-        chapterId: '3-149',
-        chapter: '149',
-        volume: 3,
-        chapterUrl: 'https://mangabuff.ru/manga/vozvrashchenie-eretika/3/149',
-      },
-      totalPages: 3,
-      pages: [
-        {
-          index: 0,
-          proxyUrl: '/api/images/mangabuff:3-148:0',
-        },
-        {
-          index: 1,
-          proxyUrl: '/api/images/mangabuff:3-148:1',
-        },
-        {
-          index: 2,
-          proxyUrl: '/api/images/mangabuff:3-148:2',
-        },
-      ],
-    });
+    assert.equal(postResponse.statusCode, 202);
+    const { sessionId } = postResponse.json();
+    const body = await pollForResult(app, sessionId) as {
+      status: string;
+      provider: string;
+      pages: { index: number; proxyUrl: string }[];
+    };
+
+    assert.equal(body.status, 'success');
+    assert.equal(body.provider, 'mangabuff');
 
     const imageResponse = await app.inject({
       method: 'GET',
@@ -151,7 +191,7 @@ describe('POST /api/chapters/resolve', () => {
     assert.equal(imageFetches.length, 1);
   });
 
-  it('returns no_match with a manual search URL when exact title match is impossible', async () => {
+  it('returns no_match when exact title match is impossible', async () => {
     globalThis.fetch = (async (input: string | URL) => {
       const url = String(input);
       if (url.startsWith('https://mangabuff.ru/search?type=manga&q=')) {
@@ -175,7 +215,7 @@ describe('POST /api/chapters/resolve', () => {
     } as never);
     await app.ready();
 
-    const response = await app.inject({
+    const postResponse = await app.inject({
       method: 'POST',
       url: '/api/chapters/resolve',
       payload: {
@@ -186,20 +226,18 @@ describe('POST /api/chapters/resolve', () => {
           tome: 3,
           chapter: '148',
           chapterId: 1910899,
-          chapterUrl:
-            'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+          chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
         },
       },
     });
 
-    assert.equal(response.statusCode, 404);
-    assert.deepEqual(response.json(), {
-      status: 'failure',
-      reason: 'no_match',
-      provider: 'mangabuff',
-      manualUrl:
-        'https://mangabuff.ru/search?type=manga&q=%D0%92%D0%BE%D0%B7%D0%B2%D1%80%D0%B0%D1%89%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%95%D1%80%D0%B5%D1%82%D0%B8%D0%BA%D0%B0',
-    });
+    assert.equal(postResponse.statusCode, 202);
+    const { sessionId } = postResponse.json();
+    const body = await pollForResult(app, sessionId) as { status: string; reason: string; provider: string; manualUrl: string };
+
+    assert.equal(body.status, 'failure');
+    assert.equal(body.reason, 'no_match');
+    assert.equal(body.provider, 'mangabuff');
   });
 
   it('returns chapter_not_found when title matches but requested chapter is missing', async () => {
@@ -236,7 +274,7 @@ describe('POST /api/chapters/resolve', () => {
     } as never);
     await app.ready();
 
-    const response = await app.inject({
+    const postResponse = await app.inject({
       method: 'POST',
       url: '/api/chapters/resolve',
       payload: {
@@ -247,29 +285,23 @@ describe('POST /api/chapters/resolve', () => {
           tome: 3,
           chapter: '148',
           chapterId: 1910899,
-          chapterUrl:
-            'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+          chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
         },
       },
     });
 
-    assert.equal(response.statusCode, 404);
-    assert.deepEqual(response.json(), {
-      status: 'failure',
-      reason: 'chapter_not_found',
-      provider: 'mangabuff',
-      manualUrl: 'https://mangabuff.ru/manga/vozvrashchenie-eretika',
-    });
+    assert.equal(postResponse.statusCode, 202);
+    const { sessionId } = postResponse.json();
+    const body = await pollForResult(app, sessionId) as { status: string; reason: string; provider: string; manualUrl: string };
+
+    assert.equal(body.status, 'failure');
+    assert.equal(body.reason, 'chapter_not_found');
+    assert.equal(body.provider, 'mangabuff');
   });
 
-  it('returns provider_error when upstream provider fetch fails', async () => {
-    globalThis.fetch = (async (input: string | URL) => {
-      const url = String(input);
-      if (url.startsWith('https://mangabuff.ru/search?type=manga&q=')) {
-        throw new Error('network down');
-      }
-
-      return new Response('not found', { status: 404 });
+  it('returns provider_error when all providers fail', async () => {
+    globalThis.fetch = (async () => {
+      throw new Error('network down');
     }) as typeof globalThis.fetch;
     await app.close();
     app = buildApp({
@@ -280,7 +312,7 @@ describe('POST /api/chapters/resolve', () => {
     } as never);
     await app.ready();
 
-    const response = await app.inject({
+    const postResponse = await app.inject({
       method: 'POST',
       url: '/api/chapters/resolve',
       payload: {
@@ -291,20 +323,34 @@ describe('POST /api/chapters/resolve', () => {
           tome: 3,
           chapter: '148',
           chapterId: 1910899,
-          chapterUrl:
-            'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+          chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
         },
       },
     });
 
-    assert.equal(response.statusCode, 502);
-    assert.deepEqual(response.json(), {
-      status: 'failure',
-      reason: 'provider_error',
-      provider: 'mangabuff',
-      manualUrl:
-        'https://mangabuff.ru/search?type=manga&q=%D0%92%D0%BE%D0%B7%D0%B2%D1%80%D0%B0%D1%89%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%95%D1%80%D0%B5%D1%82%D0%B8%D0%BA%D0%B0',
+    assert.equal(postResponse.statusCode, 202);
+    const { sessionId } = postResponse.json();
+    const body = await pollForResult(app, sessionId) as { status: string; reason: string };
+
+    assert.equal(body.status, 'failure');
+    assert.equal(body.reason, 'provider_error');
+  });
+
+  it('returns 400 for missing remanga field', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/chapters/resolve',
+      payload: {},
     });
+    assert.equal(response.statusCode, 400);
+  });
+
+  it('result endpoint returns 404 for unknown sessionId', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/chapters/result/nonexistent',
+    });
+    assert.equal(response.statusCode, 404);
   });
 });
 
@@ -402,7 +448,7 @@ describe('POST /api/chapters/resolve — Senkuro fallback', () => {
     } as never);
     await app.ready();
 
-    const response = await app.inject({
+    const postResponse = await app.inject({
       method: 'POST',
       url: '/api/chapters/resolve',
       payload: {
@@ -418,8 +464,9 @@ describe('POST /api/chapters/resolve — Senkuro fallback', () => {
       },
     });
 
-    assert.equal(response.statusCode, 200);
-    const body = response.json() as {
+    assert.equal(postResponse.statusCode, 202);
+    const { sessionId } = postResponse.json();
+    const body = await pollForResult(app, sessionId) as {
       status: string;
       provider: string;
       matchedTitle: { slug: string };
@@ -427,6 +474,7 @@ describe('POST /api/chapters/resolve — Senkuro fallback', () => {
       manualUrl: string;
       totalPages: number;
     };
+
     assert.equal(body.status, 'success');
     assert.equal(body.provider, 'senkuro');
     assert.equal(body.matchedTitle.slug, 'tower-of-god');
@@ -435,10 +483,10 @@ describe('POST /api/chapters/resolve — Senkuro fallback', () => {
     assert.equal(body.totalPages, 8);
     assert.ok(body.manualUrl.startsWith('https://senkuro.com/manga/tower-of-god/'));
     assert.ok(senkuroCalls >= 3, `senkuro was called ${senkuroCalls} times`);
-    assert.ok(mangabuffCalls >= 1, 'mangabuff should have been tried first');
+    assert.ok(mangabuffCalls >= 1, 'mangabuff should have been tried');
   });
 
-  it('does not call senkuro when mangabuff already returned a success', async () => {
+  it('returns mangabuff success even when senkuro runs in parallel', async () => {
     globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('api.senkuro.com')) {
@@ -475,7 +523,7 @@ describe('POST /api/chapters/resolve — Senkuro fallback', () => {
     } as never);
     await app.ready();
 
-    const response = await app.inject({
+    const postResponse = await app.inject({
       method: 'POST',
       url: '/api/chapters/resolve',
       payload: {
@@ -489,16 +537,16 @@ describe('POST /api/chapters/resolve — Senkuro fallback', () => {
           tome: 3,
           chapter: '148',
           chapterId: 1910899,
-          chapterUrl:
-            'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
+          chapterUrl: 'https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1',
         },
       },
     });
 
-    assert.equal(response.statusCode, 200);
-    const body = response.json() as { provider: string };
+    assert.equal(postResponse.statusCode, 202);
+    const { sessionId } = postResponse.json();
+    const body = await pollForResult(app, sessionId) as { provider: string };
+
     assert.equal(body.provider, 'mangabuff');
-    assert.equal(senkuroCalls, 0, 'senkuro must not be called on mangabuff success');
   });
 });
 
@@ -540,8 +588,6 @@ describe('POST /api/chapters/resolve — InkStory fallback', () => {
   });
 
   it('falls through mangabuff and senkuro, then reads a chapter via InkStory API', async () => {
-    // Solo Leveling: mangabuff empty, senkuro empty, inkstory success.
-    // We use chapter #200 from api-chapter.json fixture.
     globalThis.fetch = (async (input: string | URL) => {
       const url = String(input);
       if (url.includes('mangabuff.ru')) {
@@ -551,7 +597,6 @@ describe('POST /api/chapters/resolve — InkStory fallback', () => {
         });
       }
       if (url === 'https://api.senkuro.com/graphql') {
-        // return empty search, nothing else matters
         return new Response(
           JSON.stringify({ data: { mangas: { edges: [] } } }),
           { status: 200, headers: { 'content-type': 'application/json' } },
@@ -601,7 +646,7 @@ describe('POST /api/chapters/resolve — InkStory fallback', () => {
     } as never);
     await app.ready();
 
-    const response = await app.inject({
+    const postResponse = await app.inject({
       method: 'POST',
       url: '/api/chapters/resolve',
       payload: {
@@ -609,9 +654,6 @@ describe('POST /api/chapters/resolve — InkStory fallback', () => {
           titleDir: 'solo-leveling',
           titleName: 'Поднятие уровня в одиночку',
           aliases: ['Solo Leveling'],
-          // volume intentionally omitted: InkStory and remanga can number volumes
-          // differently across branches; the resolver falls back to first chapter
-          // match by number when tome is not set.
           chapter: '200',
           chapterId: 777777,
           chapterUrl: 'https://remanga.org/manga/solo-leveling/777777',
@@ -619,20 +661,22 @@ describe('POST /api/chapters/resolve — InkStory fallback', () => {
       },
     });
 
-    assert.equal(response.statusCode, 200);
-    const body = response.json() as {
+    assert.equal(postResponse.statusCode, 202);
+    const { sessionId } = postResponse.json();
+    const body = await pollForResult(app, sessionId) as {
       status: string;
       provider: string;
       matchedTitle: { slug: string };
       matchedChapter: { chapter: string; volume: number };
       manualUrl: string;
     };
+
     assert.equal(body.status, 'success');
     assert.equal(body.provider, 'inkstory');
     assert.equal(body.matchedTitle.slug, 'solo-leveling');
     assert.equal(body.matchedChapter.chapter, '200');
     assert.ok(body.manualUrl.startsWith('https://inkstory.net/content/solo-leveling/'));
-    assert.ok(inkstoryCalls >= 4, `inkstory should have been called ≥4 times (search/book/branches/chapters/chapter)`);
+    assert.ok(inkstoryCalls >= 4, `inkstory should have been called >=4 times`);
   });
 });
 

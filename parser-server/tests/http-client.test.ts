@@ -1,8 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-const noopBackoff = () => 0;
-
 describe('HttpClient', () => {
   it('adds a default User-Agent header when none provided', async () => {
     const module = await import('../src/http/client.js');
@@ -14,7 +12,7 @@ describe('HttpClient', () => {
       return new Response('ok', { status: 200 });
     }) as typeof fetch;
 
-    const client = new HttpClient({ fetchImpl: fakeFetch, backoffMs: noopBackoff });
+    const client = new HttpClient({ fetchImpl: fakeFetch });
     await client.request('https://example.com/');
 
     const ua = capturedHeaders?.get('user-agent');
@@ -34,7 +32,7 @@ describe('HttpClient', () => {
       return new Response('ok', { status: 200 });
     }) as typeof fetch;
 
-    const client = new HttpClient({ fetchImpl: fakeFetch, backoffMs: noopBackoff });
+    const client = new HttpClient({ fetchImpl: fakeFetch });
     await client.request('https://example.com/', {
       headers: { Accept: 'application/json' },
     });
@@ -54,7 +52,7 @@ describe('HttpClient', () => {
       return new Response('ok', { status: 200 });
     }) as typeof fetch;
 
-    const client = new HttpClient({ fetchImpl: fakeFetch, backoffMs: noopBackoff });
+    const client = new HttpClient({ fetchImpl: fakeFetch });
     await client.request('https://example.com/', {
       headers: { 'User-Agent': 'CustomUA/1.0' },
     });
@@ -87,8 +85,6 @@ describe('HttpClient', () => {
     const client = new HttpClient({
       fetchImpl: fakeFetch,
       timeoutMs: 30,
-      maxRetries: 0,
-      backoffMs: noopBackoff,
     });
 
     await assert.rejects(
@@ -98,7 +94,7 @@ describe('HttpClient', () => {
     assert.equal(observedAborted, true);
   });
 
-  it('retries once on network error (TypeError) and then succeeds', async () => {
+  it('does not retry on network error when maxRetries defaults to 0', async () => {
     const { HttpClient } = (await import('../src/http/client.js')) as {
       HttpClient: new (opts: unknown) => { request: (u: string, i?: unknown) => Promise<Response> };
     };
@@ -106,94 +102,16 @@ describe('HttpClient', () => {
     let calls = 0;
     const fakeFetch = (async () => {
       calls += 1;
-      if (calls === 1) {
-        throw new TypeError('fetch failed');
-      }
-      return new Response('ok', { status: 200 });
+      throw new TypeError('fetch failed');
     }) as typeof fetch;
 
-    const client = new HttpClient({ fetchImpl: fakeFetch, backoffMs: noopBackoff });
-    const response = await client.request('https://example.com/');
-
-    assert.equal(response.status, 200);
-    assert.equal(calls, 2);
-  });
-
-  it('retries on 503 but does not retry on 404', async () => {
-    const { HttpClient } = (await import('../src/http/client.js')) as {
-      HttpClient: new (opts: unknown) => { request: (u: string, i?: unknown) => Promise<Response> };
-    };
-
-    let calls503 = 0;
-    const fetch503 = (async () => {
-      calls503 += 1;
-      if (calls503 < 2) return new Response('upstream down', { status: 503 });
-      return new Response('ok', { status: 200 });
-    }) as typeof fetch;
-
-    const client503 = new HttpClient({ fetchImpl: fetch503, backoffMs: noopBackoff });
-    const r503 = await client503.request('https://example.com/');
-    assert.equal(r503.status, 200);
-    assert.equal(calls503, 2);
-
-    let calls404 = 0;
-    const fetch404 = (async () => {
-      calls404 += 1;
-      return new Response('nope', { status: 404 });
-    }) as typeof fetch;
-
-    const client404 = new HttpClient({ fetchImpl: fetch404, backoffMs: noopBackoff });
-    const r404 = await client404.request('https://example.com/');
-    assert.equal(r404.status, 404);
-    assert.equal(calls404, 1);
-  });
-
-  it('gives up after maxRetries and throws, reporting the last status', async () => {
-    const { HttpClient } = (await import('../src/http/client.js')) as {
-      HttpClient: new (opts: unknown) => { request: (u: string, i?: unknown) => Promise<Response> };
-    };
-
-    let calls = 0;
-    const fakeFetch = (async () => {
-      calls += 1;
-      return new Response('upstream down', { status: 503 });
-    }) as typeof fetch;
-
-    const client = new HttpClient({
-      fetchImpl: fakeFetch,
-      maxRetries: 2,
-      backoffMs: noopBackoff,
-    });
+    const client = new HttpClient({ fetchImpl: fakeFetch });
 
     await assert.rejects(
       client.request('https://example.com/'),
-      (err: Error) => /503/.test(err.message),
+      (err: unknown) => err instanceof TypeError,
     );
-    assert.equal(calls, 3);
-  });
-
-  it('retries on 429 and honors Retry-After when numeric', async () => {
-    const { HttpClient } = (await import('../src/http/client.js')) as {
-      HttpClient: new (opts: unknown) => { request: (u: string, i?: unknown) => Promise<Response> };
-    };
-
-    let calls = 0;
-    const fakeFetch = (async () => {
-      calls += 1;
-      if (calls === 1) {
-        return new Response('rate limited', {
-          status: 429,
-          headers: { 'Retry-After': '0' },
-        });
-      }
-      return new Response('ok', { status: 200 });
-    }) as typeof fetch;
-
-    const client = new HttpClient({ fetchImpl: fakeFetch, backoffMs: noopBackoff });
-    const response = await client.request('https://example.com/');
-
-    assert.equal(response.status, 200);
-    assert.equal(calls, 2);
+    assert.equal(calls, 1);
   });
 
   it('merges a caller-provided AbortSignal with the timeout signal', async () => {
@@ -220,8 +138,6 @@ describe('HttpClient', () => {
     const client = new HttpClient({
       fetchImpl: fakeFetch,
       timeoutMs: 5_000,
-      maxRetries: 0,
-      backoffMs: noopBackoff,
     });
 
     setTimeout(() => externalController.abort(), 10);

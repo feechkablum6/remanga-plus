@@ -11,6 +11,7 @@ import { MangabuffProvider } from "./providers/mangabuff.js";
 import { SenkuroProvider } from "./providers/senkuro.js";
 import { TeletypeProvider } from "./providers/teletype.js";
 import { ProviderRegistry } from "./providers/registry.js";
+import { ResolveSessionStore } from "./resolve-session.js";
 import { registerChapterResolveRoute } from "./routes/chapters.js";
 import { registerImagesRoute } from "./routes/images.js";
 
@@ -56,6 +57,9 @@ export function buildApp(config: AppConfig) {
   registry.register(new InkstoryProvider(httpClient));
   registry.register(new TeletypeProvider(httpClient));
 
+  // Setup session store
+  const sessionStore = new ResolveSessionStore();
+
   // Setup cache
   const cache = new FileCache(config.cacheDir);
 
@@ -66,8 +70,11 @@ export function buildApp(config: AppConfig) {
     imageMap,
     config.providerPriority ?? DEFAULT_PROVIDER_PRIORITY,
     config.titleOverrides ?? DEFAULT_TITLE_OVERRIDES,
+    sessionStore,
   );
   registerImagesRoute(app, registry, cache, imageMap);
+
+  setInterval(() => sessionStore.prune(), 30_000);
 
   // Health check
   app.get("/health", async () => ({ status: "ok" }));

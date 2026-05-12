@@ -4475,6 +4475,25 @@ const appendPremiumFreeRetryButton = (
   card.append(button);
 };
 
+const POLLING_INTERVAL_MS = 300;
+
+const pollForResolveResult = async (
+  sessionId: string,
+  controller: AbortController,
+): Promise<unknown> => {
+  const baseUrl = getParserServerBaseUrl();
+  while (!controller.signal.aborted) {
+    const response = await fetch(`${baseUrl}/api/chapters/result/${sessionId}`, {
+      signal: controller.signal,
+    });
+    if (response.status === 200) {
+      return response.json();
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS));
+  }
+  throw new DOMException("Aborted", "AbortError");
+};
+
 const resolvePremiumFreeChapterResult = async (
   reference: RemangaChapterReference,
   controller: AbortController,
@@ -4498,7 +4517,8 @@ const resolvePremiumFreeChapterResult = async (
         reference.titleDir,
       );
       const requestedBranchId = pref?.branchId ?? null;
-      const response = await fetch(`${getParserServerBaseUrl()}/api/chapters/resolve`, {
+
+      const resolveResponse = await fetch(`${getParserServerBaseUrl()}/api/chapters/resolve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -4510,17 +4530,28 @@ const resolvePremiumFreeChapterResult = async (
         signal: controller.signal,
       });
 
-      const payload = (await response.json()) as PremiumFreeClientResolveResult;
+      if (!resolveResponse.ok) {
+        throw new Error(`Resolve request failed: ${resolveResponse.status}`);
+      }
+
+      const { sessionId } = (await resolveResponse.json()) as { sessionId: string };
+      if (!sessionId) {
+        throw new Error("No sessionId in resolve response");
+      }
+
+      const payload = await pollForResolveResult(sessionId, controller);
+
       if (
         !payload ||
         typeof payload !== "object" ||
         !("status" in payload) ||
-        (payload.status !== "success" && payload.status !== "failure")
+        ((payload as { status: string }).status !== "success" &&
+          (payload as { status: string }).status !== "failure")
       ) {
         throw new Error("Unexpected premium-free response");
       }
 
-      result = payload;
+      result = payload as PremiumFreeClientResolveResult;
       purgeStaleBranchPrefIfNeeded(reference.titleDir, requestedBranchId, result);
     }
   } catch (error) {
