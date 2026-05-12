@@ -3,12 +3,14 @@ import type {
   HeaderButtonKey,
   PopupSettingKey,
 } from "./settings.js";
+import { BOOKMARK_CATEGORIES, type BookmarkCategoryKey } from "./bookmark-filter.js";
 
 export type CategoryKey = "site" | "reader" | "premium-free";
 
 export type SiteSubsection =
   | "КНОПКИ ШАПКИ"
   | "ГЛАВНАЯ СТРАНИЦА"
+  | "КАТЕГОРИИ ЗАКЛАДОК"
   | "АВТО-СКРЫТИЯ";
 
 export type ToggleAccessor =
@@ -26,12 +28,14 @@ export type ToggleAccessor =
         | "tightenChapterFeed"
         | "premiumFree"
         | "prefetchNextChapter"
-      | "showPremiumFreeProgress"
-      | "personalRecommendations"
-    >;
+        | "showPremiumFreeProgress"
+        | "personalRecommendations"
+        | "filterHomeBookmarks"
+      >;
     }
   | { kind: "header-button"; key: HeaderButtonKey }
-  | { kind: "popup"; key: PopupSettingKey };
+  | { kind: "popup"; key: PopupSettingKey }
+  | { kind: "bookmark-category"; key: BookmarkCategoryKey };
 
 export type ToggleDescriptor = {
   label: string;
@@ -83,6 +87,18 @@ const siteToggles: ReadonlyArray<ToggleDescriptor> = [
     accessor: { kind: "scalar", key: "personalRecommendations" },
     subsection: "ГЛАВНАЯ СТРАНИЦА",
   },
+  {
+    label: "Фильтровать закладки на главной",
+    accessor: { kind: "scalar", key: "filterHomeBookmarks" },
+    subsection: "ГЛАВНАЯ СТРАНИЦА",
+  },
+  ...BOOKMARK_CATEGORIES.map(
+    ({ name, key }): ToggleDescriptor => ({
+      label: name,
+      accessor: { kind: "bookmark-category", key: key as BookmarkCategoryKey },
+      subsection: "КАТЕГОРИИ ЗАКЛАДОК",
+    }),
+  ),
 ];
 
 const readerToggles: ReadonlyArray<ToggleDescriptor> = [
@@ -147,6 +163,7 @@ export const readToggleValue = (
   const a = toggle.accessor;
   if (a.kind === "scalar") return settings[a.key];
   if (a.kind === "header-button") return settings.hideHeaderButtons[a.key];
+  if (a.kind === "bookmark-category") return settings.filterBookmarkCategories[a.key] ?? false;
   return settings.hidePopups[a.key];
 };
 
@@ -163,6 +180,12 @@ export const applyToggleChange = (
     return {
       ...settings,
       hideHeaderButtons: { ...settings.hideHeaderButtons, [a.key]: next },
+    };
+  }
+  if (a.kind === "bookmark-category") {
+    return {
+      ...settings,
+      filterBookmarkCategories: { ...settings.filterBookmarkCategories, [a.key]: next },
     };
   }
   return {
