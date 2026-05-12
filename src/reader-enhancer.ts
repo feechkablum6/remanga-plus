@@ -162,10 +162,12 @@ const SECTION_COLLAPSE_INITIALIZED_ATTRIBUTE = "data-rre-collapse-initialized";
 const SECTION_COLLAPSE_TARGET_ATTRIBUTE = "data-rre-collapse-target-expanded";
 const PREMIUM_FREE_BANNER_ATTRIBUTE = "data-rre-premium-free-banner";
 const PREMIUM_FREE_STATE_ATTRIBUTE = "data-rre-premium-free-state";
+const PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE = "data-rre-premium-free-native-paid";
 
 const SLIDE_RIGHT_DURATION_MS = 220;
 const DISSOLVE_DURATION_MS = 260;
 const COLLAPSE_DURATION_MS = 240;
+const PREMIUM_FREE_RESOLVE_TIMEOUT_MS = 25_000;
 
 const TOOLBAR_ICON_NAMES: Record<ToolbarButtonKey, string> = {
   list: "List",
@@ -291,6 +293,7 @@ let premiumFreeActiveRequest:
   | {
       key: string;
       controller: AbortController;
+      timeoutId: number;
     }
   | null = null;
 let premiumFreeReaderStateSnapshot: PremiumFreeReaderState | null = null;
@@ -651,15 +654,10 @@ const ensureStyles = (): void => {
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 24px;
-      border-radius: 28px;
-      background:
-        linear-gradient(160deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.74)),
-        radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 52%);
-      box-shadow:
-        0 24px 48px rgba(15, 23, 42, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      backdrop-filter: blur(14px);
+      padding: 24px 16px;
+      background: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
     }
 
     [${CONTROL_ATTRIBUTE}="premium-free-title"] {
@@ -673,6 +671,22 @@ const ensureStyles = (): void => {
       font-size: 14px;
       line-height: 1.55;
       color: rgba(226, 232, 240, 0.82);
+      white-space: pre-line;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-empty-art"] {
+      width: min(360px, 62vw);
+      aspect-ratio: 16 / 10;
+      margin-bottom: 2px;
+      color: rgba(147, 197, 253, 0.92);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-empty-art"] img,
+    [${CONTROL_ATTRIBUTE}="premium-free-empty-art"] svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
 
     [${CONTROL_ATTRIBUTE}="premium-free-link"] {
@@ -711,14 +725,22 @@ const ensureStyles = (): void => {
     [${CONTROL_ATTRIBUTE}="premium-free-skeleton-line"] {
       height: 84px;
       border-radius: 24px;
-      background:
-        linear-gradient(110deg, rgba(148, 163, 184, 0.12) 8%, rgba(226, 232, 240, 0.22) 18%, rgba(148, 163, 184, 0.12) 33%),
-        linear-gradient(160deg, rgba(15, 23, 42, 0.74), rgba(30, 41, 59, 0.62));
-      background-size: 220% 100%, 100% 100%;
-      animation: rre-premium-skeleton 1.3s linear infinite;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(160deg, rgba(15, 23, 42, 0.74), rgba(30, 41, 59, 0.62));
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.04),
         0 10px 24px rgba(15, 23, 42, 0.18);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-skeleton-line"]::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, transparent 0%, rgba(226, 232, 240, 0.18) 46%, transparent 92%);
+      transform: translate3d(-120%, 0, 0);
+      animation: rre-premium-skeleton 1.05s linear infinite;
+      will-change: transform;
     }
 
     [${CONTROL_ATTRIBUTE}="premium-free-feed-reader"] {
@@ -767,6 +789,12 @@ const ensureStyles = (): void => {
     [${CONTROL_ATTRIBUTE}="premium-free-branch-select"]:hover,
     [${CONTROL_ATTRIBUTE}="premium-free-branch-select"]:focus-visible {
       border-color: rgba(148, 163, 184, 0.7);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-unverified-banner"] {
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
 
     [${CONTROL_ATTRIBUTE}="premium-free-stream-loader"] {
@@ -865,11 +893,11 @@ const ensureStyles = (): void => {
 
     @keyframes rre-premium-skeleton {
       0% {
-        background-position: 200% 0, 0 0;
+        transform: translate3d(-120%, 0, 0);
       }
 
       100% {
-        background-position: -20% 0, 0 0;
+        transform: translate3d(120%, 0, 0);
       }
     }
 
@@ -1585,6 +1613,48 @@ const createPremiumFreeStreamLoader = (): HTMLElement => {
   return loader;
 };
 
+const createPremiumFreeUnverifiedBanner = (manualUrl: string): HTMLElement => {
+  const banner = document.createElement("div");
+  banner.setAttribute(CONTROL_ATTRIBUTE, "premium-free-unverified-banner");
+  banner.style.cssText = [
+    "display: flex",
+    "align-items: center",
+    "justify-content: space-between",
+    "gap: 12px",
+    "padding: 10px 16px",
+    "background: #fff3cd",
+    "border-bottom: 1px solid #ffc107",
+    "color: #664d03",
+    "font-size: 14px",
+    "line-height: 1.4",
+    "width: 100%",
+    "box-sizing: border-box",
+  ].join(";");
+
+  const text = document.createElement("span");
+  text.textContent = "Эта глава найдена на Teletype — может не совпадать с оригиналом";
+
+  const link = document.createElement("a");
+  link.href = manualUrl;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "Открыть на Teletype";
+  link.style.cssText = [
+    "color: #664d03",
+    "font-weight: 600",
+    "white-space: nowrap",
+    "text-decoration: underline",
+  ].join(";");
+
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: manualUrl });
+  });
+
+  banner.append(text, link);
+  return banner;
+};
+
 const createPremiumFreeStreamError = (
   failure: PremiumFreeFailureResult,
   titleName: string,
@@ -1697,6 +1767,9 @@ const renderPremiumFreeFeedStream = (
       firstEntry.reference.titleDir,
     );
     if (selector) streamReader.append(selector);
+    if (firstEntry.result.status === "success" && firstEntry.result.unverified) {
+      streamReader.prepend(createPremiumFreeUnverifiedBanner(firstEntry.result.manualUrl));
+    }
   }
 
   stream.entries.forEach((entry) => {
@@ -1849,6 +1922,7 @@ const syncPremiumFreeBanner = (
   if (!banner || !enabled) {
     abortPremiumFreeRequest();
     resetPremiumFreeChapterStream();
+    restoreNativePaidBlocks();
     if (existingKey) {
       premiumFreePageIndex.delete(existingKey);
     }
@@ -1861,6 +1935,7 @@ const syncPremiumFreeBanner = (
   if (!reference) {
     abortPremiumFreeRequest();
     resetPremiumFreeChapterStream();
+    restoreNativePaidBlocks();
     if (existingKey) {
       premiumFreePageIndex.delete(existingKey);
     }
@@ -1871,6 +1946,7 @@ const syncPremiumFreeBanner = (
 
   const key = createPremiumFreeKey(reference);
   const container = ensurePremiumFreeContainer(banner);
+  hideNativePaidBlocksAfterPremiumFree(banner);
   if (existingKey && existingKey !== key) {
     premiumFreePageIndex.delete(existingKey);
     resetPremiumFreeChapterStream();
@@ -1888,15 +1964,18 @@ const syncPremiumFreeBanner = (
       premiumFreeResultCache.delete(key);
     }
 
-    renderPremiumFreeState(container, "resolving", {
-      title: "Premium Free",
-      copy: "Запускаем parser-server, ищем подходящий источник и подготавливаем главу к чтению.",
-    });
-
     if (!premiumFreeActiveRequest || premiumFreeActiveRequest.key !== key) {
-      const controller = new AbortController();
-      premiumFreeActiveRequest = { key, controller };
+      renderPremiumFreeState(container, "resolving", {
+        title: "Premium Free",
+        copy: "Запускаем parser-server, ищем подходящий источник и подготавливаем главу к чтению.",
+      });
+      const controller = startPremiumFreeActiveRequest(reference, key);
       void requestPremiumFreeChapter(reference, key, controller);
+    } else if (container.getAttribute(PREMIUM_FREE_STATE_ATTRIBUTE) !== "resolving") {
+      renderPremiumFreeState(container, "resolving", {
+        title: "Premium Free",
+        copy: "Запускаем parser-server, ищем подходящий источник и подготавливаем главу к чтению.",
+      });
     }
 
     return;
@@ -1904,15 +1983,17 @@ const syncPremiumFreeBanner = (
 
   if (cachedResult.status === "failure") {
     renderPremiumFreeError(container, cachedResult, reference.titleName);
-    if (cachedResult.reason === "resolver_unavailable") {
+    if (
+      cachedResult.reason === "resolver_unavailable" ||
+      cachedResult.reason === "resolve_timeout"
+    ) {
       appendPremiumFreeRetryButton(container, () => {
         premiumFreeResultCache.delete(key);
         renderPremiumFreeState(container, "resolving", {
           title: "Premium Free",
           copy: "Перезапускаем parser-server...",
         });
-        const controller = new AbortController();
-        premiumFreeActiveRequest = { key, controller };
+        const controller = startPremiumFreeActiveRequest(reference, key);
         void requestPremiumFreeChapter(reference, key, controller);
       });
     }
@@ -3813,10 +3894,74 @@ const normalizeText = (value: string | null | undefined): string =>
   (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 
 const abortPremiumFreeRequest = (): void => {
+  if (premiumFreeActiveRequest) {
+    window.clearTimeout(premiumFreeActiveRequest.timeoutId);
+  }
   premiumFreeActiveRequest?.controller.abort();
   premiumFreeActiveRequest = null;
   premiumFreeNextRequest?.controller.abort();
   premiumFreeNextRequest = null;
+};
+
+const clearPremiumFreeActiveRequest = (key: string): void => {
+  if (premiumFreeActiveRequest?.key !== key) {
+    return;
+  }
+
+  window.clearTimeout(premiumFreeActiveRequest.timeoutId);
+  premiumFreeActiveRequest = null;
+};
+
+const createPremiumFreeResolveTimeoutFailure = (
+  reference: RemangaChapterReference,
+): PremiumFreeFailureResult => ({
+  status: "failure",
+  reason: "resolve_timeout",
+  provider: "unknown",
+  manualUrl: buildPremiumFreeSearchUrl(reference.titleName),
+});
+
+const handlePremiumFreeResolveTimeout = (
+  reference: RemangaChapterReference,
+  key: string,
+): void => {
+  if (premiumFreeActiveRequest?.key !== key) {
+    return;
+  }
+
+  premiumFreeActiveRequest.controller.abort();
+  premiumFreeActiveRequest = null;
+
+  const result = createPremiumFreeResolveTimeoutFailure(reference);
+  premiumFreeResultCache.set(key, createPremiumFreeCacheEntry(result));
+
+  const banner = findBuyChapterBanner();
+  if (!banner) {
+    return;
+  }
+
+  const currentReference = collectPremiumFreeTargetReference(banner);
+  const container = document.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="${PREMIUM_FREE_ROOT_KEY}"]`,
+  );
+  if (!container || !currentReference || createPremiumFreeKey(currentReference) !== key) {
+    return;
+  }
+
+  renderPremiumFreeError(container, result, reference.titleName);
+};
+
+const startPremiumFreeActiveRequest = (
+  reference: RemangaChapterReference,
+  key: string,
+): AbortController => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(
+    () => handlePremiumFreeResolveTimeout(reference, key),
+    PREMIUM_FREE_RESOLVE_TIMEOUT_MS,
+  );
+  premiumFreeActiveRequest = { key, controller, timeoutId };
+  return controller;
 };
 
 const createPremiumFreeKey = (reference: RemangaChapterReference): string =>
@@ -4082,6 +4227,62 @@ const restorePremiumFreeBanner = (banner: HTMLElement | null): void => {
   });
 };
 
+const isNativePaidChapterBlock = (node: HTMLElement): boolean => {
+  if (node.hasAttribute(CONTROL_ATTRIBUTE)) {
+    return false;
+  }
+
+  const text = normalizeText(node.textContent);
+  if (!text) {
+    return false;
+  }
+
+  return (
+    (text.includes("открыть за") && text.includes("монет")) ||
+    (text.includes("купить том") && text.includes("монет")) ||
+    /^том\s+\d+\s+глава\s+[0-9.]+/i.test(text)
+  );
+};
+
+const hideNativePaidBlocksAfterPremiumFree = (banner: HTMLElement): void => {
+  let node = banner.nextElementSibling;
+  while (node) {
+    const current = node;
+    node = node.nextElementSibling;
+
+    if (!(current instanceof HTMLElement)) {
+      continue;
+    }
+
+    if (current.hasAttribute(CONTROL_ATTRIBUTE)) {
+      continue;
+    }
+
+    if (isNativePaidChapterBlock(current)) {
+      current.setAttribute(PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE, "true");
+      markHidden(current, true);
+      continue;
+    }
+
+    const nestedPaidBlocks = Array.from(
+      current.querySelectorAll<HTMLElement>("section, article, div"),
+    ).filter(isNativePaidChapterBlock);
+    nestedPaidBlocks.forEach((block) => {
+      block.setAttribute(PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE, "true");
+      markHidden(block, true);
+    });
+  }
+};
+
+const restoreNativePaidBlocks = (): void => {
+  document
+    .querySelectorAll<HTMLElement>(`[${PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE}="true"]`)
+    .forEach((node) => {
+      node.removeAttribute(PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE);
+      markHidden(node, false);
+    });
+};
+
 const ensurePremiumFreeContainer = (banner: HTMLElement): HTMLElement => {
   banner.setAttribute(PREMIUM_FREE_BANNER_ATTRIBUTE, "true");
   banner.style.height = "auto";
@@ -4116,6 +4317,53 @@ const createPremiumFreeStatusCard = (
 ): HTMLElement => {
   const card = document.createElement("div");
   card.setAttribute(CONTROL_ATTRIBUTE, "premium-free-status");
+
+  if (
+    copy.includes("Тайтл найден, но нужная глава не обнаружена") ||
+    copy.includes("Поиск главы занял слишком много времени") ||
+    copy.includes("Не удалось надёжно сопоставить главу")
+  ) {
+    const art = document.createElement("div");
+    art.setAttribute(CONTROL_ATTRIBUTE, "premium-free-empty-art");
+    const renderFallbackArt = (): void => {
+      art.innerHTML = `
+        <svg viewBox="0 0 320 200" role="img" aria-label="Глава не найдена" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="rre-empty-page" x1="88" x2="232" y1="35" y2="165" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#334155"/>
+              <stop offset="1" stop-color="#111827"/>
+            </linearGradient>
+            <linearGradient id="rre-empty-accent" x1="110" x2="210" y1="72" y2="142" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#93c5fd"/>
+              <stop offset="1" stop-color="#38bdf8"/>
+            </linearGradient>
+          </defs>
+          <path d="M85 36h110l40 40v88H85z" fill="url(#rre-empty-page)" stroke="rgba(148, 163, 184, .44)" stroke-width="3"/>
+          <path d="M195 36v42h40" fill="none" stroke="rgba(226, 232, 240, .28)" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M117 93h76M117 116h58M117 139h92" stroke="rgba(226, 232, 240, .22)" stroke-width="8" stroke-linecap="round"/>
+          <circle cx="209" cy="124" r="24" fill="#0f172a" stroke="url(#rre-empty-accent)" stroke-width="7"/>
+          <path d="m225 140 21 21" stroke="url(#rre-empty-accent)" stroke-width="9" stroke-linecap="round"/>
+          <path d="m197 113 24 24M221 113l-24 24" stroke="#bfdbfe" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+      `;
+    };
+
+    const image = document.createElement("img");
+    image.alt = "";
+    image.decoding = "async";
+    image.addEventListener("error", renderFallbackArt, { once: true });
+    const src =
+      typeof chrome !== "undefined" && chrome.runtime?.getURL
+        ? chrome.runtime.getURL("assets/premium-free-not-found.png")
+        : null;
+    if (src) {
+      image.src = src;
+      art.append(image);
+    } else {
+      renderFallbackArt();
+    }
+    card.append(art);
+  }
 
   const titleNode = document.createElement("div");
   titleNode.setAttribute(CONTROL_ATTRIBUTE, "premium-free-title");
@@ -4408,24 +4656,35 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
     key: nextKey,
     controller,
   };
+  let nextTimedOut = false;
+  const nextTimeoutId = window.setTimeout(() => {
+    nextTimedOut = true;
+    controller.abort();
+  }, PREMIUM_FREE_RESOLVE_TIMEOUT_MS);
 
-  let result: PremiumFreeClientResolveResult;
+  let result: PremiumFreeClientResolveResult = createPremiumFreeResolveTimeoutFailure(nextReference);
   try {
     result = await resolvePremiumFreeChapterResult(nextReference, controller);
   } catch {
-    if (controller.signal.aborted) {
+    if (nextTimedOut) {
+      result = createPremiumFreeResolveTimeoutFailure(nextReference);
+    } else if (controller.signal.aborted) {
       return;
+    } else {
+      throw new Error("Unexpected premium-free next-chapter abort state");
     }
-
-    throw new Error("Unexpected premium-free next-chapter abort state");
   } finally {
+    window.clearTimeout(nextTimeoutId);
+    if (nextTimedOut) {
+      premiumFreeResultCache.set(nextKey, createPremiumFreeCacheEntry(result));
+    }
     if (premiumFreeNextRequest?.key === nextKey) {
       premiumFreeNextRequest = null;
     }
   }
 
   if (
-    controller.signal.aborted ||
+    (controller.signal.aborted && !nextTimedOut) ||
     !premiumFreeChapterStream ||
     premiumFreeChapterStream.rootKey !== stream.rootKey ||
     !stream.container.isConnected
@@ -4472,9 +4731,7 @@ const requestPremiumFreeChapter = async (
     return;
   }
 
-  if (premiumFreeActiveRequest?.key === key) {
-    premiumFreeActiveRequest = null;
-  }
+  clearPremiumFreeActiveRequest(key);
 
   const banner = findBuyChapterBanner();
   if (!banner) {

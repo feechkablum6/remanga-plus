@@ -9,6 +9,7 @@ import { HttpClient } from "./http/client.js";
 import { InkstoryProvider } from "./providers/inkstory.js";
 import { MangabuffProvider } from "./providers/mangabuff.js";
 import { SenkuroProvider } from "./providers/senkuro.js";
+import { TeletypeProvider } from "./providers/teletype.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { registerChapterResolveRoute } from "./routes/chapters.js";
 import { registerImagesRoute } from "./routes/images.js";
@@ -53,6 +54,7 @@ export function buildApp(config: AppConfig) {
   registry.register(new MangabuffProvider(httpClient));
   registry.register(new SenkuroProvider(httpClient));
   registry.register(new InkstoryProvider(httpClient));
+  registry.register(new TeletypeProvider(httpClient));
 
   // Setup cache
   const cache = new FileCache(config.cacheDir);

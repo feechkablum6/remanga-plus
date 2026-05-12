@@ -108,6 +108,7 @@ export interface ExternalResolveSuccess {
   pages: ExternalChapterPage[];
   branches?: SourceTitleBranch[];
   selectedBranchId?: string;
+  unverified?: boolean;
 }
 
 export interface ExternalResolveFailure {
@@ -127,6 +128,7 @@ export interface SourceProvider {
   manualSearchUrl?(query: string): string;
   parseChapter(chapterRef: string): Promise<Chapter | ExternalChapterParseResult>;
   fetchImage(imageRef: string): Promise<Buffer>;
+  resolveChapterDirectly?(remanga: RemangaChapterReference): Promise<ExternalResolveResult>;
 }
 
 export interface ExternalSourceProvider extends SourceProvider {

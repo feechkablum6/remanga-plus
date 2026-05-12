@@ -171,7 +171,26 @@ export async function resolveExternalChapter(
 
   for (const providerName of providerPriority) {
     const provider = providers.find((candidate) => candidate.name === providerName);
-    if (!provider || !isExternalSourceProvider(provider)) {
+    if (!provider) {
+      continue;
+    }
+
+    if (typeof provider.resolveChapterDirectly === "function") {
+      try {
+        const directResult = await provider.resolveChapterDirectly(remanga);
+        if (directResult.status === "success") {
+          return directResult;
+        }
+        if (directResult.status === "failure") {
+          recordFailure(directResult);
+        }
+      } catch {
+        recordFailure(createFailureResult("provider_error", provider.name, resolveManualSearchUrl(provider, remanga.titleName)));
+      }
+      continue;
+    }
+
+    if (!isExternalSourceProvider(provider)) {
       continue;
     }
 

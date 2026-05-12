@@ -49,6 +49,7 @@ export type PremiumFreeResolveSuccess = {
   }>;
   branches?: PremiumFreeBranch[];
   selectedBranchId?: string;
+  unverified?: boolean;
 };
 
 export type PremiumFreeResolveFailure = {
@@ -65,7 +66,8 @@ export type PremiumFreeResolveResult =
 export type PremiumFreeClientFailureReason =
   | PremiumFreeResolveFailure["reason"]
   | "resolver_unavailable"
-  | "install_required";
+  | "install_required"
+  | "resolve_timeout";
 
 export type PremiumFreeClientFailure = {
   status: "failure";
@@ -211,6 +213,7 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   mangabuff: "Mangabuff",
   senkuro: "Senkuro",
   inkstory: "InkStory",
+  teletype: "Teletype",
 };
 
 const displayProviderName = (provider: string): string =>
@@ -310,6 +313,15 @@ export const describePremiumFreeFailure = (
     return {
       title: "Premium Free",
       copy: `Parser-server не запустился.${detail}`,
+    };
+  }
+
+  if (failure.reason === "resolve_timeout") {
+    return {
+      title: "Premium Free",
+      copy: "Поиск главы занял слишком много времени. Можно попробовать снова или открыть источник вручную.",
+      linkHref: fallbackUrl,
+      linkLabel: buildOpenLabel(failure.provider, { manual: true }),
     };
   }
 
