@@ -1,4 +1,8 @@
-import type { HeaderButtonKey, ReaderEnhancerSettings } from "./settings.js";
+import type {
+  BookmarkFilterCategoryKey,
+  HeaderButtonKey,
+  ReaderEnhancerSettings,
+} from "./settings.js";
 
 export const HEADER_BUTTON_KEYS: readonly HeaderButtonKey[] = [
   "logo",
@@ -38,9 +42,24 @@ const HEADER_LOCATORS: Record<HeaderButtonKey, Locator> = {
 
 const GAME_BANNER_SELECTOR = "div.fixed.bottom-8.right-8.z-100";
 
+const VISIBLE_BOOKMARK_BADGES: ReadonlyArray<{
+  label: string;
+  key: BookmarkFilterCategoryKey;
+}> = [
+  { label: "Читаю", key: "reading" },
+  { label: "Буду читать", key: "planned" },
+  { label: "Прочитано", key: "completed" },
+  { label: "Брошено", key: "dropped" },
+  { label: "Не интересно", key: "notInterest" },
+  { label: "Любимое", key: "favorite" },
+];
+
+export type HomeBookmarkDirs = Record<string, BookmarkFilterCategoryKey[]>;
+
 export function applyHomeEnhancements(
   root: ParentNode,
   settings: ReaderEnhancerSettings,
+  bookmarkDirs: Set<string> | null = null,
 ): void {
   const header =
     (root as Element).querySelector?.(
@@ -49,6 +68,7 @@ export function applyHomeEnhancements(
   applyHeaderButtons(header as ParentNode, settings);
   applyGameBanner(root, settings);
   applyPromoBanner(root, settings);
+  applyBookmarkFilter(root, settings, bookmarkDirs);
 }
 
 function applyHeaderButtons(
@@ -112,6 +132,111 @@ function applyPromoBanner(
   candidates.forEach((el) => {
     setHidden(el, "promo-banner", settings.hideHomePromoBanner);
   });
+}
+
+export function getEnabledBookmarkDirs(
+  dirs: HomeBookmarkDirs,
+  categories: Record<BookmarkFilterCategoryKey, boolean>,
+): Set<string> {
+  const enabled = new Set<BookmarkFilterCategoryKey>(
+    Object.entries(categories)
+      .filter((entry): entry is [BookmarkFilterCategoryKey, boolean] => entry[1])
+      .map(([key]) => key as BookmarkFilterCategoryKey),
+  );
+  const out = new Set<string>();
+  for (const [dir, dirCategories] of Object.entries(dirs)) {
+    if (dirCategories.some((category) => enabled.has(category))) {
+      out.add(dir);
+    }
+  }
+  return out;
+}
+
+function applyBookmarkFilter(
+  root: ParentNode,
+  settings: ReaderEnhancerSettings,
+  bookmarkDirs: Set<string> | null,
+): void {
+  if (!isHomeRoot() || !settings.filterHomeBookmarks) {
+    clearBookmarkFilter(root);
+    return;
+  }
+
+  const scope = (root as Element).querySelector?.("main") ?? root;
+  const links = (scope as Element).querySelectorAll?.(
+    'a[href*="/content/"], a[href*="/manga/"]',
+  ) ?? [];
+  const targets = new Map<HTMLElement, boolean>();
+  links.forEach((link) => {
+    if (!(link instanceof HTMLAnchorElement)) return;
+    const dir = extractMangaDir(link.href);
+    if (!dir) return;
+    const target = getTitleCardElement(link, scope);
+    const shouldHide =
+      (bookmarkDirs?.has(dir) ?? false) || hasVisibleFilteredBookmarkBadge(link, settings);
+    targets.set(target, (targets.get(target) ?? false) || shouldHide);
+  });
+  targets.forEach((hidden, element) => setHidden(element, "bookmark-filter", hidden));
+}
+
+function hasVisibleFilteredBookmarkBadge(
+  link: HTMLAnchorElement,
+  settings: ReaderEnhancerSettings,
+): boolean {
+  const text = link.textContent ?? "";
+  for (const badge of VISIBLE_BOOKMARK_BADGES) {
+    if (settings.filterBookmarkCategories[badge.key] && text.includes(badge.label)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function clearBookmarkFilter(root: ParentNode): void {
+  const hidden = (root as Element).querySelectorAll?.(
+    '[data-rre-home-hidden="bookmark-filter"]',
+  ) ?? [];
+  hidden.forEach((element) => {
+    if (element instanceof HTMLElement) {
+      setHidden(element, "bookmark-filter", false);
+    }
+  });
+}
+
+function isHomeRoot(): boolean {
+  return (
+    window.location.hostname === "remanga.org" &&
+    (window.location.pathname === "/" || window.location.pathname === "")
+  );
+}
+
+function extractMangaDir(href: string): string | null {
+  try {
+    const url = new URL(href, window.location.origin);
+    const match = url.pathname.match(/^\/(?:content|manga)\/([^/?#]+)/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getTitleCardElement(
+  link: HTMLAnchorElement,
+  scope: ParentNode,
+): HTMLElement {
+  let candidate: HTMLElement = link;
+  let current: HTMLElement | null = link;
+
+  while (current?.parentElement && current.parentElement !== scope) {
+    const parent: HTMLElement = current.parentElement;
+    if (parent.matches("main, section, article, body, html")) break;
+    const titleLinks = parent.querySelectorAll('a[href*="/content/"], a[href*="/manga/"]');
+    if (titleLinks.length !== 1) break;
+    candidate = parent;
+    current = parent;
+  }
+
+  return candidate;
 }
 
 function setHidden(

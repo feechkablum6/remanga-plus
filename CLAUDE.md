@@ -10,6 +10,7 @@ Chrome-расширение (Manifest V3) для remanga.org — убирает 
 
 ```bash
 # Сборка расширения (content.js + background.js → dist/)
+# Обязательно после правок extension-кода: браузер загружает dist/, без build изменения не попадут в расширение.
 npm run build
 
 # Проверка типов (extension + tests)
@@ -139,6 +140,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT слать URL в `parseChapter` у Senkuro/InkStory напрямую — провайдер ждёт slug/UUID, URL парсится через `extractChapterSlug`/`extractChapterUuid`.
 - DO NOT `first: 10000` у Senkuro `mangaChapters` — сервер 400. Пагинация `first: 100` + `after: endCursor`.
 - DO NOT использовать `/v2/branches?book=X` у InkStory как authoritative список — там top-20 с editorsChoice. Группировать chapters по `branchId` из `/v2/chapters?bookId=`.
+- DO NOT отдавать InkStory `pages[].image` как готовую картинку без проверки protected filename-маркера и расшифровки.
 - DO NOT запускать `node dist/index.js` parser-server руками параллельно с включённым Premium Free — native host сам поднимет, будет EADDRINUSE. `lsof -ti :3000 | xargs kill -9` перед ручным запуском.
 - DO NOT забывать `manga { slug }` в `CHAPTER_QUERY` — иначе `chapterUrl` в response без slug манги.
 - DO NOT использовать non-ASCII символы в `installer.nsi`.
@@ -158,7 +160,12 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT забывать обновлять подзаголовок-счётчик карточки в `formatCount`-функции `popup.ts` если меняется число тогглов в категории. Сам счётчик пересчитывается из `countCategoryToggles`, но русский plural нужно проверить (1 «настройка», 2-4 «настройки», 5+ «настроек», 11-14 «настроек»).
 - DO NOT ставить `display: flex/grid/block` на элемент с HTML-атрибутом `hidden` без сопутствующего `[hidden] { display: none }` — class-селектор перебивает UA-таблицу, `el.hidden = true` визуально ничего не сделает.
 - DO NOT использовать синхронный POST /api/chapters/resolve — только асинхронная модель (202 → polling → result).
+- DO NOT делать fetch к localhost из content script — CORS блокирует. Healthcheck/parser-server запросы только через background service worker (у него есть host_permissions, нет CORS).
+- DO NOT игнорировать порт native host ready-ответа — если `{status:"ready", port:3001}`, используем порт 3001 без повторного healthcheck polling.
+- DO NOT обрабатывать «Extension context invalidated» как обычную ошибку parser-server — это не сетевая проблема, это смерть content script. Показывать кнопку «Перезагрузить страницу» вместо «Повторить».
 - DO NOT добавлять ретраи в HttpClient — ошибка = мгновенный failed провайдера.
+- DO NOT заменять весь `premium-free-feed-reader` при подгрузке следующей Premium Free главы — добавлять недостающие главы вниз.
+- DO NOT переключать Premium Free sync на новый нижний `BuyChapterActions`, если на странице уже есть `premium-free-root`.
 
 ## Visuals (gpt-image-prompt + frontend-design)
 

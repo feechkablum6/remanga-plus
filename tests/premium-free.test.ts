@@ -336,6 +336,22 @@ test("install_required failure keeps provider-specific label with 'вручну�
   assert.equal(senkuroInstall.linkLabel, "Открыть Senkuro вручную");
 });
 
+test("resolve timeout failure offers a manual source fallback", () => {
+  const timeoutFailure = describePremiumFreeFailure(
+    {
+      status: "failure",
+      reason: "resolve_timeout",
+      provider: "unknown",
+      manualUrl: "",
+    },
+    "Башня Бога",
+  );
+
+  assert.match(timeoutFailure.copy, /слишком много времени/);
+  assert.equal(timeoutFailure.linkLabel, "Открыть источник вручную");
+  assert.match(timeoutFailure.linkHref ?? "", /mangabuff\.ru\/search/);
+});
+
 test("readPremiumFreeBranchPreference returns null when no matching entry", () => {
   assert.equal(readPremiumFreeBranchPreference(null, "solo-leveling"), null);
   assert.equal(readPremiumFreeBranchPreference({}, "solo-leveling"), null);

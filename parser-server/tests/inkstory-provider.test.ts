@@ -21,7 +21,7 @@ const loadModule = async () => {
       name: string;
       manualSearchUrl: (q: string) => string;
       searchTitles: (q: string) => Promise<unknown[]>;
-      getTitleDetails: (ref: string) => Promise<unknown>;
+      getTitleDetails: (ref: string, options?: { forcedBranchId?: string }) => Promise<unknown>;
       parseChapter: (ref: string) => Promise<unknown>;
       fetchImage: (url: string) => Promise<Buffer>;
     };
@@ -394,5 +394,26 @@ describe("InkstoryProvider", () => {
     );
     assert.equal(buf.length, 2);
     assert.equal(observed?.get("referer"), null);
+  });
+
+  it("fetchImage decrypts protected XOR chapter images", async () => {
+    const { InkstoryProvider } = await loadModule();
+    const plain = Buffer.from([0xff, 0xd8, 0xff, 0xdb]);
+    const key = Buffer.from("UySkp0BzPhwlvP2V");
+    const encrypted = Buffer.from(plain.map((byte, index) => byte ^ key[index % key.length]));
+    let requestedUrl = "";
+    const fakeHttp = {
+      async request(url: string) {
+        requestedUrl = url;
+        return new Response(encrypted, { status: 200 });
+      },
+    };
+
+    const buf = await new InkstoryProvider(fakeHttp).fetchImage(
+      "https://static.inuko.me/chapters/x/0f8ba8a7-aa26-sa38-8c9a-8cace6221978.jpeg",
+    );
+
+    assert.equal(requestedUrl, "https://static.inuko.me/chapters/x/0f8ba8a7-aa26-xa38-8c9a-8cace6221978.jpeg");
+    assert.deepEqual(buf, plain);
   });
 });

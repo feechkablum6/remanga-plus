@@ -6,8 +6,7 @@ import type {
   SourceTitleSearchResult,
 } from "./provider.interface.js";
 
-const USAGI_BASE_URL = "https://a.zazaza.me";
-const USAGI_REFERER = "https://a.zazaza.me/";
+const USAGI_BASE_URLS = ["https://web.usagi.one", "https://a.zazaza.me"] as const;
 
 const isHttpClient = (value: unknown): value is HttpClient =>
   value instanceof HttpClient;
@@ -32,10 +31,10 @@ const stripTags = (value: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-const getAbsoluteUrl = (href: string): string =>
-  new URL(href, USAGI_BASE_URL).toString();
+const getAbsoluteUrl = (href: string, baseUrl: string): string =>
+  new URL(href, baseUrl).toString();
 
-export function extractUsagiSearchResults(html: string): SourceTitleSearchResult[] {
+export function extractUsagiSearchResults(html: string, baseUrl: string): SourceTitleSearchResult[] {
   const results: SourceTitleSearchResult[] = [];
   const seen = new Set<string>();
 
@@ -58,7 +57,7 @@ export function extractUsagiSearchResults(html: string): SourceTitleSearchResult
       titleId: slug,
       slug,
       titleName: decodeHtmlEntities(titleName),
-      titleUrl: getAbsoluteUrl(href),
+      titleUrl: getAbsoluteUrl(href, baseUrl),
     });
   }
 
@@ -68,6 +67,7 @@ export function extractUsagiSearchResults(html: string): SourceTitleSearchResult
 export function extractUsagiTitleDetails(
   html: string,
   titleUrl: string,
+  baseUrl: string,
 ): SourceTitleDetails {
   const slug = new URL(titleUrl).pathname.split("/").filter(Boolean).at(-1) ?? "";
   const titleName =
@@ -103,7 +103,7 @@ export function extractUsagiTitleDetails(
       titleId: slug,
       chapter,
       volume,
-      chapterUrl: getAbsoluteUrl(href),
+      chapterUrl: getAbsoluteUrl(href, baseUrl),
     });
   }
 
@@ -129,8 +129,13 @@ export function extractUsagiChapterPages(
   }
 
   const id = chapterInfoMatch[1];
-  const volume = Number(chapterInfoMatch[3]);
-  const num = String(chapterInfoMatch[4]);
+
+  const urlPathMatch = chapterUrl.match(/\/vol(\d+)\/(\d+)/);
+  if (!urlPathMatch) {
+    throw new Error(`Cannot extract chapter volume/number from URL: ${chapterUrl}`);
+  }
+  const volume = Number(urlPathMatch[1]);
+  const chapter = urlPathMatch[2];
 
   const pages: ExternalChapterParseResult["pages"] = [];
   const pageRegex = /\['(https?:\/\/[^']*)'\s*,\s*''\s*,\s*"([^"]+)"\s*,\s*\d+\s*,\s*\d+\]/g;
@@ -149,12 +154,10 @@ export function extractUsagiChapterPages(
     index++;
   }
 
-  const titleId = String(volume);
-
   return {
     chapterId: id,
-    titleId,
-    chapter: num,
+    titleId: String(volume),
+    chapter,
     volume,
     chapterUrl,
     pages,
@@ -164,44 +167,47 @@ export function extractUsagiChapterPages(
 export class UsagiProvider implements ExternalSourceProvider {
   name = "usagi";
   private readonly http: HttpClient;
-  private readonly baseUrl: string;
+  private readonly baseUrls: readonly string[];
+  private activeBaseUrl: string;
 
   constructor(
     httpOrFetch: typeof fetch | HttpClient = fetch,
-    baseUrl: string = USAGI_BASE_URL,
+    baseUrls: readonly string[] = [...USAGI_BASE_URLS],
   ) {
     this.http = coerceHttpClient(httpOrFetch);
-    this.baseUrl = baseUrl;
+    this.baseUrls = baseUrls;
+    this.activeBaseUrl = baseUrls[0];
   }
 
   manualSearchUrl(query: string): string {
-    return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
+    return `${this.activeBaseUrl}/search?q=${encodeURIComponent(query)}`;
   }
 
   async searchTitles(query: string): Promise<SourceTitleSearchResult[]> {
-    const response = await this.fetchHtml(this.manualSearchUrl(query));
-    return extractUsagiSearchResults(response);
+    const { html, baseUrl } = await this.fetchHtmlWithFallback(this.manualSearchUrl(query));
+    return extractUsagiSearchResults(html, baseUrl);
   }
 
   async getTitleDetails(titleRef: string): Promise<SourceTitleDetails> {
     const titleUrl = titleRef.startsWith("http")
       ? titleRef
-      : `${this.baseUrl}/${titleRef}`;
-    const response = await this.fetchHtml(titleUrl);
-    return extractUsagiTitleDetails(response, titleUrl);
+      : `${this.activeBaseUrl}/${titleRef}`;
+    const { html, baseUrl } = await this.fetchHtmlWithFallback(titleUrl);
+    return extractUsagiTitleDetails(html, titleUrl, baseUrl);
   }
 
   async parseChapter(chapterRef: string): Promise<ExternalChapterParseResult> {
     const chapterUrl = chapterRef.startsWith("http")
       ? chapterRef
-      : `${this.baseUrl}${chapterRef.startsWith("/") ? "" : "/"}${chapterRef}`;
-    const response = await this.fetchHtml(chapterUrl);
-    return extractUsagiChapterPages(response, chapterUrl);
+      : `${this.activeBaseUrl}${chapterRef.startsWith("/") ? "" : "/"}${chapterRef}`;
+    const response = await this.fetchHtmlWithFallback(chapterUrl);
+    return extractUsagiChapterPages(response.html, chapterUrl);
   }
 
   async fetchImage(imageRef: string): Promise<Buffer> {
+    const referer = `${this.activeBaseUrl}/`;
     const response = await this.http.request(imageRef, {
-      headers: { Referer: USAGI_REFERER },
+      headers: { Referer: referer },
     });
     if (!response.ok) {
       throw new Error(`Usagi image fetch failed: ${response.status}`);
@@ -209,13 +215,24 @@ export class UsagiProvider implements ExternalSourceProvider {
     return Buffer.from(await response.arrayBuffer());
   }
 
-  private async fetchHtml(url: string): Promise<string> {
-    const response = await this.http.request(url, {
-      headers: { Referer: USAGI_REFERER },
-    });
-    if (!response.ok) {
-      throw new Error(`Usagi request failed: ${response.status} for ${url}`);
+  private async fetchHtmlWithFallback(url: string): Promise<{ html: string; baseUrl: string }> {
+    const triedBaseUrls: string[] = [];
+    for (const baseUrl of this.baseUrls) {
+      const resolvedUrl = url.startsWith(baseUrl) ? url : url.replace(/^https?:\/\/[^/]+/, baseUrl);
+      const referer = `${baseUrl}/`;
+      try {
+        const response = await this.http.request(resolvedUrl, {
+          headers: { Referer: referer },
+        });
+        if (response.ok) {
+          this.activeBaseUrl = baseUrl;
+          return { html: await response.text(), baseUrl };
+        }
+        triedBaseUrls.push(`${baseUrl} (${response.status})`);
+      } catch {
+        triedBaseUrls.push(`${baseUrl} (network error)`);
+      }
     }
-    return response.text();
+    throw new Error(`Usagi request failed for all domains: ${triedBaseUrls.join(", ")}`);
   }
 }

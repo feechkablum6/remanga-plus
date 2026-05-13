@@ -28,3 +28,13 @@ test("background worker owns parser startup coordination", () => {
   assert.match(backgroundSource, /connectNative|sendNativeMessage/);
   assert.match(backgroundSource, /buildParserServerHealthcheckUrl|PARSER_SERVER_HEALTHCHECK_URL/);
 });
+
+test("home bookmark pagination follows Remanga next URLs", () => {
+  const backgroundSource = readFileSync(
+    path.resolve(process.cwd(), "src/background.ts"),
+    "utf8",
+  );
+
+  assert.match(backgroundSource, /extractHomeBookmarkNextPage/);
+  assert.match(backgroundSource, /new URL\(next, "https:\/\/api\.remanga\.org"\)/);
+});

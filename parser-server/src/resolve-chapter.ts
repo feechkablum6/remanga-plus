@@ -58,7 +58,8 @@ const resolveChapterMatch = (
   const byChapter = details.chapters.filter((chapter) => chapter.chapter === remanga.chapter);
 
   if (typeof remanga.tome === "number") {
-    return byChapter.find((chapter) => chapter.volume === remanga.tome) ?? null;
+    const byTome = byChapter.find((chapter) => chapter.volume === remanga.tome);
+    if (byTome) return byTome;
   }
 
   return byChapter[0] ?? null;
@@ -113,9 +114,9 @@ const createSuccessResult = (
     },
     matchedChapter: {
       chapterId: matchedChapter?.chapterId ?? `${parsedChapter.volume}-${parsedChapter.chapter}`,
-      chapter: parsedChapter.chapter,
-      volume: parsedChapter.volume,
-      chapterUrl: parsedChapter.chapterUrl,
+      chapter: matchedChapter?.chapter ?? parsedChapter.chapter,
+      volume: matchedChapter?.volume ?? parsedChapter.volume,
+      chapterUrl: matchedChapter?.chapterUrl ?? parsedChapter.chapterUrl,
     },
     manualUrl: parsedChapter.chapterUrl,
     nextChapter: matchedChapter

@@ -124,6 +124,26 @@ describe('resolveExternalChapter parallel', () => {
     }
   });
 
+  it('matches chapter by number when source volume differs from Remanga volume', async () => {
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (module as Record<string, unknown>).resolveExternalChapter as
+      | ((args: unknown) => Promise<unknown>)
+      | undefined;
+
+    const result = (await resolveExternalChapter?.({
+      remanga: { ...remanga, tome: 2, chapter: '148' },
+      providers: [makeSuccessProvider('senkuro')],
+      providerPriority: ['senkuro'],
+      titleOverrides: {},
+    })) as ExternalResolveResult;
+
+    assert.equal(result.status, 'success');
+    if (result.status === 'success') {
+      assert.equal(result.matchedChapter.chapter, '148');
+      assert.equal(result.matchedChapter.volume, 3);
+    }
+  });
+
   it('returns best failure when all providers fail', async () => {
     const module = await import('../src/resolve-chapter.js');
     const resolveExternalChapter = (module as Record<string, unknown>).resolveExternalChapter as

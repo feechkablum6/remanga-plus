@@ -37,6 +37,23 @@ test("content_scripts has remanga-bridge for category lookup", () => {
   );
 });
 
+test("content_scripts has fullscreen bridge in the page main world", () => {
+  const cs = manifest.content_scripts as Array<{
+    matches: string[];
+    js: string[];
+    world?: string;
+  }>;
+
+  assert.ok(
+    cs.some(
+      (s) =>
+        s.matches.some((m) => m.includes("remanga.org")) &&
+        s.js.includes("fullscreen-bridge.js") &&
+        s.world === "MAIN",
+    ),
+  );
+});
+
 test("manifest preserves existing key field", () => {
   assert.ok(typeof manifest.key === "string" && manifest.key.length > 0);
 });

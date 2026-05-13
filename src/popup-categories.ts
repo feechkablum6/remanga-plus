@@ -1,6 +1,7 @@
 import type {
   ReaderEnhancerSettings,
   HeaderButtonKey,
+  BookmarkFilterCategoryKey,
   PopupSettingKey,
 } from "./settings.js";
 
@@ -28,9 +29,11 @@ export type ToggleAccessor =
         | "prefetchNextChapter"
       | "showPremiumFreeProgress"
       | "personalRecommendations"
+      | "filterHomeBookmarks"
     >;
     }
   | { kind: "header-button"; key: HeaderButtonKey }
+  | { kind: "bookmark-category"; key: BookmarkFilterCategoryKey }
   | { kind: "popup"; key: PopupSettingKey };
 
 export type ToggleDescriptor = {
@@ -59,6 +62,15 @@ const HEADER_BUTTONS: ReadonlyArray<[HeaderButtonKey, string]> = [
   ["avatar", "Профиль"],
 ];
 
+const BOOKMARK_FILTER_CATEGORIES: ReadonlyArray<[BookmarkFilterCategoryKey, string]> = [
+  ["reading", "Читаю"],
+  ["planned", "Буду читать"],
+  ["completed", "Прочитано"],
+  ["dropped", "Брошено"],
+  ["notInterest", "Не интересно"],
+  ["favorite", "Любимое"],
+];
+
 const siteToggles: ReadonlyArray<ToggleDescriptor> = [
   ...HEADER_BUTTONS.map(
     ([key, label]): ToggleDescriptor => ({
@@ -83,6 +95,18 @@ const siteToggles: ReadonlyArray<ToggleDescriptor> = [
     accessor: { kind: "scalar", key: "personalRecommendations" },
     subsection: "ГЛАВНАЯ СТРАНИЦА",
   },
+  {
+    label: "Фильтровать закладки",
+    accessor: { kind: "scalar", key: "filterHomeBookmarks" },
+    subsection: "ГЛАВНАЯ СТРАНИЦА",
+  },
+  ...BOOKMARK_FILTER_CATEGORIES.map(
+    ([key, label]): ToggleDescriptor => ({
+      label,
+      accessor: { kind: "bookmark-category", key },
+      subsection: "ГЛАВНАЯ СТРАНИЦА",
+    }),
+  ),
 ];
 
 const readerToggles: ReadonlyArray<ToggleDescriptor> = [
@@ -147,6 +171,7 @@ export const readToggleValue = (
   const a = toggle.accessor;
   if (a.kind === "scalar") return settings[a.key];
   if (a.kind === "header-button") return settings.hideHeaderButtons[a.key];
+  if (a.kind === "bookmark-category") return settings.filterBookmarkCategories[a.key];
   return settings.hidePopups[a.key];
 };
 
@@ -163,6 +188,12 @@ export const applyToggleChange = (
     return {
       ...settings,
       hideHeaderButtons: { ...settings.hideHeaderButtons, [a.key]: next },
+    };
+  }
+  if (a.kind === "bookmark-category") {
+    return {
+      ...settings,
+      filterBookmarkCategories: { ...settings.filterBookmarkCategories, [a.key]: next },
     };
   }
   return {

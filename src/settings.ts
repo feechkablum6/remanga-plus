@@ -26,6 +26,14 @@ export type HeaderButtonKey =
   | "notifications"
   | "avatar";
 
+export type BookmarkFilterCategoryKey =
+  | "reading"
+  | "planned"
+  | "completed"
+  | "dropped"
+  | "notInterest"
+  | "favorite";
+
 export type ReaderEnhancerSettings = {
   hideHeader: boolean;
   hideRightRail: boolean;
@@ -45,12 +53,15 @@ export type ReaderEnhancerSettings = {
   hideHomeGameBanner: boolean;
   hideHomePromoBanner: boolean;
   personalRecommendations: boolean;
+  filterHomeBookmarks: boolean;
+  filterBookmarkCategories: Record<BookmarkFilterCategoryKey, boolean>;
 };
 
 type PartialSettings = Partial<
   Omit<
     ReaderEnhancerSettings,
     "hideToolbarButtons" | "hidePopups" | "hideSettingsMenuItems" | "hideHeaderButtons"
+    | "filterBookmarkCategories"
   >
 > & {
   hideBuyChapterBanner?: boolean;
@@ -58,6 +69,7 @@ type PartialSettings = Partial<
   hideSettingsMenuItems?: Partial<Record<SettingsMenuItemKey, boolean>>;
   hidePopups?: Partial<Record<PopupSettingKey, boolean>>;
   hideHeaderButtons?: Partial<Record<HeaderButtonKey, boolean>>;
+  filterBookmarkCategories?: Partial<Record<BookmarkFilterCategoryKey, boolean>>;
 };
 
 const createDefaultSettingsMenuItems = (): Record<SettingsMenuItemKey, boolean> =>
@@ -107,6 +119,15 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
   hideHomeGameBanner: false,
   hideHomePromoBanner: false,
   personalRecommendations: true,
+  filterHomeBookmarks: false,
+  filterBookmarkCategories: {
+    reading: true,
+    planned: true,
+    completed: true,
+    dropped: false,
+    notInterest: false,
+    favorite: true,
+  },
 };
 
 export const cloneSettings = (
@@ -130,6 +151,8 @@ export const cloneSettings = (
   hideHomeGameBanner: settings.hideHomeGameBanner,
   hideHomePromoBanner: settings.hideHomePromoBanner,
   personalRecommendations: settings.personalRecommendations,
+  filterHomeBookmarks: settings.filterHomeBookmarks,
+  filterBookmarkCategories: { ...settings.filterBookmarkCategories },
 });
 
 export const mergeSettings = (
@@ -181,6 +204,12 @@ export const mergeSettings = (
     partialSettings?.hideHomePromoBanner ?? DEFAULT_SETTINGS.hideHomePromoBanner,
   personalRecommendations:
     partialSettings?.personalRecommendations ?? DEFAULT_SETTINGS.personalRecommendations,
+  filterHomeBookmarks:
+    partialSettings?.filterHomeBookmarks ?? DEFAULT_SETTINGS.filterHomeBookmarks,
+  filterBookmarkCategories: {
+    ...DEFAULT_SETTINGS.filterBookmarkCategories,
+    ...partialSettings?.filterBookmarkCategories,
+  },
 });
 
 const getStorageArea = (): chrome.storage.SyncStorageArea | null =>

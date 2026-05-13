@@ -13,6 +13,7 @@ import {
   describePremiumFreeFailure,
   derivePremiumFreeTargetReference,
   ensureParserServerReady,
+  isExtensionContextInvalidatedDetail,
   extractRemangaChapterReference,
   mapParserServerFailure,
   markRemangaChapterAsViewed,
@@ -27,10 +28,14 @@ import {
   type PremiumFreeCacheEntry,
   type PremiumFreeClientResolveResult,
   type RemangaChapterReference,
+  mapServerProgressToChips,
+  type ProviderChipInfo,
+  PROVIDER_DISPLAY_NAMES,
 } from "./premium-free";
 import {
   PARSER_SERVER_DEFAULT_PORT,
   PROXY_IMAGE_MESSAGE_TYPE,
+  PROGRESS_PATH_PREFIX,
   buildParserServerBaseUrl,
 } from "./parser-server";
 import {
@@ -60,6 +65,13 @@ import {
   createProgressTracker,
   type ProgressTracker,
 } from "./premium-free-progress";
+import {
+  createStatusBlock,
+  updateStatusBlock,
+  createMiniStatusBlock,
+  updateMiniStatusBlock,
+  type StatusBlockUpdate,
+} from "./premium-free-status-ui.js";
 
 type CommitSettings = (
   updater: (current: ReaderEnhancerSettings) => ReaderEnhancerSettings,
@@ -163,6 +175,7 @@ const SECTION_COLLAPSE_TARGET_ATTRIBUTE = "data-rre-collapse-target-expanded";
 const PREMIUM_FREE_BANNER_ATTRIBUTE = "data-rre-premium-free-banner";
 const PREMIUM_FREE_STATE_ATTRIBUTE = "data-rre-premium-free-state";
 const PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE = "data-rre-premium-free-native-paid";
+const PSEUDO_FULLSCREEN_ATTRIBUTE = "data-rre-pseudo-fullscreen";
 
 const SLIDE_RIGHT_DURATION_MS = 220;
 const DISSOLVE_DURATION_MS = 260;
@@ -502,6 +515,7 @@ export const clearEnhancerArtifacts = (): void => {
   if (main) {
     main.style.paddingTop = "";
   }
+  document.documentElement.removeAttribute(PSEUDO_FULLSCREEN_ATTRIBUTE);
 
   const railContainer = findRailContainer();
   if (railContainer) {
@@ -592,6 +606,35 @@ const ensureStyles = (): void => {
     [${EMPTY_RAIL_ATTRIBUTE}="true"] {
       opacity: 0;
       pointer-events: none;
+    }
+
+    html[${PSEUDO_FULLSCREEN_ATTRIBUTE}="true"],
+    html[${PSEUDO_FULLSCREEN_ATTRIBUTE}="true"] body {
+      background: #000 !important;
+      overflow: hidden !important;
+    }
+
+    html[${PSEUDO_FULLSCREEN_ATTRIBUTE}="true"] header.fixed {
+      display: none !important;
+    }
+
+    html[${PSEUDO_FULLSCREEN_ATTRIBUTE}="true"] main {
+      padding-top: 0 !important;
+      min-height: 100vh !important;
+      background: #000 !important;
+    }
+
+    html[${PSEUDO_FULLSCREEN_ATTRIBUTE}="true"] [data-sentry-element="AsideContainer"] {
+      position: fixed !important;
+      top: 0 !important;
+      right: 0 !important;
+      height: 100vh !important;
+      z-index: 2147483646 !important;
+    }
+
+    html[${PSEUDO_FULLSCREEN_ATTRIBUTE}="true"] .reader-container-width {
+      --reader-container-width: 100vw !important;
+      max-width: 100vw !important;
     }
 
     [${CONTROL_ATTRIBUTE}="settings-rows"] {
@@ -715,32 +758,99 @@ const ensureStyles = (): void => {
       font-family: inherit;
     }
 
-    [${CONTROL_ATTRIBUTE}="premium-free-skeleton-list"] {
+    [${CONTROL_ATTRIBUTE}="premium-free-status-icon"] {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
       display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: min(calc(100% - 32px), 640px);
-    }
-
-    [${CONTROL_ATTRIBUTE}="premium-free-skeleton-line"] {
-      height: 84px;
-      border-radius: 24px;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid currentColor;
       position: relative;
-      overflow: hidden;
-      background: linear-gradient(160deg, rgba(15, 23, 42, 0.74), rgba(30, 41, 59, 0.62));
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 10px 24px rgba(15, 23, 42, 0.18);
+      transition: border-color 400ms ease, background-color 400ms ease, transform 300ms ease;
     }
 
-    [${CONTROL_ATTRIBUTE}="premium-free-skeleton-line"]::after {
-      content: "";
+    [${CONTROL_ATTRIBUTE}="premium-free-status-icon-inner"] {
       position: absolute;
       inset: 0;
-      background: linear-gradient(110deg, transparent 0%, rgba(226, 232, 240, 0.18) 46%, transparent 92%);
-      transform: translate3d(-120%, 0, 0);
-      animation: rre-premium-skeleton 1.05s linear infinite;
-      will-change: transform;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 400ms ease, transform 300ms ease;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status-icon-inner"][data-rre-icon-active="false"] {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status-icon-inner"][data-rre-icon-active="true"] {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status-block"][data-rre-phase="searching"]
+      [${CONTROL_ATTRIBUTE}="premium-free-status-icon"] {
+      animation: rre-pulse-ring 1.8s ease-in-out infinite;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status-block"][data-rre-phase="searching"]
+      [${CONTROL_ATTRIBUTE}="premium-free-status-icon-inner"] svg {
+      animation: rre-icon-spin 2s linear infinite;
+    }
+
+    @keyframes rre-pulse-ring {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(29, 78, 216, 0.4); }
+      50% { box-shadow: 0 0 0 10px rgba(29, 78, 216, 0); }
+    }
+
+    @keyframes rre-icon-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status-block"] {
+      animation: rre-status-appear 300ms ease forwards;
+    }
+
+    @keyframes rre-status-appear {
+      from { opacity: 0; transform: scale(0.92) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-provider-chips"] {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 4px;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-chip"] {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      border: 1.5px solid;
+      font-size: 12px;
+      line-height: 1.4;
+      transition: border-color 300ms ease, color 300ms ease, background-color 300ms ease;
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status-block"][data-rre-phase="found"] {
+      animation: rre-fade-out 400ms ease 1500ms forwards;
+    }
+
+    @keyframes rre-fade-out {
+      to { opacity: 0; transform: scale(0.96); }
+    }
+
+    [${CONTROL_ATTRIBUTE}="premium-free-status-subtitle"] {
+      font-size: 13px;
+      color: rgba(226, 232, 240, 0.6);
+      line-height: 1.4;
+      margin-top: 2px;
     }
 
     [${CONTROL_ATTRIBUTE}="premium-free-feed-reader"] {
@@ -891,16 +1001,6 @@ const ensureStyles = (): void => {
       box-shadow: none;
     }
 
-    @keyframes rre-premium-skeleton {
-      0% {
-        transform: translate3d(-120%, 0, 0);
-      }
-
-      100% {
-        transform: translate3d(120%, 0, 0);
-      }
-    }
-
     [${MOTION_ATTRIBUTE}] {
       will-change: opacity, transform, filter, -webkit-mask-position, mask-position;
       transform: translate3d(0, 0, 0);
@@ -1041,15 +1141,39 @@ const findSettingsPanel = (): HTMLElement | null =>
     return text.includes("настройки читалки");
   }) ?? null;
 
+const isVisiblePremiumFreeBannerCandidate = (node: HTMLElement | null): node is HTMLElement => {
+  if (!node) {
+    return false;
+  }
+
+  const rect = node.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(node);
+  return style.display !== "none" && style.visibility !== "hidden";
+};
+
 const findBuyChapterBanner = (): HTMLElement | null => {
-  const actionsBlock = document.querySelector<HTMLElement>(
-    '[data-sentry-component="BuyChapterActions"]',
+  const existingRoot = document.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="${PREMIUM_FREE_ROOT_KEY}"]`,
   );
-  if (!actionsBlock) {
+  const existingRootBanner = existingRoot?.closest<HTMLElement>("div.h-screen") ?? null;
+  if (isVisiblePremiumFreeBannerCandidate(existingRootBanner)) {
+    return existingRootBanner;
+  }
+
+  const banner = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-sentry-component="BuyChapterActions"]'),
+  )
+    .map((node) => node.closest<HTMLElement>("div.h-screen") ?? node)
+    .find(isVisiblePremiumFreeBannerCandidate);
+  if (!banner) {
     return null;
   }
 
-  return actionsBlock.closest<HTMLElement>("div.h-screen") ?? actionsBlock;
+  return banner;
 };
 
 const PREMIUM_FREE_ROOT_KEY = "premium-free-root";
@@ -1607,10 +1731,7 @@ const observePremiumFreeStreamPages = (container: HTMLElement): void => {
 };
 
 const createPremiumFreeStreamLoader = (): HTMLElement => {
-  const loader = document.createElement("div");
-  loader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-loader");
-  loader.textContent = "Подгружаем следующую главу из parser-server.";
-  return loader;
+  return createMiniStatusBlock();
 };
 
 const createPremiumFreeUnverifiedBanner = (manualUrl: string): HTMLElement => {
@@ -1752,15 +1873,100 @@ const createPremiumFreeBranchSelector = (
   return wrapper;
 };
 
+const renderPremiumFreeStreamChapter = (
+  entry: PremiumFreeStreamEntry,
+  state: PremiumFreeReaderState,
+): HTMLElement => {
+  const chapterSection = document.createElement("section");
+  chapterSection.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-chapter");
+  chapterSection.dataset.rrePremiumFreeStreamKey = entry.key;
+  renderPremiumFreeFeedPages(chapterSection, entry.result, state, entry.key);
+  return chapterSection;
+};
+
+const appendMissingPremiumFreeStreamChapters = (
+  streamReader: HTMLElement,
+  stream: PremiumFreeChapterStream,
+  state: PremiumFreeReaderState,
+): void => {
+  const renderedKeys = new Set(
+    Array.from(
+      streamReader.querySelectorAll<HTMLElement>(
+        `[${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"][data-rre-premium-free-stream-key]`,
+      ),
+    ).map((node) => node.dataset.rrePremiumFreeStreamKey),
+  );
+
+  stream.entries.forEach((entry) => {
+    if (renderedKeys.has(entry.key)) {
+      return;
+    }
+
+    streamReader.append(renderPremiumFreeStreamChapter(entry, state));
+  });
+};
+
+const clearPremiumFreeStreamTailControls = (streamReader: HTMLElement): void => {
+  streamReader
+    .querySelectorAll<HTMLElement>(
+      [
+        `[${CONTROL_ATTRIBUTE}="premium-free-stream-loader"]`,
+        `[${CONTROL_ATTRIBUTE}="premium-free-stream-sentinel"]`,
+        `[${CONTROL_ATTRIBUTE}="premium-free-status"]`,
+      ].join(", "),
+    )
+    .forEach((node) => node.remove());
+};
+
+const syncPremiumFreeStreamTailControls = (
+  streamReader: HTMLElement,
+  stream: PremiumFreeChapterStream,
+): void => {
+  clearPremiumFreeStreamTailControls(streamReader);
+
+  const tailSection = streamReader.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"]:last-of-type`,
+  );
+  if (!tailSection) {
+    return;
+  }
+
+  if (stream.status === "loading-next") {
+    tailSection.append(createPremiumFreeStreamLoader());
+    return;
+  }
+
+  if (stream.status === "error" && stream.errorResult) {
+    tailSection.append(
+      createPremiumFreeStreamError(
+        stream.errorResult,
+        stream.entries.at(-1)?.reference.titleName ?? "Premium Free",
+      ),
+    );
+    return;
+  }
+
+  if (stream.status !== "exhausted" && stream.entries.at(-1)?.result.nextChapter) {
+    const sentinel = document.createElement("div");
+    sentinel.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-sentinel");
+    sentinel.style.width = "100%";
+    sentinel.style.height = "1px";
+    tailSection.append(sentinel);
+  }
+};
+
 const renderPremiumFreeFeedStream = (
   container: HTMLElement,
   stream: PremiumFreeChapterStream,
   state: PremiumFreeReaderState,
 ): void => {
-  const streamReader = document.createElement("div");
+  const existingStreamReader = container.querySelector<HTMLElement>(
+    `:scope > [${CONTROL_ATTRIBUTE}="premium-free-feed-reader"]`,
+  );
+  const streamReader = existingStreamReader ?? document.createElement("div");
   streamReader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-feed-reader");
 
-  const firstEntry = stream.entries[0];
+  const firstEntry = existingStreamReader ? null : stream.entries[0];
   if (firstEntry) {
     const selector = createPremiumFreeBranchSelector(
       firstEntry.result,
@@ -1772,35 +1978,12 @@ const renderPremiumFreeFeedStream = (
     }
   }
 
-  stream.entries.forEach((entry) => {
-    const chapterSection = document.createElement("section");
-    chapterSection.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-chapter");
-    chapterSection.dataset.rrePremiumFreeStreamKey = entry.key;
-    renderPremiumFreeFeedPages(chapterSection, entry.result, state, entry.key);
-    streamReader.append(chapterSection);
-  });
+  appendMissingPremiumFreeStreamChapters(streamReader, stream, state);
+  syncPremiumFreeStreamTailControls(streamReader, stream);
 
-  const tailSection = streamReader.lastElementChild;
-  if (tailSection instanceof HTMLElement) {
-    if (stream.status === "loading-next") {
-      tailSection.append(createPremiumFreeStreamLoader());
-    } else if (stream.status === "error" && stream.errorResult) {
-      tailSection.append(
-        createPremiumFreeStreamError(
-          stream.errorResult,
-          stream.entries.at(-1)?.reference.titleName ?? "Premium Free",
-        ),
-      );
-    } else if (stream.status !== "exhausted" && stream.entries.at(-1)?.result.nextChapter) {
-      const sentinel = document.createElement("div");
-      sentinel.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-sentinel");
-      sentinel.style.width = "100%";
-      sentinel.style.height = "1px";
-      tailSection.append(sentinel);
-    }
+  if (!existingStreamReader) {
+    container.replaceChildren(streamReader);
   }
-
-  container.replaceChildren(streamReader);
   observePremiumFreeStreamPages(container);
   observePremiumFreeLoadSentinel();
   ensurePremiumFreeViewportListeners();
@@ -1965,17 +2148,22 @@ const syncPremiumFreeBanner = (
     }
 
     if (!premiumFreeActiveRequest || premiumFreeActiveRequest.key !== key) {
-      renderPremiumFreeState(container, "resolving", {
-        title: "Premium Free",
-        copy: "Запускаем parser-server, ищем подходящий источник и подготавливаем главу к чтению.",
-      });
+      const statusBlock = createStatusBlock("connecting");
+      container.setAttribute(PREMIUM_FREE_STATE_ATTRIBUTE, "resolving");
+      container.replaceChildren(statusBlock);
       const controller = startPremiumFreeActiveRequest(reference, key);
-      void requestPremiumFreeChapter(reference, key, controller);
+      const onStatusProgress: ProgressCallback = (update) => {
+        if (!statusBlock.isConnected) return;
+        updateStatusBlock(statusBlock, {
+          phase: update.phase === "connecting" ? "connecting" : "searching",
+          providers: update.providers,
+        });
+      };
+      void requestPremiumFreeChapter(reference, key, controller, onStatusProgress);
     } else if (container.getAttribute(PREMIUM_FREE_STATE_ATTRIBUTE) !== "resolving") {
-      renderPremiumFreeState(container, "resolving", {
-        title: "Premium Free",
-        copy: "Запускаем parser-server, ищем подходящий источник и подготавливаем главу к чтению.",
-      });
+      const statusBlock = createStatusBlock("connecting");
+      container.setAttribute(PREMIUM_FREE_STATE_ATTRIBUTE, "resolving");
+      container.replaceChildren(statusBlock);
     }
 
     return;
@@ -1989,14 +2177,39 @@ const syncPremiumFreeBanner = (
     ) {
       appendPremiumFreeRetryButton(container, () => {
         premiumFreeResultCache.delete(key);
-        renderPremiumFreeState(container, "resolving", {
-          title: "Premium Free",
-          copy: "Перезапускаем parser-server...",
-        });
+        const statusBlock = createStatusBlock("connecting");
+        updateStatusBlock(statusBlock, { phase: "connecting", providers: [] });
+        const title = statusBlock.querySelector(`[data-rre-control="premium-free-title"]`);
+        if (title) title.textContent = "Перезапускаем parser-server\u2026";
+        container.setAttribute(PREMIUM_FREE_STATE_ATTRIBUTE, "resolving");
+        container.replaceChildren(statusBlock);
         const controller = startPremiumFreeActiveRequest(reference, key);
-        void requestPremiumFreeChapter(reference, key, controller);
+        const onStatusProgress: ProgressCallback = (update) => {
+          if (!statusBlock.isConnected) return;
+          updateStatusBlock(statusBlock, {
+            phase: update.phase === "connecting" ? "connecting" : "searching",
+            providers: update.providers,
+          });
+        };
+        void requestPremiumFreeChapter(reference, key, controller, onStatusProgress);
       });
     }
+    return;
+  }
+
+  const statusBlock = container.querySelector<HTMLElement>(`[data-rre-control="premium-free-status-block"]`);
+  if (statusBlock && cachedResult.status === "success") {
+    updateStatusBlock(statusBlock, {
+      phase: "found",
+      providers: cachedResult.status === "success"
+        ? [{ name: cachedResult.provider, displayName: PROVIDER_DISPLAY_NAMES[cachedResult.provider] ?? cachedResult.provider, status: "success" as const }]
+        : [],
+    });
+    setTimeout(() => {
+      if (container.isConnected) {
+        renderPremiumFreePages(container, cachedResult, key, reference);
+      }
+    }, 1900);
     return;
   }
 
@@ -2304,9 +2517,7 @@ const syncMainFullscreenButton = (readerDom: ReaderDom): void => {
       settingsGroup.before(existingButton);
     }
 
-    existingButton.onclick = () => {
-      void toggleFullscreen();
-    };
+    wireFullscreenButton(existingButton);
     return;
   }
 
@@ -3735,7 +3946,9 @@ const isSafeToForceHide = (toast: HTMLElement): boolean => {
 };
 
 const syncFullscreenButtonStates = (): void => {
-  const isActive = Boolean(document.fullscreenElement);
+  const isActive =
+    Boolean(document.fullscreenElement) ||
+    document.documentElement.getAttribute(PSEUDO_FULLSCREEN_ATTRIBUTE) === "true";
 
   document
     .querySelectorAll<HTMLButtonElement>(
@@ -3766,12 +3979,87 @@ const createFullscreenButton = (
   const button = cloneToolbarButton(templateButton, controlName);
   button.setAttribute("aria-label", "Полноэкранный режим");
   button.title = "Полноэкранный режим";
-  button.onclick = () => {
-    void toggleFullscreen();
-  };
+  wireFullscreenButton(button);
   button.replaceChildren(createFullscreenIcon());
   syncFullscreenButtonStates();
   return button;
+};
+
+const wireFullscreenButton = (button: HTMLButtonElement): void => {
+  button.onclick = handleFullscreenButtonClick;
+  button.onpointerup = handleFullscreenButtonClick;
+};
+
+const handleFullscreenButtonClick = (event: MouseEvent | PointerEvent): void => {
+  if (event.defaultPrevented) {
+    return;
+  }
+
+  const currentTarget = event.currentTarget;
+  if (!(currentTarget instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const handledAt = Number(currentTarget.dataset.rreFullscreenHandledAt ?? "0");
+  if (Number.isFinite(handledAt) && Date.now() - handledAt < 700) {
+    return;
+  }
+
+  currentTarget.dataset.rreFullscreenHandledAt = String(Date.now());
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (document.documentElement.getAttribute(PSEUDO_FULLSCREEN_ATTRIBUTE) === "true") {
+    setPseudoFullscreen(false);
+    return;
+  }
+
+  const action = document.fullscreenElement
+    ? document.exitFullscreen()
+    : document.documentElement.requestFullscreen();
+
+  action
+    .then(syncFullscreenButtonStates)
+    .catch((error: unknown) => {
+      if (!document.fullscreenElement) {
+        setPseudoFullscreen(true);
+      }
+      showFullscreenError(error);
+    });
+};
+
+const setPseudoFullscreen = (active: boolean): void => {
+  if (active) {
+    document.documentElement.setAttribute(PSEUDO_FULLSCREEN_ATTRIBUTE, "true");
+  } else {
+    document.documentElement.removeAttribute(PSEUDO_FULLSCREEN_ATTRIBUTE);
+  }
+
+  syncFullscreenButtonStates();
+};
+
+const showFullscreenError = (error: unknown): void => {
+  const message = error instanceof Error ? error.message : "Браузер отклонил fullscreen";
+  const notice = document.createElement("div");
+  notice.textContent = `Fullscreen не включился: ${message}`;
+  notice.setAttribute(CONTROL_ATTRIBUTE, "fullscreen-error");
+  notice.style.position = "fixed";
+  notice.style.right = "16px";
+  notice.style.bottom = "16px";
+  notice.style.zIndex = "2147483647";
+  notice.style.maxWidth = "360px";
+  notice.style.padding = "10px 12px";
+  notice.style.borderRadius = "10px";
+  notice.style.background = "rgba(15, 23, 42, 0.94)";
+  notice.style.color = "rgb(248, 250, 252)";
+  notice.style.fontSize = "13px";
+  notice.style.lineHeight = "1.35";
+  notice.style.boxShadow = "0 8px 24px rgba(15, 23, 42, 0.28)";
+
+  document.querySelector(`[${CONTROL_ATTRIBUTE}="fullscreen-error"]`)?.remove();
+  document.documentElement.append(notice);
+  window.setTimeout(() => notice.remove(), 4200);
 };
 
 const cloneToolbarButton = (
@@ -3874,18 +4162,8 @@ const createFallbackSettingsIcon = (): SVGSVGElement => {
   return svg;
 };
 
-const toggleFullscreen = async (): Promise<void> => {
-  try {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      return;
-    }
-
-    await document.documentElement.requestFullscreen();
-  } catch {
-    syncFullscreenButtonStates();
-  }
-};
+const FULLSCREEN_BUTTON_SELECTOR =
+  "[data-rre-control='fullscreen-main'], [data-rre-control='fullscreen-recovery']";
 
 const containsAny = (text: string, keywords: string[]): boolean =>
   keywords.some((keyword) => text.includes(keyword));
@@ -4034,7 +4312,7 @@ const createPremiumFreeStreamEntry = (
   reference,
   result,
   chapterLabel: formatPremiumFreeChapterLabel(
-    result.matchedChapter.volume,
+    reference.tome,
     result.matchedChapter.chapter,
   ),
 });
@@ -4407,20 +4685,6 @@ const renderPremiumFreeState = (
       options.linkLabel,
     ),
   );
-
-  if (state !== "resolving") {
-    return;
-  }
-
-  const skeletonList = document.createElement("div");
-  skeletonList.setAttribute(CONTROL_ATTRIBUTE, "premium-free-skeleton-list");
-  [96, 84, 132, 108, 88].forEach((height) => {
-    const line = document.createElement("div");
-    line.setAttribute(CONTROL_ATTRIBUTE, "premium-free-skeleton-line");
-    line.style.height = `${height}px`;
-    skeletonList.append(line);
-  });
-  container.append(skeletonList);
 };
 
 const renderPremiumFreePages = (
@@ -4450,11 +4714,81 @@ const renderPremiumFreeError = (
   result: Extract<PremiumFreeClientResolveResult, { status: "failure" }>,
   titleName: string,
 ): void => {
-  renderPremiumFreeState(
-    container,
-    "error",
-    describePremiumFreeFailure(result, titleName),
-  );
+  const statusBlock = container.querySelector<HTMLElement>(`[data-rre-control="premium-free-status-block"]`);
+
+  if (statusBlock) {
+    const isParserFailure =
+      result.reason === "resolver_unavailable" ||
+      result.reason === "install_required";
+    if (isParserFailure) {
+      updateStatusBlock(statusBlock, {
+        phase: "parser_down",
+        providers: [],
+      });
+    } else {
+      updateStatusBlock(statusBlock, {
+        phase: "not_found",
+        providers: [],
+      });
+    }
+    const subtitle = document.createElement("div");
+    subtitle.setAttribute("data-rre-control", "premium-free-status-subtitle");
+    subtitle.textContent = isParserFailure
+      ? "Расширение не смогло автоматически запустить локальный парсер"
+      : "Ни один источник не содержит эту главу";
+    statusBlock.append(subtitle);
+  } else {
+    renderPremiumFreeState(container, "error", describePremiumFreeFailure(result, titleName));
+  }
+
+  if (
+    result.reason === "resolver_unavailable" ||
+    result.reason === "resolve_timeout"
+  ) {
+    appendPremiumFreeRetryButton(container, () => {
+      premiumFreeResultCache.delete(createPremiumFreeKey(collectPremiumFreeTargetReference(findBuyChapterBanner()!)!));
+      const banner = findBuyChapterBanner();
+      if (banner) {
+        syncPremiumFreeBanner(banner, true);
+      }
+    });
+  }
+
+  if (result.reason === "install_required" && isExtensionContextInvalidatedDetail(result.detail)) {
+    const reloadButton = document.createElement("button");
+    reloadButton.type = "button";
+    reloadButton.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-retry");
+    reloadButton.textContent = "Перезагрузить страницу";
+    reloadButton.style.cursor = "pointer";
+    reloadButton.addEventListener("click", () => {
+      window.location.reload();
+    });
+    const actions = container.querySelector(`[${CONTROL_ATTRIBUTE}="premium-free-stream-actions"]`);
+    if (actions) {
+      actions.prepend(reloadButton);
+    }
+  }
+
+  appendPremiumFreeRemangaLink(container, result);
+};
+
+const appendPremiumFreeRemangaLink = (
+  container: HTMLElement,
+  result: Extract<PremiumFreeClientResolveResult, { status: "failure" }>,
+): void => {
+  const card = container.querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="premium-free-status"]`)
+    ?? container.querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="premium-free-status-block"]`);
+  if (!card) return;
+
+  const link = document.createElement("a");
+  link.setAttribute(CONTROL_ATTRIBUTE, "premium-free-link");
+  link.href = result.manualUrl;
+  link.textContent = "Открыть на Remanga";
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: result.manualUrl });
+  });
+  card.append(link);
 };
 
 const appendPremiumFreeRetryButton = (
@@ -4477,6 +4811,50 @@ const appendPremiumFreeRetryButton = (
 
 const POLLING_INTERVAL_MS = 300;
 
+const PROGRESS_POLLING_INTERVAL_MS = 500;
+
+type ProgressCallback = (update: {
+  phase: "connecting" | "searching";
+  providers: ProviderChipInfo[];
+  complete: boolean;
+}) => void;
+
+const pollForProviderProgress = (
+  sessionId: string,
+  controller: AbortController,
+  onProgress: ProgressCallback,
+): (() => void) => {
+  let stopped = false;
+  const poll = async (): Promise<void> => {
+    if (stopped || controller.signal.aborted) return;
+    try {
+      const baseUrl = getParserServerBaseUrl();
+      const response = await fetch(`${baseUrl}${PROGRESS_PATH_PREFIX}${sessionId}`, {
+        signal: controller.signal,
+      });
+      if (response.ok && !stopped) {
+        const data = await response.json() as {
+          providers: Record<string, { status: string; reason?: string; detail?: string }>;
+          complete: boolean;
+        };
+        onProgress({
+          phase: "searching",
+          providers: mapServerProgressToChips(data.providers),
+          complete: data.complete,
+        });
+      }
+    } catch {
+      // Прогресс-поллинг — best-effort, игнорируем ошибки
+    }
+    if (!stopped && !controller.signal.aborted) {
+      await new Promise((resolve) => setTimeout(resolve, PROGRESS_POLLING_INTERVAL_MS));
+      void poll();
+    }
+  };
+  void poll();
+  return () => { stopped = true; };
+};
+
 const pollForResolveResult = async (
   sessionId: string,
   controller: AbortController,
@@ -4497,10 +4875,13 @@ const pollForResolveResult = async (
 const resolvePremiumFreeChapterResult = async (
   reference: RemangaChapterReference,
   controller: AbortController,
+  onProgress?: ProgressCallback,
 ): Promise<PremiumFreeClientResolveResult> => {
   let result: PremiumFreeClientResolveResult;
 
   try {
+    onProgress?.({ phase: "connecting", providers: [], complete: false });
+
     const parserServerStatus = await ensureParserServerReady();
     if (parserServerStatus.status === "ready" && typeof parserServerStatus.port === "number") {
       activeParserServerPort = parserServerStatus.port;
@@ -4539,7 +4920,13 @@ const resolvePremiumFreeChapterResult = async (
         throw new Error("No sessionId in resolve response");
       }
 
+      const stopProgressPolling = pollForProviderProgress(sessionId, controller, (update) => {
+        onProgress?.(update);
+      });
+
       const payload = await pollForResolveResult(sessionId, controller);
+
+      stopProgressPolling();
 
       if (
         !payload ||
@@ -4694,8 +5081,17 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   }, PREMIUM_FREE_RESOLVE_TIMEOUT_MS);
 
   let result: PremiumFreeClientResolveResult = createPremiumFreeResolveTimeoutFailure(nextReference);
+  const loaderElement = stream.container.querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="premium-free-stream-loader"]`);
+  const onProgress: ProgressCallback = (update) => {
+    if (loaderElement?.isConnected) {
+      updateMiniStatusBlock(loaderElement, {
+        phase: update.phase === "connecting" ? "connecting" : "searching",
+        providers: update.providers,
+      });
+    }
+  };
   try {
-    result = await resolvePremiumFreeChapterResult(nextReference, controller);
+    result = await resolvePremiumFreeChapterResult(nextReference, controller, onProgress);
   } catch {
     if (nextTimedOut) {
       result = createPremiumFreeResolveTimeoutFailure(nextReference);
@@ -4748,9 +5144,10 @@ const requestPremiumFreeChapter = async (
   reference: RemangaChapterReference,
   key: string,
   controller: AbortController,
+  onProgress?: ProgressCallback,
 ): Promise<void> => {
   try {
-    await resolvePremiumFreeChapterResult(reference, controller);
+    await resolvePremiumFreeChapterResult(reference, controller, onProgress);
   } catch (error) {
     if (controller.signal.aborted) {
       return;

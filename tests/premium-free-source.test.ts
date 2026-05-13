@@ -7,9 +7,13 @@ const readerEnhancerSource = readFileSync(
   path.resolve(process.cwd(), "src/reader-enhancer.ts"),
   "utf8",
 );
+const popupCategoriesSource = readFileSync(
+  path.resolve(process.cwd(), "src/popup-categories.ts"),
+  "utf8",
+);
 
 test('uses "Premium Free" as the toggle label', () => {
-  assert.match(readerEnhancerSource, /label: "Premium Free"/);
+  assert.match(popupCategoriesSource, /"premium-free": \{ label: "Premium Free"/);
 });
 
 test("tracks premium-free resolving, rendering, and error states", () => {
@@ -64,6 +68,29 @@ test("contains parser startup specific premium-free copy", () => {
   assert.match(premiumFreeSource, /nextChapter/);
 });
 
+test("renders parser startup failures as parser-not-running instead of chapter-not-found", () => {
+  const statusUiSource = readFileSync(
+    path.resolve(process.cwd(), "src/premium-free-status-ui.ts"),
+    "utf8",
+  );
+
+  assert.match(statusUiSource, /parser_down/);
+  assert.match(statusUiSource, /Парсер не запущен/);
+  assert.match(readerEnhancerSource, /result\.reason === "resolver_unavailable"/);
+  assert.match(readerEnhancerSource, /phase: "parser_down"/);
+});
+
+test("warning status icon uses separate valid SVG paths", () => {
+  const statusUiSource = readFileSync(
+    path.resolve(process.cwd(), "src/premium-free-status-ui.ts"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(statusUiSource, /ICON_PATHS\.warning\.split\("m"\)/);
+  assert.match(statusUiSource, /warningTriangle/);
+  assert.match(statusUiSource, /warningMark/);
+});
+
 test("contains feed-only chapter stream rendering contracts", () => {
   assert.match(
     readerEnhancerSource,
@@ -92,4 +119,39 @@ test("falls back to viewport geometry when observer-only premium-free prefetch i
   );
   assert.match(readerEnhancerSource, /requestPremiumFreeViewportSync/);
   assert.match(readerEnhancerSource, /window\.addEventListener\(\s*"scroll"/);
+});
+
+test("appends premium-free stream chapters without replacing the existing feed", () => {
+  const streamRender = readerEnhancerSource.match(
+    /const renderPremiumFreeFeedStream = \([\s\S]*?\n\};\n\nconst observePremiumFreeLoadSentinel/u,
+  );
+
+  assert.ok(streamRender, "expected renderPremiumFreeFeedStream function body");
+  assert.match(streamRender[0], /existingStreamReader/);
+  assert.match(streamRender[0], /appendMissingPremiumFreeStreamChapters/);
+  assert.match(
+    streamRender[0],
+    /if \(!existingStreamReader\) \{\s*container\.replaceChildren\(streamReader\);\s*\}/,
+  );
+});
+
+test("keeps premium-free sync anchored to the existing root banner", () => {
+  const bannerFinder = readerEnhancerSource.match(
+    /const findBuyChapterBanner = \(\): HTMLElement \| null => \{[\s\S]*?\n\};\n\nconst PREMIUM_FREE_ROOT_KEY/u,
+  );
+
+  assert.ok(bannerFinder, "expected findBuyChapterBanner function body");
+  assert.match(bannerFinder[0], /PREMIUM_FREE_ROOT_KEY/);
+  assert.match(bannerFinder[0], /closest<HTMLElement>\("div\.h-screen"\)/);
+  assert.doesNotMatch(bannerFinder[0], /PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE/);
+});
+
+test("ignores zero-height premium-free root banners when selecting the paid banner", () => {
+  const bannerFinder = readerEnhancerSource.match(
+    /const findBuyChapterBanner = \(\): HTMLElement \| null => \{[\s\S]*?\n\};\n\nconst PREMIUM_FREE_ROOT_KEY/u,
+  );
+
+  assert.ok(bannerFinder, "expected findBuyChapterBanner function body");
+  assert.match(bannerFinder[0], /isVisiblePremiumFreeBannerCandidate\(existingRootBanner\)/);
+  assert.match(bannerFinder[0], /find\(isVisiblePremiumFreeBannerCandidate\)/);
 });

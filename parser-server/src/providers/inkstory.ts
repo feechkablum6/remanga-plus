@@ -10,6 +10,7 @@ import type {
 
 const API_BASE = "https://api.inkstory.net";
 const SITE_BASE = "https://inkstory.net";
+const IMAGE_XOR_KEY = Buffer.from("UySkp0BzPhwlvP2V");
 
 type I18nName = { [lang: string]: string | undefined };
 type AltName = { language: string; name: string };
@@ -69,6 +70,31 @@ const buildChapterUrl = (bookSlug: string, chapterId: string): string =>
   bookSlug
     ? `${SITE_BASE}/content/${bookSlug}/${chapterId}`
     : `${SITE_BASE}/content/${chapterId}`;
+
+const getProtectedImageMode = (imageRef: string): false | "xor" | "sec" => {
+  const filename = imageRef.split("/").pop()?.split(".")[0] ?? "";
+  if (filename.length !== 36) return false;
+  if (filename[14] === "s") return "sec";
+  if (filename[14] === "x") return "xor";
+  return false;
+};
+
+const normalizeProtectedImageRef = (imageRef: string, mode: false | "xor" | "sec"): string => {
+  if (mode !== "sec") return imageRef;
+  const parts = imageRef.split("/");
+  const filename = parts.pop();
+  if (!filename) return imageRef;
+  parts.push(`${filename.slice(0, 14)}x${filename.slice(15)}`);
+  return parts.join("/");
+};
+
+const decryptXorImage = (data: Buffer): Buffer => {
+  const decrypted = Buffer.allocUnsafe(data.length);
+  for (let i = 0; i < data.length; i += 1) {
+    decrypted[i] = data[i] ^ IMAGE_XOR_KEY[i % IMAGE_XOR_KEY.length];
+  }
+  return decrypted;
+};
 
 /** UUID v4 pattern for InkStory chapter IDs. */
 const UUID_RE = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i;
@@ -392,10 +418,12 @@ export class InkstoryProvider implements ExternalSourceProvider {
   }
 
   async fetchImage(imageRef: string): Promise<Buffer> {
-    const response = await this.http.request(imageRef);
+    const protectedMode = getProtectedImageMode(imageRef);
+    const response = await this.http.request(normalizeProtectedImageRef(imageRef, protectedMode));
     if (!response.ok) {
       throw new Error(`InkStory image fetch failed: ${response.status}`);
     }
-    return Buffer.from(await response.arrayBuffer());
+    const data = Buffer.from(await response.arrayBuffer());
+    return protectedMode ? decryptXorImage(data) : data;
   }
 }

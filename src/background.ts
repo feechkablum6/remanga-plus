@@ -17,7 +17,10 @@ import {
   type MangalibResponse,
   type MangalibTokenProvider,
 } from "./import-mangalib/mangalib-client.js";
-import { fetchRemangaAuthStatus } from "./import-mangalib/remanga-client.js";
+import {
+  fetchRemangaAuthStatus,
+  fetchRemangaBookmarkTypes,
+} from "./import-mangalib/remanga-client.js";
 import {
   MANGALIB_PROXIED_FETCH_MESSAGE_TYPE,
   READ_MANGALIB_TOKEN_MESSAGE_TYPE,
@@ -38,6 +41,7 @@ import {
 const HEALTHCHECK_TIMEOUT_MS = 3_000;
 const HEALTHCHECK_MAX_ATTEMPTS = 5;
 const HEALTHCHECK_RETRY_DELAY_MS = 500;
+const NATIVE_HOST_RESPONSE_TIMEOUT_MS = 10_000;
 const READY_CACHE_TTL_MS = 5_000;
 
 const DISCOVERED_PORT_SESSION_KEY = "rre:discoveredPort";
@@ -224,10 +228,25 @@ const sendNativeEnsureMessage = async (): Promise<ParserServerEnsureResult> => {
   }
 
   return new Promise((resolve) => {
+    let settled = false;
+    const timeout = globalThis.setTimeout(() => {
+      settled = true;
+      resolve({
+        status: "failed",
+        detail: "Native host did not answer in time.",
+      });
+    }, NATIVE_HOST_RESPONSE_TIMEOUT_MS);
+
     chrome.runtime.sendNativeMessage(
       NATIVE_HOST_NAME,
       { type: "ensure-parser-server" },
       (response: unknown) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        globalThis.clearTimeout(timeout);
+
         const runtimeError = chrome.runtime?.lastError?.message;
         if (runtimeError) {
           resolve({
@@ -268,6 +287,16 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
       return { status: "ready", port: discoveredPort } as const;
     }
 
+    if (
+      discoveredPort !== PARSER_SERVER_DEFAULT_PORT &&
+      (await checkParserServerHealth(PARSER_SERVER_DEFAULT_PORT))
+    ) {
+      discoveredPort = PARSER_SERVER_DEFAULT_PORT;
+      persistDiscoveredPort(discoveredPort);
+      readyUntil = Date.now() + READY_CACHE_TTL_MS;
+      return { status: "ready", port: discoveredPort } as const;
+    }
+
     const nativeResult = await sendNativeEnsureMessage();
     console.warn("[RRE] Native host ensure-parser-server response.", nativeResult);
     if (nativeResult.status !== "ready") {
@@ -276,21 +305,8 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
 
     discoveredPort = extractPort(nativeResult);
     persistDiscoveredPort(discoveredPort);
-
-    if (await pollParserServerHealth(discoveredPort)) {
-      readyUntil = Date.now() + READY_CACHE_TTL_MS;
-      return { status: "ready", port: discoveredPort } as const;
-    }
-
-    console.error("[RRE] Parser-server remained unhealthy after native launch.", {
-      port: discoveredPort,
-      url: buildParserServerHealthcheckUrl(discoveredPort),
-      nativeResult,
-    });
-    return {
-      status: "failed",
-      detail: "Parser-server did not become healthy after launch.",
-    } as const;
+    readyUntil = Date.now() + READY_CACHE_TTL_MS;
+    return { status: "ready", port: discoveredPort } as const;
   })();
 
   try {
@@ -344,8 +360,59 @@ async function sendWithBridgeFallback<T>(
 
 const REMANGA_BOOKMARK_TYPES_CACHE_KEY = "remangaBookmarkTypesCache";
 const REMANGA_BOOKMARKS_URL = "https://remanga.org/user/bookmarks";
+const HOME_BOOKMARK_DIRS_CACHE_KEY = "rre:homeBookmarkDirs:v2";
+const HOME_BOOKMARK_DIRS_CACHE_TTL_MS = 30 * 60 * 1000;
+const LOAD_HOME_BOOKMARKS_MESSAGE_TYPE = "rre/load-home-bookmarks";
 const HIDDEN_TAB_POLL_DEADLINE_MS = 15_000;
 const HIDDEN_TAB_POLL_INTERVAL_MS = 500;
+
+type HomeBookmarkCategoryKey =
+  | "reading"
+  | "planned"
+  | "completed"
+  | "dropped"
+  | "notInterest"
+  | "favorite";
+
+const DEFAULT_HOME_BOOKMARK_CATEGORY_KEY: HomeBookmarkCategoryKey = "reading";
+
+type HomeBookmarkDirs = Record<string, HomeBookmarkCategoryKey[]>;
+
+type CachedHomeBookmarkDirs = {
+  dirs: HomeBookmarkDirs;
+  userId: number;
+  updatedAt: number;
+};
+
+function extractHomeBookmarkNextPage(next: unknown, currentPage: number): number | null {
+  if (typeof next === "number") {
+    return Number.isInteger(next) && next > currentPage ? next : null;
+  }
+
+  if (typeof next !== "string" || next.length === 0) {
+    return null;
+  }
+
+  try {
+    const url = new URL(next, "https://api.remanga.org");
+    const page = Number(url.searchParams.get("page"));
+    return Number.isInteger(page) && page > currentPage ? page : null;
+  } catch {
+    return null;
+  }
+}
+
+const HOME_BOOKMARK_CATEGORY_NAMES: ReadonlyArray<{
+  name: string;
+  key: HomeBookmarkCategoryKey;
+}> = [
+  { name: "Читаю", key: "reading" },
+  { name: "Буду читать", key: "planned" },
+  { name: "Прочитано", key: "completed" },
+  { name: "Брошено", key: "dropped" },
+  { name: "Не интересно", key: "notInterest" },
+  { name: "Любимое", key: "favorite" },
+];
 
 async function readRemangaTypesFromExistingTabs(): Promise<BookmarkType[]> {
   const allTabs = await chrome.tabs.query({});
@@ -484,6 +551,116 @@ async function getRemangaToken(): Promise<string | null> {
   return readRemangaAuthToken(cookieHeader);
 }
 
+async function readHomeBookmarkDirsCache(): Promise<CachedHomeBookmarkDirs | null> {
+  const area = chrome.storage?.local;
+  if (!area) return null;
+  return await new Promise<CachedHomeBookmarkDirs | null>((resolve) => {
+    area.get(HOME_BOOKMARK_DIRS_CACHE_KEY, (items) => {
+      void chrome.runtime?.lastError;
+      const raw = items?.[HOME_BOOKMARK_DIRS_CACHE_KEY] as
+        | CachedHomeBookmarkDirs
+        | undefined;
+      if (
+        !raw ||
+        typeof raw.updatedAt !== "number" ||
+        typeof raw.userId !== "number" ||
+        !raw.dirs ||
+        typeof raw.dirs !== "object"
+      ) {
+        resolve(null);
+        return;
+      }
+      resolve(raw);
+    });
+  });
+}
+
+async function writeHomeBookmarkDirsCache(payload: CachedHomeBookmarkDirs): Promise<void> {
+  const area = chrome.storage?.local;
+  if (!area) return;
+  await new Promise<void>((resolve) => {
+    area.set({ [HOME_BOOKMARK_DIRS_CACHE_KEY]: payload }, () => {
+      void chrome.runtime?.lastError;
+      resolve();
+    });
+  });
+}
+
+async function loadHomeBookmarkDirs(): Promise<HomeBookmarkDirs> {
+  const cached = await readHomeBookmarkDirsCache();
+  if (cached && Date.now() - cached.updatedAt < HOME_BOOKMARK_DIRS_CACHE_TTL_MS) {
+    return cached.dirs;
+  }
+
+  const token = await getRemangaToken();
+  if (!token) return cached?.dirs ?? {};
+
+  const auth = await fetchRemangaAuthStatus(async () => token);
+  if (!auth.signedIn || typeof auth.userId !== "number") {
+    return cached?.dirs ?? {};
+  }
+
+  const categoryByTypeId = new Map<number, HomeBookmarkCategoryKey>();
+  const categoryByName = new Map(
+    HOME_BOOKMARK_CATEGORY_NAMES.map((category) => [
+      category.name.toLowerCase(),
+      category.key,
+    ]),
+  );
+
+  const types = await fetchRemangaBookmarkTypes(async () => token);
+  for (const type of types) {
+    const category = categoryByName.get(type.name.toLowerCase());
+    if (category) categoryByTypeId.set(type.id, category);
+  }
+
+  const dirs: HomeBookmarkDirs = {};
+  let page = 1;
+  for (;;) {
+    const url = new URL(`https://api.remanga.org/api/v2/users/${auth.userId}/bookmarks/`);
+    url.searchParams.set("page", String(page));
+    const response = await fetch(url.toString(), {
+      credentials: "omit",
+      headers: {
+        Authorization: "bearer " + token,
+        Accept: "application/json",
+      },
+    });
+    if (!response.ok) break;
+    const body = (await response.json()) as {
+      next?: unknown;
+      results?: Array<{
+        title?: { dir?: unknown };
+        type?: unknown;
+        bookmark_type_id?: unknown;
+      }>;
+    };
+    if (!body || !Array.isArray(body.results)) break;
+
+    for (const row of body.results) {
+      const dir = row.title?.dir;
+      const typeId = row.type ?? row.bookmark_type_id;
+      if (typeof dir !== "string" || typeof typeId !== "number") continue;
+      const category = categoryByTypeId.get(typeId) ?? DEFAULT_HOME_BOOKMARK_CATEGORY_KEY;
+      dirs[dir] ??= [];
+      if (!dirs[dir].includes(category)) {
+        dirs[dir].push(category);
+      }
+    }
+
+    const nextPage = extractHomeBookmarkNextPage(body.next, page);
+    if (nextPage === null) break;
+    page = nextPage;
+  }
+
+  await writeHomeBookmarkDirsCache({
+    dirs,
+    userId: auth.userId,
+    updatedAt: Date.now(),
+  });
+  return dirs;
+}
+
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (!message || typeof message !== "object" || !("type" in message)) {
@@ -522,6 +699,11 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
           : { status: "down" };
         sendResponse(result);
       })();
+      return true;
+    }
+
+    if (message.type === LOAD_HOME_BOOKMARKS_MESSAGE_TYPE) {
+      void loadHomeBookmarkDirs().then((dirs) => sendResponse({ dirs }));
       return true;
     }
 

@@ -58,12 +58,32 @@
     },
     {
       "matches": [
+        "https://remanga.org/*"
+      ],
+      "js": [
+        "fullscreen-bridge.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
         "https://mangalib.me/*"
       ],
       "js": [
         "mangalib-bridge.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/premium-free-not-found.png"
+      ],
+      "matches": [
+        "https://remanga.org/*"
+      ]
     }
   ]
 }

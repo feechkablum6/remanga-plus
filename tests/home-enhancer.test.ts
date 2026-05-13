@@ -2,7 +2,11 @@ import "./setup-dom.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyHomeEnhancements, HEADER_BUTTON_KEYS } from "../src/home-enhancer.js";
+import {
+  applyHomeEnhancements,
+  getEnabledBookmarkDirs,
+  HEADER_BUTTON_KEYS,
+} from "../src/home-enhancer.js";
 import { mergeSettings } from "../src/settings.js";
 
 const buildHeader = (): { root: HTMLElement; cleanup: () => void } => {
@@ -202,5 +206,158 @@ test("applyHomeEnhancements hides logo, search, bookmarks, ellipsis, avatar when
     assert.equal(avatar.style.display, "none");
   } finally {
     cleanup();
+  }
+});
+
+test("getEnabledBookmarkDirs returns dirs matching enabled categories", () => {
+  const dirs = getEnabledBookmarkDirs(
+    {
+      "reading-title": ["reading"],
+      "dropped-title": ["dropped"],
+      "favorite-title": ["favorite", "completed"],
+    },
+    mergeSettings({
+      filterBookmarkCategories: {
+        reading: true,
+        dropped: false,
+        favorite: true,
+      },
+    }).filterBookmarkCategories,
+  );
+
+  assert.deepEqual([...dirs].sort(), ["favorite-title", "reading-title"]);
+});
+
+test("applyHomeEnhancements hides home manga links whose dirs are filtered", () => {
+  const root = document.createElement("div");
+  root.innerHTML = `
+    <main>
+      <a data-card="reading" href="/manga/reading-title">Reading</a>
+      <a data-card="other" href="/manga/other-title">Other</a>
+    </main>
+  `;
+  document.body.appendChild(root);
+  try {
+    applyHomeEnhancements(
+      root,
+      mergeSettings({ filterHomeBookmarks: true }),
+      new Set(["reading-title"]),
+    );
+
+    const reading = root.querySelector('[data-card="reading"]') as HTMLElement;
+    const other = root.querySelector('[data-card="other"]') as HTMLElement;
+    assert.equal(reading.style.display, "none");
+    assert.notEqual(other.style.display, "none");
+  } finally {
+    root.remove();
+  }
+});
+
+test("applyHomeEnhancements hides home content links whose dirs are filtered", () => {
+  const root = document.createElement("div");
+  root.innerHTML = `
+    <header><a href="/content/reading-title">Header title should stay visible</a></header>
+    <main>
+      <a data-card="reading" href="/content/reading-title">Reading</a>
+      <a data-card="other" href="/content/other-title">Other</a>
+    </main>
+  `;
+  document.body.appendChild(root);
+  try {
+    applyHomeEnhancements(
+      root,
+      mergeSettings({ filterHomeBookmarks: true }),
+      new Set(["reading-title"]),
+    );
+
+    const header = root.querySelector("header a") as HTMLElement;
+    const reading = root.querySelector('[data-card="reading"]') as HTMLElement;
+    const other = root.querySelector('[data-card="other"]') as HTMLElement;
+    assert.notEqual(header.style.display, "none");
+    assert.equal(reading.style.display, "none");
+    assert.notEqual(other.style.display, "none");
+  } finally {
+    root.remove();
+  }
+});
+
+test("applyHomeEnhancements hides the title card wrapper, not only the link", () => {
+  const root = document.createElement("div");
+  root.innerHTML = `
+    <main>
+      <div data-card="reading" class="grid-item">
+        <img src="/cover.jpg" alt="" />
+        <a href="/content/reading-title">Reading</a>
+      </div>
+      <div data-card="other" class="grid-item">
+        <img src="/cover-2.jpg" alt="" />
+        <a href="/content/other-title">Other</a>
+      </div>
+    </main>
+  `;
+  document.body.appendChild(root);
+  try {
+    applyHomeEnhancements(
+      root,
+      mergeSettings({ filterHomeBookmarks: true }),
+      new Set(["reading-title"]),
+    );
+
+    const reading = root.querySelector('[data-card="reading"]') as HTMLElement;
+    const readingLink = reading.querySelector("a") as HTMLElement;
+    const other = root.querySelector('[data-card="other"]') as HTMLElement;
+    assert.equal(reading.style.display, "none");
+    assert.notEqual(readingLink.style.display, "none");
+    assert.notEqual(other.style.display, "none");
+  } finally {
+    root.remove();
+  }
+});
+
+test("applyHomeEnhancements restores bookmark-filtered links when disabled", () => {
+  const root = document.createElement("div");
+  root.innerHTML = `<main><a data-card="reading" href="/manga/reading-title">Reading</a></main>`;
+  document.body.appendChild(root);
+  try {
+    applyHomeEnhancements(
+      root,
+      mergeSettings({ filterHomeBookmarks: true }),
+      new Set(["reading-title"]),
+    );
+    const reading = root.querySelector('[data-card="reading"]') as HTMLElement;
+    assert.equal(reading.style.display, "none");
+
+    applyHomeEnhancements(root, mergeSettings({ filterHomeBookmarks: false }), null);
+    assert.notEqual(reading.style.display, "none");
+  } finally {
+    root.remove();
+  }
+});
+
+test("applyHomeEnhancements hides home cards with visible bookmark badges when dirs are unavailable", () => {
+  const root = document.createElement("div");
+  root.innerHTML = `
+    <main>
+      <a data-card="planned" href="/manga/planned-title/main">
+        <span>Буду читать</span>
+        <span>Planned title</span>
+      </a>
+      <a data-card="other" href="/manga/other-title/main">Other</a>
+    </main>
+  `;
+  document.body.appendChild(root);
+  try {
+    applyHomeEnhancements(
+      root,
+      mergeSettings({ filterHomeBookmarks: true }),
+      null,
+    );
+
+    const planned = root.querySelector('[data-card="planned"]') as HTMLElement;
+    const other = root.querySelector('[data-card="other"]') as HTMLElement;
+    assert.equal(planned.style.display, "none");
+    assert.notEqual(other.style.display, "none");
+  } finally {
+    root.remove();
   }
 });

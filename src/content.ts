@@ -18,7 +18,13 @@ import {
   prefetchNextChapter,
   resetPrefetchDedup,
 } from "./chapter-prefetch";
-import { applyHomeEnhancements } from "./home-enhancer";
+import {
+  applyHomeEnhancements,
+  getEnabledBookmarkDirs,
+  type HomeBookmarkDirs,
+} from "./home-enhancer";
+
+const LOAD_HOME_BOOKMARKS_MESSAGE_TYPE = "rre/load-home-bookmarks";
 
 declare global {
   interface Window {
@@ -42,6 +48,7 @@ async function bootstrap(): Promise<void> {
   const settledRefreshHandles = new Set<number>();
   let lastUrl = window.location.href;
   let lastTitleDir: string | null = null;
+  let homeBookmarkDirs: HomeBookmarkDirs | null = null;
 
   const triggerPrefetchForCurrentUrl = () => {
     if (!currentSettings.prefetchNextChapter) return;
@@ -64,7 +71,11 @@ async function bootstrap(): Promise<void> {
   };
 
   const runRefresh = () => {
-    applyHomeEnhancements(document, currentSettings);
+    const enabledBookmarkDirs =
+      homeBookmarkDirs && currentSettings.filterHomeBookmarks
+        ? getEnabledBookmarkDirs(homeBookmarkDirs, currentSettings.filterBookmarkCategories)
+        : null;
+    applyHomeEnhancements(document, currentSettings, enabledBookmarkDirs);
 
     if (!isReaderPage()) {
       clearEnhancerArtifacts();
@@ -81,6 +92,34 @@ async function bootstrap(): Promise<void> {
   const requestRefresh = () => {
     window.clearTimeout(refreshHandle);
     refreshHandle = window.setTimeout(runRefresh, REFRESH_DEBOUNCE_MS);
+  };
+
+  const requestHomeBookmarks = () => {
+    if (!currentSettings.filterHomeBookmarks) {
+      homeBookmarkDirs = null;
+      return;
+    }
+
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      { type: LOAD_HOME_BOOKMARKS_MESSAGE_TYPE },
+      (response: unknown) => {
+        void chrome.runtime?.lastError;
+        if (
+          response &&
+          typeof response === "object" &&
+          "dirs" in response &&
+          response.dirs &&
+          typeof response.dirs === "object"
+        ) {
+          homeBookmarkDirs = response.dirs as HomeBookmarkDirs;
+          requestRefresh();
+        }
+      },
+    );
   };
 
   const clearSettledRefreshes = () => {
@@ -219,15 +258,20 @@ async function bootstrap(): Promise<void> {
 
   watchSettings((nextSettings) => {
     const previousPremiumFree = currentSettings.premiumFree;
+    const previousFilterHomeBookmarks = currentSettings.filterHomeBookmarks;
     currentSettings = nextSettings;
     if (!previousPremiumFree && currentSettings.premiumFree) {
       requestParserServerWarmup(currentSettings);
+    }
+    if (!previousFilterHomeBookmarks && currentSettings.filterHomeBookmarks) {
+      requestHomeBookmarks();
     }
     requestRefresh();
   });
 
   requestParserServerWarmup(currentSettings);
   requestRefresh();
+  requestHomeBookmarks();
 }
 
 function shouldRefreshForMutation(mutation: MutationRecord): boolean {

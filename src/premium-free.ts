@@ -81,6 +81,77 @@ export type PremiumFreeClientResolveResult =
   | PremiumFreeResolveSuccess
   | PremiumFreeClientFailure;
 
+export type ProviderPhase = "connecting" | "searching" | "found" | "not_found";
+
+export type ProviderChipStatus =
+  | "pending"
+  | "searching"
+  | "found_title"
+  | "loading_chapters"
+  | "parsing"
+  | "success"
+  | "not_found"
+  | "provider_error";
+
+export type ProviderChipInfo = {
+  name: string;
+  displayName: string;
+  status: ProviderChipStatus;
+};
+
+export type StatusBlockPhase = {
+  phase: ProviderPhase;
+  providers: ProviderChipInfo[];
+};
+
+export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+  mangabuff: "Mangabuff",
+  senkuro: "Senkuro",
+  inkstory: "InkStory",
+  teletype: "Teletype",
+  usagi: "Usagi",
+};
+
+export const mapServerProgressToChips = (
+  providers: Record<string, { status: string; reason?: string; detail?: string }>,
+): ProviderChipInfo[] => {
+  const result: ProviderChipInfo[] = [];
+  for (const [name, progress] of Object.entries(providers)) {
+    let chipStatus: ProviderChipStatus;
+    switch (progress.status) {
+      case "pending":
+        chipStatus = "pending";
+        break;
+      case "searching":
+        chipStatus = "searching";
+        break;
+      case "found_title":
+        chipStatus = "found_title";
+        break;
+      case "loading_chapters":
+        chipStatus = "loading_chapters";
+        break;
+      case "parsing":
+        chipStatus = "parsing";
+        break;
+      case "success":
+        chipStatus = "success";
+        break;
+      case "failed":
+        chipStatus = progress.reason === "no_match" ? "not_found" : "provider_error";
+        break;
+      default:
+        chipStatus = "pending";
+    }
+    result.push({
+      name,
+      displayName: PROVIDER_DISPLAY_NAMES[name] ?? name,
+      status: chipStatus,
+    });
+  }
+  return result;
+};
+
 export type PremiumFreeCacheEntry = {
   result: PremiumFreeClientResolveResult;
   expiresAt: number | null;
@@ -209,14 +280,6 @@ export const buildPremiumFreeSearchUrl = (titleName: string): string =>
 export const isResolverUnavailableError = (error: unknown): boolean =>
   error instanceof TypeError;
 
-const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  mangabuff: "Mangabuff",
-  senkuro: "Senkuro",
-  inkstory: "InkStory",
-  teletype: "Teletype",
-  usagi: "Usagi",
-};
-
 const displayProviderName = (provider: string): string =>
   PROVIDER_DISPLAY_NAMES[provider] ?? provider;
 
@@ -231,11 +294,25 @@ const createParserServerFailure = (
   ...(detail ? { detail } : {}),
 });
 
+const EXTENSION_CONTEXT_INVALIDATED_RE = /invalidated/i;
+
+const isExtensionContextInvalidated = (): boolean => {
+  if (typeof chrome === "undefined") return true;
+  if (!chrome.runtime?.id) return true;
+  return false;
+};
+
+export const EXTENSION_CONTEXT_INVALIDATED_DETAIL =
+  "Extension context invalidated. Reload the page.";
+
+export const isExtensionContextInvalidatedDetail = (detail: string | undefined): boolean =>
+  typeof detail === "string" && detail.includes("Extension context invalidated");
+
 export const ensureParserServerReady = async (): Promise<ParserServerEnsureResult> => {
-  if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+  if (isExtensionContextInvalidated()) {
     return {
       status: "failed",
-      detail: "Chrome runtime messaging недоступен.",
+      detail: "Extension context invalidated. Reload the page.",
     };
   }
 
@@ -245,9 +322,23 @@ export const ensureParserServerReady = async (): Promise<ParserServerEnsureResul
       (response: unknown) => {
         const runtimeError = chrome.runtime?.lastError?.message;
         if (runtimeError) {
+          if (EXTENSION_CONTEXT_INVALIDATED_RE.test(runtimeError)) {
+            return resolve({
+              status: "install_required",
+              detail: "Extension context invalidated. Reload the page.",
+            });
+          }
           resolve({
             status: "failed",
             detail: runtimeError,
+          });
+          return;
+        }
+
+        if (isExtensionContextInvalidated()) {
+          resolve({
+            status: "install_required",
+            detail: "Extension context invalidated. Reload the page.",
           });
           return;
         }
@@ -300,6 +391,12 @@ export const describePremiumFreeFailure = (
   const fallbackUrl = failure.manualUrl || buildPremiumFreeSearchUrl(titleName);
 
   if (failure.reason === "install_required") {
+    if (isExtensionContextInvalidatedDetail(failure.detail)) {
+      return {
+        title: "Premium Free",
+        copy: "Расширение обновилось. Перезагрузите страницу.",
+      };
+    }
     return {
       title: "Premium Free",
       copy:
