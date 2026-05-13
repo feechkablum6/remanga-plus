@@ -5,6 +5,13 @@ import {
   type ToolbarButtonKey,
 } from "./settings";
 import {
+  CONTROL_ATTRIBUTE,
+  HIDDEN_ATTRIBUTE,
+  markHidden,
+  normalizeText,
+  queryAllWithSelf,
+} from "./reader-dom-utils";
+import {
   PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY,
   buildPremiumFreeSearchUrl,
   clearStalePremiumFreeBranchPreference,
@@ -34,7 +41,6 @@ import {
 } from "./premium-free";
 import {
   PARSER_SERVER_DEFAULT_PORT,
-  PROXY_IMAGE_MESSAGE_TYPE,
   PROGRESS_PATH_PREFIX,
   buildParserServerBaseUrl,
 } from "./parser-server";
@@ -66,12 +72,36 @@ import {
   type ProgressTracker,
 } from "./premium-free-progress";
 import {
+  fetchPremiumFreeImageBlobUrl,
+  isPremiumFreeImageCached,
+  subscribePremiumFreeImageLoad,
+} from "./premium-free-image-loader";
+import {
+  createPremiumFreeKey,
+  createPremiumFreeStreamEntry,
+  type PremiumFreeChapterStream,
+  type PremiumFreeFailureResult,
+  type PremiumFreeIndicatorSnapshot,
+  type PremiumFreeReaderMode,
+  type PremiumFreeReaderState,
+  type PremiumFreeState,
+  type PremiumFreeStreamEntry,
+  type PremiumFreeStreamStatus,
+  type PremiumFreeSuccessResult,
+  type PremiumFreeVisiblePage,
+} from "./premium-free-reader-model";
+import {
   createStatusBlock,
   updateStatusBlock,
   createMiniStatusBlock,
   updateMiniStatusBlock,
   type StatusBlockUpdate,
 } from "./premium-free-status-ui.js";
+
+export {
+  isPremiumFreeImageCached,
+  subscribePremiumFreeImageLoad,
+} from "./premium-free-image-loader";
 
 type CommitSettings = (
   updater: (current: ReaderEnhancerSettings) => ReaderEnhancerSettings,
@@ -122,45 +152,7 @@ type ToggleDefinition = {
 };
 
 type MotionMode = "slide-right" | "dissolve";
-type PremiumFreeState = "idle" | "resolving" | "rendering" | "error";
-type PremiumFreeReaderMode = "feed" | "pager";
-type PremiumFreeStreamStatus = "idle" | "loading-next" | "error" | "exhausted";
-type PremiumFreeReaderState = {
-  mode: PremiumFreeReaderMode;
-  containerWidthVar: string | null;
-  brightnessVar: string | null;
-};
-type PremiumFreeSuccessResult = Extract<PremiumFreeClientResolveResult, { status: "success" }>;
-type PremiumFreeFailureResult = Extract<PremiumFreeClientResolveResult, { status: "failure" }>;
-type PremiumFreeStreamEntry = {
-  key: string;
-  reference: RemangaChapterReference;
-  result: PremiumFreeSuccessResult;
-  chapterLabel: string;
-};
-type PremiumFreeVisiblePage = {
-  key: string;
-  pageIndex: number;
-  ratio: number;
-};
-type PremiumFreeIndicatorSnapshot = {
-  chapterLabelText: string | null;
-  pageCounterText: string | null;
-  url: string;
-};
-type PremiumFreeChapterStream = {
-  rootKey: string;
-  container: HTMLElement;
-  entries: PremiumFreeStreamEntry[];
-  status: PremiumFreeStreamStatus;
-  errorResult: PremiumFreeFailureResult | null;
-  visiblePages: Map<HTMLElement, PremiumFreeVisiblePage>;
-  indicatorSnapshot: PremiumFreeIndicatorSnapshot | null;
-  activeHistoryUrl: string | null;
-};
 
-const CONTROL_ATTRIBUTE = "data-rre-control";
-const HIDDEN_ATTRIBUTE = "data-rre-hidden";
 const RAIL_STYLE_ATTRIBUTE = "data-rre-rail-style";
 const SETTINGS_STYLE_ATTRIBUTE = "data-rre-settings-style";
 const IGNORE_TOGGLE_ATTRIBUTE = "data-rre-ignore-toggle";
@@ -1381,91 +1373,6 @@ const clampPremiumFreePageIndex = (
   return Math.min(Math.max(nextIndex, 0), totalPages - 1);
 };
 
-type PremiumFreeImageLoadEvent = { proxyPath: string; success: boolean };
-type PremiumFreeImageLoadListener = (event: PremiumFreeImageLoadEvent) => void;
-
-const premiumFreeImageLoadListeners = new Set<PremiumFreeImageLoadListener>();
-
-export const subscribePremiumFreeImageLoad = (
-  listener: PremiumFreeImageLoadListener,
-): (() => void) => {
-  premiumFreeImageLoadListeners.add(listener);
-  return () => {
-    premiumFreeImageLoadListeners.delete(listener);
-  };
-};
-
-const notifyPremiumFreeImageLoad = (event: PremiumFreeImageLoadEvent): void => {
-  premiumFreeImageLoadListeners.forEach((listener) => {
-    try {
-      listener(event);
-    } catch {
-      /* swallow listener errors */
-    }
-  });
-};
-
-const imageBlobCache = new Map<string, string>();
-export const isPremiumFreeImageCached = (proxyPath: string): boolean =>
-  imageBlobCache.has(proxyPath);
-const pendingImageLoads = new Map<string, Promise<string | null>>();
-
-const fetchImageBlobUrl = (proxyPath: string): Promise<string | null> => {
-  const cached = imageBlobCache.get(proxyPath);
-  if (cached) {
-    notifyPremiumFreeImageLoad({ proxyPath, success: true });
-    return Promise.resolve(cached);
-  }
-
-  const pending = pendingImageLoads.get(proxyPath);
-  if (pending) return pending;
-
-  const promise = new Promise<string | null>((resolve) => {
-    chrome.runtime.sendMessage(
-      { type: PROXY_IMAGE_MESSAGE_TYPE, proxyPath },
-      (response: unknown) => {
-        pendingImageLoads.delete(proxyPath);
-        if (
-          !response ||
-          typeof response !== "object" ||
-          !("data" in response) ||
-          typeof (response as { data: unknown }).data !== "string"
-        ) {
-          resolve(null);
-          notifyPremiumFreeImageLoad({ proxyPath, success: false });
-          return;
-        }
-        const dataUrl = (response as { data: string }).data;
-        const commaIndex = dataUrl.indexOf(",");
-        if (commaIndex === -1) {
-          resolve(null);
-          notifyPremiumFreeImageLoad({ proxyPath, success: false });
-          return;
-        }
-        try {
-          const mimeMatch = dataUrl.substring(0, commaIndex).match(/data:([^;]+)/);
-          const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
-          const binary = atob(dataUrl.substring(commaIndex + 1));
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-          }
-          const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-          imageBlobCache.set(proxyPath, blobUrl);
-          resolve(blobUrl);
-          notifyPremiumFreeImageLoad({ proxyPath, success: true });
-        } catch {
-          resolve(null);
-          notifyPremiumFreeImageLoad({ proxyPath, success: false });
-        }
-      },
-    );
-  });
-
-  pendingImageLoads.set(proxyPath, promise);
-  return promise;
-};
-
 const createPremiumFreeImage = (
   page: Extract<PremiumFreeClientResolveResult, { status: "success" }>["pages"][number],
 ): HTMLImageElement => {
@@ -1474,14 +1381,9 @@ const createPremiumFreeImage = (
   image.decoding = "async";
   image.alt = `Страница ${page.index + 1}`;
 
-  const cached = imageBlobCache.get(page.proxyUrl);
-  if (cached) {
-    image.src = cached;
-  } else {
-    void fetchImageBlobUrl(page.proxyUrl).then((blobUrl) => {
-      if (blobUrl) image.src = blobUrl;
-    });
-  }
+  void fetchPremiumFreeImageBlobUrl(page.proxyUrl).then((blobUrl) => {
+    if (blobUrl) image.src = blobUrl;
+  });
 
   return image;
 };
@@ -2383,18 +2285,6 @@ const isSafeAdVisibilityBlock = (node: HTMLElement): boolean => {
   return Array.from(node.querySelectorAll("button")).some(
     (button) => normalizeText(button.textContent) === "отключить рекламу",
   );
-};
-
-const queryAllWithSelf = <T extends Element>(
-  root: ParentNode,
-  selector: string,
-): T[] => {
-  const matches = Array.from(root.querySelectorAll<T>(selector));
-  if (root instanceof Element && root.matches(selector)) {
-    matches.unshift(root as T);
-  }
-
-  return matches;
 };
 
 const findCommentsContainerByMarkers = (
@@ -3483,19 +3373,6 @@ const applyVisibilitySettings = (
   syncRailContainerState(readerDom.railContainer);
 };
 
-const markHidden = (node: HTMLElement | null, hidden: boolean): void => {
-  if (!node) {
-    return;
-  }
-
-  if (hidden) {
-    node.setAttribute(HIDDEN_ATTRIBUTE, "true");
-    return;
-  }
-
-  node.removeAttribute(HIDDEN_ATTRIBUTE);
-};
-
 const syncMotionVisibility = (
   node: HTMLElement | null,
   {
@@ -4168,9 +4045,6 @@ const FULLSCREEN_BUTTON_SELECTOR =
 const containsAny = (text: string, keywords: string[]): boolean =>
   keywords.some((keyword) => text.includes(keyword));
 
-const normalizeText = (value: string | null | undefined): string =>
-  (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-
 const abortPremiumFreeRequest = (): void => {
   if (premiumFreeActiveRequest) {
     window.clearTimeout(premiumFreeActiveRequest.timeoutId);
@@ -4242,14 +4116,6 @@ const startPremiumFreeActiveRequest = (
   return controller;
 };
 
-const createPremiumFreeKey = (reference: RemangaChapterReference): string =>
-  [reference.titleDir, reference.tome ?? "untomed", reference.chapter].join(":");
-
-const formatPremiumFreeChapterLabel = (
-  tome: number | undefined,
-  chapter: string,
-): string => (typeof tome === "number" ? `${tome} - ${chapter}` : chapter);
-
 const findPremiumFreeChapterLabelControl = (): HTMLElement | null =>
   Array.from(document.querySelectorAll<HTMLElement>("button, a"))
     .find((node) => /^\d+\s*-\s*[\d.]+$/.test(node.textContent?.trim() ?? "")) ?? null;
@@ -4303,19 +4169,6 @@ const collectPremiumFreeTargetReference = (
     bannerText: banner?.textContent ?? null,
     nextChapterHref: findPremiumFreeNextChapterHref(),
   });
-
-const createPremiumFreeStreamEntry = (
-  reference: RemangaChapterReference,
-  result: PremiumFreeSuccessResult,
-): PremiumFreeStreamEntry => ({
-  key: createPremiumFreeKey(reference),
-  reference,
-  result,
-  chapterLabel: formatPremiumFreeChapterLabel(
-    reference.tome,
-    result.matchedChapter.chapter,
-  ),
-});
 
 const capturePremiumFreeReaderIndicators = (): PremiumFreeIndicatorSnapshot => ({
   chapterLabelText: findPremiumFreeChapterLabelControl()?.textContent?.trim() ?? null,
@@ -4982,7 +4835,7 @@ const handlePaidNextChapterPrefetch = async (
   };
 
   await prewarmPremiumFreeChapter(reference, resolvePremiumFreeChapterResult, {
-    prewarmImage: fetchImageBlobUrl,
+    prewarmImage: fetchPremiumFreeImageBlobUrl,
   });
 };
 
@@ -5003,7 +4856,7 @@ const prewarmPremiumFreeNextStreamChapter = (
   void prewarmPremiumFreeChapter(
     nextReference,
     resolvePremiumFreeChapterResult,
-    { prewarmImage: fetchImageBlobUrl },
+    { prewarmImage: fetchPremiumFreeImageBlobUrl },
   );
 };
 
