@@ -12,6 +12,7 @@ const readerEnhancerSource = readSourceIfExists("src/reader-enhancer.ts");
 const popupCategoriesSource = readSourceIfExists("src/popup-categories.ts");
 const readerModelSource = readSourceIfExists("src/premium-free-reader-model.ts");
 const readerViewSource = readSourceIfExists("src/premium-free-reader-view.ts");
+const domUtilsSource = readSourceIfExists("src/reader-dom-utils.ts");
 
 test('uses "Premium Free" as the toggle label', () => {
   assert.match(popupCategoriesSource, /"premium-free": \{ label: "Premium Free"/);
@@ -137,22 +138,22 @@ test("appends premium-free stream chapters without replacing the existing feed",
 });
 
 test("keeps premium-free sync anchored to the existing root banner", () => {
-  const bannerFinder = readerEnhancerSource.match(
-    /const findBuyChapterBanner = \(\): HTMLElement \| null => \{[\s\S]*?\n\};\n\nconst PREMIUM_FREE_ROOT_KEY/u,
+  const bannerFinder = domUtilsSource.match(
+    /export const findBuyChapterBanner = \(\): HTMLElement \| null => \{[\s\S]*?\n\};/,
   );
 
-  assert.ok(bannerFinder, "expected findBuyChapterBanner function body");
+  assert.ok(bannerFinder, "expected findBuyChapterBanner function body in reader-dom-utils");
   assert.match(bannerFinder[0], /PREMIUM_FREE_ROOT_KEY/);
   assert.match(bannerFinder[0], /closest<HTMLElement>\("div\.h-screen"\)/);
   assert.doesNotMatch(bannerFinder[0], /PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE/);
 });
 
 test("ignores zero-height premium-free root banners when selecting the paid banner", () => {
-  const bannerFinder = readerEnhancerSource.match(
-    /const findBuyChapterBanner = \(\): HTMLElement \| null => \{[\s\S]*?\n\};\n\nconst PREMIUM_FREE_ROOT_KEY/u,
+  const bannerFinder = domUtilsSource.match(
+    /export const findBuyChapterBanner = \(\): HTMLElement \| null => \{[\s\S]*?\n\};/,
   );
 
-  assert.ok(bannerFinder, "expected findBuyChapterBanner function body");
+  assert.ok(bannerFinder, "expected findBuyChapterBanner function body in reader-dom-utils");
   assert.match(bannerFinder[0], /isVisiblePremiumFreeBannerCandidate\(existingRootBanner\)/);
   assert.match(bannerFinder[0], /find\(isVisiblePremiumFreeBannerCandidate\)/);
 });

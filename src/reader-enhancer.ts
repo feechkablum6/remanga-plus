@@ -7,6 +7,13 @@ import {
 import {
   CONTROL_ATTRIBUTE,
   HIDDEN_ATTRIBUTE,
+  PREMIUM_FREE_BANNER_ATTRIBUTE,
+  PREMIUM_FREE_KEY_ATTRIBUTE,
+  PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE,
+  PREMIUM_FREE_ROOT_KEY,
+  PREMIUM_FREE_STATE_ATTRIBUTE,
+  findBuyChapterBanner,
+  findSettingsPanel,
   markHidden,
   normalizeText,
   queryAllWithSelf,
@@ -171,9 +178,6 @@ const MOTION_TARGET_HIDDEN_ATTRIBUTE = "data-rre-motion-target-hidden";
 const SECTION_COLLAPSE_ATTRIBUTE = "data-rre-collapse-state";
 const SECTION_COLLAPSE_INITIALIZED_ATTRIBUTE = "data-rre-collapse-initialized";
 const SECTION_COLLAPSE_TARGET_ATTRIBUTE = "data-rre-collapse-target-expanded";
-const PREMIUM_FREE_BANNER_ATTRIBUTE = "data-rre-premium-free-banner";
-const PREMIUM_FREE_STATE_ATTRIBUTE = "data-rre-premium-free-state";
-const PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE = "data-rre-premium-free-native-paid";
 const PSEUDO_FULLSCREEN_ATTRIBUTE = "data-rre-pseudo-fullscreen";
 
 const SLIDE_RIGHT_DURATION_MS = 220;
@@ -1130,53 +1134,6 @@ const findRailContainer = (): HTMLElement | null =>
     '[data-sentry-element="AsideContainer"]',
   ) ?? null;
 
-const findSettingsPanel = (): HTMLElement | null =>
-  Array.from(document.querySelectorAll<HTMLElement>("div")).find((node) => {
-    if (!node.classList.contains("bg-background-content")) {
-      return false;
-    }
-
-    const text = normalizeText(node.textContent);
-    return text.includes("настройки читалки");
-  }) ?? null;
-
-const isVisiblePremiumFreeBannerCandidate = (node: HTMLElement | null): node is HTMLElement => {
-  if (!node) {
-    return false;
-  }
-
-  const rect = node.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return false;
-  }
-
-  const style = window.getComputedStyle(node);
-  return style.display !== "none" && style.visibility !== "hidden";
-};
-
-const findBuyChapterBanner = (): HTMLElement | null => {
-  const existingRoot = document.querySelector<HTMLElement>(
-    `[${CONTROL_ATTRIBUTE}="${PREMIUM_FREE_ROOT_KEY}"]`,
-  );
-  const existingRootBanner = existingRoot?.closest<HTMLElement>("div.h-screen") ?? null;
-  if (isVisiblePremiumFreeBannerCandidate(existingRootBanner)) {
-    return existingRootBanner;
-  }
-
-  const banner = Array.from(
-    document.querySelectorAll<HTMLElement>('[data-sentry-component="BuyChapterActions"]'),
-  )
-    .map((node) => node.closest<HTMLElement>("div.h-screen") ?? node)
-    .find(isVisiblePremiumFreeBannerCandidate);
-  if (!banner) {
-    return null;
-  }
-
-  return banner;
-};
-
-const PREMIUM_FREE_ROOT_KEY = "premium-free-root";
-const PREMIUM_FREE_KEY_ATTRIBUTE = "data-rre-premium-free-key";
 const PREMIUM_FREE_SCROLL_LISTENER_OPTIONS = {
   capture: true,
   passive: true,

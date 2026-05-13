@@ -17,9 +17,20 @@ test("reader-enhancer reuses shared DOM helpers instead of redefining them", () 
   assert.doesNotMatch(readerEnhancerSource, /const normalizeText =/);
   assert.doesNotMatch(readerEnhancerSource, /const queryAllWithSelf =/);
   assert.doesNotMatch(readerEnhancerSource, /const markHidden =/);
+  assert.doesNotMatch(readerEnhancerSource, /const findSettingsPanel =/);
+  assert.doesNotMatch(readerEnhancerSource, /const findBuyChapterBanner =/);
+  assert.doesNotMatch(readerEnhancerSource, /const isVisiblePremiumFreeBannerCandidate =/);
+  assert.doesNotMatch(readerEnhancerSource, /const PREMIUM_FREE_ROOT_KEY =/);
+  assert.doesNotMatch(readerEnhancerSource, /const PREMIUM_FREE_KEY_ATTRIBUTE =/);
+  assert.doesNotMatch(readerEnhancerSource, /const PREMIUM_FREE_BANNER_ATTRIBUTE =/);
+  assert.doesNotMatch(readerEnhancerSource, /const PREMIUM_FREE_STATE_ATTRIBUTE =/);
+  assert.doesNotMatch(readerEnhancerSource, /const PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE =/);
 
   assert.match(domUtilsSource, /export const CONTROL_ATTRIBUTE/);
   assert.match(domUtilsSource, /export const markHidden/);
+  assert.match(domUtilsSource, /export const findSettingsPanel/);
+  assert.match(domUtilsSource, /export const findBuyChapterBanner/);
+  assert.match(domUtilsSource, /export const PREMIUM_FREE_ROOT_KEY/);
 });
 
 test("reader-enhancer does not own Premium Free image transport", () => {
