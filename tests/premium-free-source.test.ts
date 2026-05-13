@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-const readerEnhancerSource = readFileSync(
-  path.resolve(process.cwd(), "src/reader-enhancer.ts"),
-  "utf8",
-);
-const popupCategoriesSource = readFileSync(
-  path.resolve(process.cwd(), "src/popup-categories.ts"),
-  "utf8",
-);
+const readSourceIfExists = (filePath: string): string => {
+  const absolutePath = path.resolve(process.cwd(), filePath);
+  return existsSync(absolutePath) ? readFileSync(absolutePath, "utf8") : "";
+};
+
+const readerEnhancerSource = readSourceIfExists("src/reader-enhancer.ts");
+const popupCategoriesSource = readSourceIfExists("src/popup-categories.ts");
+const readerModelSource = readSourceIfExists("src/premium-free-reader-model.ts");
+const readerViewSource = readSourceIfExists("src/premium-free-reader-view.ts");
 
 test('uses "Premium Free" as the toggle label', () => {
   assert.match(popupCategoriesSource, /"premium-free": \{ label: "Premium Free"/);
@@ -18,7 +19,7 @@ test('uses "Premium Free" as the toggle label', () => {
 
 test("tracks premium-free resolving, rendering, and error states", () => {
   assert.match(
-    readerEnhancerSource,
+    readerModelSource,
     /type PremiumFreeState = "idle" \| "resolving" \| "rendering" \| "error"/,
   );
   assert.match(readerEnhancerSource, /PREMIUM_FREE_STATE_ATTRIBUTE/);
@@ -26,7 +27,7 @@ test("tracks premium-free resolving, rendering, and error states", () => {
 
 test("collects live reader mode and width state for premium-free rendering", () => {
   assert.match(
-    readerEnhancerSource,
+    readerModelSource,
     /type PremiumFreeReaderMode = "feed" \| "pager"/,
   );
   assert.match(readerEnhancerSource, /collectPremiumFreeReaderState/);
@@ -34,16 +35,16 @@ test("collects live reader mode and width state for premium-free rendering", () 
 });
 
 test("renders dedicated premium-free feed and pager readers", () => {
-  assert.match(readerEnhancerSource, /renderPremiumFreeFeedPages/);
-  assert.match(readerEnhancerSource, /renderPremiumFreePagerPages/);
-  assert.match(readerEnhancerSource, /premium-free-feed-reader/);
-  assert.match(readerEnhancerSource, /premium-free-pager-reader/);
+  assert.match(readerViewSource, /renderPremiumFreeFeedPages/);
+  assert.match(readerViewSource, /renderPremiumFreePagerPages/);
+  assert.match(readerViewSource, /premium-free-feed-reader/);
+  assert.match(readerViewSource, /premium-free-pager-reader/);
 });
 
 test("uses a native-style clickable overlay for premium-free pager navigation", () => {
-  assert.match(readerEnhancerSource, /premium-free-clickable-area/);
-  assert.match(readerEnhancerSource, /premium-free-click-zone-prev/);
-  assert.match(readerEnhancerSource, /premium-free-click-zone-next/);
+  assert.match(readerViewSource, /premium-free-clickable-area/);
+  assert.match(readerViewSource, /premium-free-click-zone-prev/);
+  assert.match(readerViewSource, /premium-free-click-zone-next/);
   assert.match(readerEnhancerSource, /premiumFreePageIndex/);
 });
 
@@ -93,7 +94,7 @@ test("warning status icon uses separate valid SVG paths", () => {
 
 test("contains feed-only chapter stream rendering contracts", () => {
   assert.match(
-    readerEnhancerSource,
+    readerModelSource,
     /type PremiumFreeStreamStatus = "idle" \| "loading-next" \| "error" \| "exhausted"/,
   );
   assert.match(readerEnhancerSource, /premium-free-stream-chapter/);
