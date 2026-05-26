@@ -8,6 +8,7 @@ import type { ResolveSessionStore } from "../resolve-session.js";
 interface ResolveBody {
   remanga?: RemangaChapterReference;
   forcedBranchId?: string;
+  disabledProviders?: string[];
 }
 
 export function registerChapterResolveRoute(
@@ -36,12 +37,26 @@ export function registerChapterResolveRoute(
         ? request.body.forcedBranchId
         : undefined;
 
-    const session = sessionStore.create(providerPriority);
+    const disabledSet = new Set(
+      Array.isArray(request.body?.disabledProviders)
+        ? request.body.disabledProviders.filter((p): p is string => typeof p === "string")
+        : [],
+    );
+
+    const activePriority = disabledSet.size > 0
+      ? providerPriority.filter((name) => !disabledSet.has(name))
+      : providerPriority;
+
+    if (activePriority.length === 0) {
+      return reply.code(400).send({ error: "All providers are disabled" });
+    }
+
+    const session = sessionStore.create(activePriority);
 
     resolveExternalChapter({
       remanga,
       providers: registry.getAll(),
-      providerPriority,
+      providerPriority: activePriority,
       titleOverrides,
       ...(forcedBranchId ? { forcedBranchId } : {}),
       onProgress: (providerName, status, extra) => {

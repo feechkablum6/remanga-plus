@@ -2,7 +2,7 @@ import { buildApp } from "./server.js";
 
 const config = {
   cacheDir: process.env.CACHE_DIR ?? "./cache",
-  port: Number(process.env.PORT) || 3000,
+  port: Number(process.env.PORT) || 7845,
   host: process.env.HOST ?? "0.0.0.0",
 };
 

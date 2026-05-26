@@ -17,7 +17,7 @@ const parserServerNodeBin = process.env.REMANGA_NODE_BIN
   ? path.resolve(process.env.REMANGA_NODE_BIN)
   : process.execPath;
 const parserServerHost = "127.0.0.1";
-const portRange = [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009];
+const portRange = [7845, 7846, 7847, 7848, 7849, 7850, 7851, 7852, 7853, 7854];
 const launchTimeoutMs = 15_000;
 const pollIntervalMs = 250;
 const probeTimeoutMs = 1500;

@@ -65,18 +65,32 @@ const resolveChapterMatch = (
   return byChapter[0] ?? null;
 };
 
-const resolveNextChapterMatch = (
+// Sort by reading order (volume asc, chapter asc) so "next" is unambiguous
+// regardless of how a given provider returns its chapter list.
+const compareChaptersAsc = (
+  a: SourceTitleDetails["chapters"][number],
+  b: SourceTitleDetails["chapters"][number],
+): number => {
+  if (a.volume !== b.volume) return a.volume - b.volume;
+  const an = Number(a.chapter);
+  const bn = Number(b.chapter);
+  if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
+  return a.chapter.localeCompare(b.chapter, undefined, { numeric: true });
+};
+
+export const resolveNextChapterMatch = (
   details: SourceTitleDetails,
   matchedChapterId: string,
 ): ExternalResolveSuccess["nextChapter"] => {
-  const matchedIndex = details.chapters.findIndex(
+  const sorted = [...details.chapters].sort(compareChaptersAsc);
+  const matchedIndex = sorted.findIndex(
     (chapter) => chapter.chapterId === matchedChapterId,
   );
-  if (matchedIndex <= 0) {
+  if (matchedIndex === -1 || matchedIndex === sorted.length - 1) {
     return null;
   }
 
-  const nextChapter = details.chapters[matchedIndex - 1];
+  const nextChapter = sorted[matchedIndex + 1];
   if (!nextChapter) {
     return null;
   }

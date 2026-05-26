@@ -108,6 +108,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   mangabuff: "Mangabuff",
   senkuro: "Senkuro",
   inkstory: "InkStory",
+  telemanga: "Telemanga",
   teletype: "Teletype",
   usagi: "Usagi",
 };

@@ -25,16 +25,16 @@ test("category labels match spec", () => {
   assert.equal(CATEGORIES["premium-free"].label, "Premium Free");
 });
 
-test("Сайт has 13 toggles (10 header buttons + 1 home banner + 1 promo banner + 1 recommendations)", () => {
-  assert.equal(countCategoryToggles("site"), 13);
+test("Сайт has 19 toggles", () => {
+  assert.equal(countCategoryToggles("site"), 19);
 });
 
 test("Читалка has 8 toggles (5 visual + 3 popup auto-dismiss)", () => {
   assert.equal(countCategoryToggles("reader"), 8);
 });
 
-test("Premium Free has 3 toggles (режим + префетч + прогресс)", () => {
-  assert.equal(countCategoryToggles("premium-free"), 3);
+test("Premium Free has 4 toggles", () => {
+  assert.equal(countCategoryToggles("premium-free"), 4);
 });
 
 test("Сайт toggles include all 10 header button keys with Russian labels", () => {
@@ -74,12 +74,13 @@ test("Читалка toggles match the 8 spec labels in display order", () => {
   ]);
 });
 
-test("Premium Free toggles are: режим + префетч + прогресс", () => {
+test("Premium Free toggles are: режим + префетч + прогресс + рекомендации", () => {
   const labels = CATEGORIES["premium-free"].toggles.map((t) => t.label);
   assert.deepEqual(labels, [
     "Premium Free режим",
     "Префетч следующей главы",
     "Показывать прогресс загрузки",
+    "Персональные рекомендации",
   ]);
 });
 
@@ -126,10 +127,9 @@ test("Premium Free 'прогресс' toggle wired to showPremiumFreeProgress", 
   }
 });
 
-test("site toggles include personalRecommendations under ГЛАВНАЯ СТРАНИЦА", () => {
-  const toggles = CATEGORIES.site.toggles;
+test("premium-free toggles include personalRecommendations", () => {
+  const toggles = CATEGORIES["premium-free"].toggles;
   const rec = toggles.find(t => t.label === "Персональные рекомендации");
   assert.ok(rec, "toggle not found");
   assert.deepEqual(rec?.accessor, { kind: "scalar", key: "personalRecommendations" });
-  assert.equal(rec?.subsection, "ГЛАВНАЯ СТРАНИЦА");
 });

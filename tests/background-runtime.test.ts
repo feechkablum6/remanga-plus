@@ -5,7 +5,7 @@ import { checkParserServerHealth, ensureParserServer } from "../src/background.j
 
 test("checkParserServerHealth returns true for an ok health response", async () => {
   const result = await checkParserServerHealth(
-    3000,
+    7845,
     (async () =>
       new Response(JSON.stringify({ status: "ok" }), {
         status: 200,
@@ -99,7 +99,7 @@ test("ensureParserServer trusts the native host ready response after launch", as
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     requestedUrls.push(url);
 
-    if (url === "http://127.0.0.1:3000/health") {
+    if (url === "http://127.0.0.1:7845/health") {
       return new Response(JSON.stringify({ status: "starting" }), {
         status: 503,
         headers: { "Content-Type": "application/json" },
@@ -121,8 +121,8 @@ test("ensureParserServer trusts the native host ready response after launch", as
       status: "ready",
       port: 3001,
     });
-    assert.equal(requestedUrls[0], "http://127.0.0.1:3000/health");
-    assert.deepEqual(requestedUrls, ["http://127.0.0.1:3000/health"]);
+    assert.equal(requestedUrls[0], "http://127.0.0.1:7845/health");
+    assert.deepEqual(requestedUrls, ["http://127.0.0.1:7845/health"]);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.chrome = originalChrome;
@@ -190,10 +190,10 @@ test("ensureParserServer falls back to default port when restored port is stale"
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     requestedUrls.push(url);
-    if (url === "http://127.0.0.1:3001/health") {
+    if (url === "http://127.0.0.1:7846/health") {
       throw new TypeError("offline");
     }
-    if (url === "http://127.0.0.1:3000/health") {
+    if (url === "http://127.0.0.1:7845/health") {
       return new Response(JSON.stringify({ status: "ok" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -206,8 +206,8 @@ test("ensureParserServer falls back to default port when restored port is stale"
   try {
     await ensureParserServer();
     const result = await ensureParserServer();
-    assert.deepEqual(result, { status: "ready", port: 3000 });
-    assert.ok(requestedUrls.includes("http://127.0.0.1:3000/health"));
+    assert.deepEqual(result, { status: "ready", port: 7845 });
+    assert.ok(requestedUrls.includes("http://127.0.0.1:7845/health"));
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.chrome = originalChrome;

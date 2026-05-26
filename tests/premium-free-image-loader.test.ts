@@ -25,6 +25,22 @@ const installChromeResponse = (response: unknown): void => {
   };
 };
 
+const installChromeResponses = (responses: unknown[]): void => {
+  let index = 0;
+  (globalThis as unknown as { chrome: unknown }).chrome = {
+    runtime: {
+      sendMessage(message: unknown, callback: (response: unknown) => void) {
+        assert.deepEqual(message, {
+          type: PROXY_IMAGE_MESSAGE_TYPE,
+          proxyPath: "/api/images/demo:1:0",
+        });
+        callback(responses[Math.min(index, responses.length - 1)]);
+        index += 1;
+      },
+    },
+  };
+};
+
 test("fetchPremiumFreeImageBlobUrl caches a successful proxy response and emits success", async () => {
   clearPremiumFreeImageCache();
   const originalCreateObjectURL = URL.createObjectURL;
@@ -69,4 +85,30 @@ test("fetchPremiumFreeImageBlobUrl emits failure for malformed responses", async
 
   unsubscribe();
   clearPremiumFreeImageCache();
+});
+
+test("fetchPremiumFreeImageBlobUrl retries a transient proxy failure", async () => {
+  clearPremiumFreeImageCache();
+  const originalCreateObjectURL = URL.createObjectURL;
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: () => "blob:rre-retry",
+  });
+  installChromeResponses([{ error: "HTTP 502" }, { data: ONE_PIXEL_JPEG }]);
+
+  const events: Array<{ proxyPath: string; success: boolean }> = [];
+  const unsubscribe = subscribePremiumFreeImageLoad((event) => events.push(event));
+
+  const result = await fetchPremiumFreeImageBlobUrl("/api/images/demo:1:0");
+
+  assert.equal(result, "blob:rre-retry");
+  assert.equal(isPremiumFreeImageCached("/api/images/demo:1:0"), true);
+  assert.deepEqual(events, [{ proxyPath: "/api/images/demo:1:0", success: true }]);
+
+  unsubscribe();
+  clearPremiumFreeImageCache();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: originalCreateObjectURL,
+  });
 });

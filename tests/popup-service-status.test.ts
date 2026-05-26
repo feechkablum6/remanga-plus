@@ -18,11 +18,11 @@ test("initial state shows 'Проверка…', no restart button", () => {
 
 test("ok state shows 'Parser-server :PORT' with no restart button", () => {
   const dom = new JSDOM(html);
-  renderServerStatus(dom.window.document, { kind: "ok", port: 3000 });
+  renderServerStatus(dom.window.document, { kind: "ok", port: 7845 });
   const label = dom.window.document.querySelector("[data-server-label]");
   const btn = dom.window.document.querySelector<HTMLElement>("[data-server-restart]");
   const row = dom.window.document.querySelector("[data-server-status]");
-  assert.equal(label?.textContent, "Parser-server :3000");
+  assert.equal(label?.textContent, "Parser-server :7845");
   assert.equal(btn?.hidden, true);
   assert.equal(row?.getAttribute("data-state"), "ok");
 });

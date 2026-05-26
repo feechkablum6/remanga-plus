@@ -208,6 +208,8 @@ const GIFT_PROMO_KEYWORDS = [
   "прочтение",
 ];
 
+const PREMIUM_SUB_KEYWORDS = ["premium подписк", "подписк"];
+
 const ACTIVE_FULLSCREEN_CLASSES = [
   "bg-accent/40",
   "hover:bg-accent",
@@ -225,6 +227,7 @@ let stylesInstalled = false;
 let prefetchNextChapterEnabled = false;
 let premiumFreeEnabled = false;
 let progressTrackerEnabled = false;
+let disabledProviderNames: string[] = [];
 let activeProgressTracker: ProgressTracker | null = null;
 let activeProgressTrackerKey: string | null = null;
 let rightRailOptionsExpanded = false;
@@ -542,6 +545,9 @@ export const syncReaderEnhancer = ({
   prefetchNextChapterEnabled = settings.prefetchNextChapter;
   premiumFreeEnabled = settings.premiumFree;
   progressTrackerEnabled = settings.showPremiumFreeProgress;
+  disabledProviderNames = Object.entries(settings.disabledProviders)
+    .filter(([, disabled]) => disabled)
+    .map(([name]) => name);
   ensureProgressTracker();
   // Toggle the data-rre-tighten-chapter-feed attribute that the CSS rule in
   // ensureStyles() reacts to. Updated every sync so changes take effect
@@ -3533,6 +3539,10 @@ const classifyPopup = (popup: HTMLElement): PopupSettingKey | null => {
     return "giftsPromo";
   }
 
+  if (containsAny(text, PREMIUM_SUB_KEYWORDS)) {
+    return "premiumSubscription";
+  }
+
   if (popup.matches('[data-dismissible="true"]') && isSafeToForceHide(popup)) {
     return "otherNonBlocking";
   }
@@ -3550,6 +3560,10 @@ const shouldDismissPopup = (
 
   if (popupType === "giftsPromo") {
     return settings.hidePopups.giftsPromo;
+  }
+
+  if (popupType === "premiumSubscription") {
+    return settings.hidePopups.premiumSubscription;
   }
 
   return settings.hidePopups.otherNonBlocking;
@@ -4571,6 +4585,7 @@ const resolvePremiumFreeChapterResult = async (
         body: JSON.stringify({
           remanga: reference,
           ...(requestedBranchId ? { forcedBranchId: requestedBranchId } : {}),
+          ...(disabledProviderNames.length > 0 ? { disabledProviders: disabledProviderNames } : {}),
         }),
         signal: controller.signal,
       });

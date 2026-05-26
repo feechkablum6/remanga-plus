@@ -208,3 +208,32 @@ test("mergeSettings uses provided personalRecommendations", () => {
   const s = mergeSettings({ personalRecommendations: false });
   assert.equal(s.personalRecommendations, false);
 });
+
+test("DEFAULT_SETTINGS exposes disabledProviders with all providers enabled by default", () => {
+  assert.deepEqual(DEFAULT_SETTINGS.disabledProviders, {
+    mangabuff: false,
+    senkuro: false,
+    inkstory: false,
+    telemanga: false,
+    teletype: false,
+    usagi: false,
+  });
+});
+
+test("mergeSettings merges partial disabledProviders overrides", () => {
+  const merged = mergeSettings({ disabledProviders: { mangabuff: true } });
+  assert.equal(merged.disabledProviders.mangabuff, true);
+  assert.equal(merged.disabledProviders.senkuro, false);
+});
+
+test("mergeSettings without partial keeps default disabledProviders", () => {
+  const merged = mergeSettings({});
+  assert.deepEqual(merged.disabledProviders, DEFAULT_SETTINGS.disabledProviders);
+});
+
+test("cloneSettings makes independent copy of disabledProviders", () => {
+  const s = mergeSettings({ disabledProviders: { inkstory: true } });
+  const c = cloneSettings(s);
+  c.disabledProviders.inkstory = false;
+  assert.equal(s.disabledProviders.inkstory, true);
+});

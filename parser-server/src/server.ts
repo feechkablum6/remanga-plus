@@ -9,6 +9,7 @@ import { HttpClient } from "./http/client.js";
 import { InkstoryProvider } from "./providers/inkstory.js";
 import { MangabuffProvider } from "./providers/mangabuff.js";
 import { SenkuroProvider } from "./providers/senkuro.js";
+import { TelemangaProvider } from "./providers/telemanga.js";
 import { TeletypeProvider } from "./providers/teletype.js";
 import { UsagiProvider } from "./providers/usagi.js";
 import { ProviderRegistry } from "./providers/registry.js";
@@ -56,6 +57,7 @@ export function buildApp(config: AppConfig) {
   registry.register(new MangabuffProvider(httpClient));
   registry.register(new SenkuroProvider(httpClient));
   registry.register(new InkstoryProvider(httpClient));
+  registry.register(new TelemangaProvider(httpClient));
   registry.register(new TeletypeProvider(httpClient));
   registry.register(new UsagiProvider(httpClient));
 

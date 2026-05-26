@@ -30,6 +30,6 @@ test("renderToggles does NOT duplicate DOM children on second render", () => {
   renderToggles(dom.window.document, settings, async () => {});
   renderToggles(dom.window.document, settings, async () => {});
   const list = dom.window.document.querySelector('[data-toggle-list="site"]');
-  // 12 toggle rows total (10 header buttons + 1 home banner + 1 promo banner), should NOT be 24
-  assert.equal(list?.querySelectorAll(".toggle").length, 12);
+  // 19 toggle rows total, should NOT be 38
+  assert.equal(list?.querySelectorAll(".toggle").length, 19);
 });

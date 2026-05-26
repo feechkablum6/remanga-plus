@@ -3,6 +3,7 @@ import type {
   HeaderButtonKey,
   BookmarkFilterCategoryKey,
   PopupSettingKey,
+  ProviderKey,
 } from "./settings.js";
 
 export type CategoryKey = "site" | "reader" | "premium-free";
@@ -34,19 +35,32 @@ export type ToggleAccessor =
     }
   | { kind: "header-button"; key: HeaderButtonKey }
   | { kind: "bookmark-category"; key: BookmarkFilterCategoryKey }
-  | { kind: "popup"; key: PopupSettingKey };
+  | { kind: "popup"; key: PopupSettingKey }
+  | { kind: "provider"; key: ProviderKey };
+
+export type CollapsibleGroupDef = {
+  name: string;
+  label: string;
+};
 
 export type ToggleDescriptor = {
   label: string;
   caption?: string;
   accessor: ToggleAccessor;
   subsection?: SiteSubsection;
+  collapsibleGroup?: string;
 };
 
 export type CategoryMeta = {
   label: string;
   icon: "globe" | "book" | "bolt";
   toggles: ReadonlyArray<ToggleDescriptor>;
+};
+
+export const COLLAPSIBLE_GROUPS: Record<string, string> = {
+  homeHiding: "Скрытие на главной",
+  bookmarkFilter: "Фильтровать закладки",
+  providerToggles: "Провайдеры",
 };
 
 const HEADER_BUTTONS: ReadonlyArray<[HeaderButtonKey, string]> = [
@@ -71,6 +85,15 @@ const BOOKMARK_FILTER_CATEGORIES: ReadonlyArray<[BookmarkFilterCategoryKey, stri
   ["favorite", "Любимое"],
 ];
 
+const PROVIDER_KEYS: ReadonlyArray<[ProviderKey, string]> = [
+  ["mangabuff", "Mangabuff"],
+  ["senkuro", "Senkuro"],
+  ["inkstory", "InkStory"],
+  ["telemanga", "Telemanga"],
+  ["teletype", "Teletype"],
+  ["usagi", "Usagi"],
+];
+
 const siteToggles: ReadonlyArray<ToggleDescriptor> = [
   ...HEADER_BUTTONS.map(
     ([key, label]): ToggleDescriptor => ({
@@ -83,28 +106,26 @@ const siteToggles: ReadonlyArray<ToggleDescriptor> = [
     label: "Скрыть баннер игры",
     accessor: { kind: "scalar", key: "hideHomeGameBanner" },
     subsection: "ГЛАВНАЯ СТРАНИЦА",
+    collapsibleGroup: "homeHiding",
   },
   {
     label: "Скрыть промо-плашку Telegram",
     accessor: { kind: "scalar", key: "hideHomePromoBanner" },
     subsection: "ГЛАВНАЯ СТРАНИЦА",
+    collapsibleGroup: "homeHiding",
   },
   {
-    label: "Персональные рекомендации",
-    caption: "Заменить рекомендации на главной с учётом ваших закладок",
-    accessor: { kind: "scalar", key: "personalRecommendations" },
+    label: "Скрыть окно Premium подписки",
+    accessor: { kind: "popup", key: "premiumSubscription" },
     subsection: "ГЛАВНАЯ СТРАНИЦА",
-  },
-  {
-    label: "Фильтровать закладки",
-    accessor: { kind: "scalar", key: "filterHomeBookmarks" },
-    subsection: "ГЛАВНАЯ СТРАНИЦА",
+    collapsibleGroup: "homeHiding",
   },
   ...BOOKMARK_FILTER_CATEGORIES.map(
     ([key, label]): ToggleDescriptor => ({
       label,
       accessor: { kind: "bookmark-category", key },
       subsection: "ГЛАВНАЯ СТРАНИЦА",
+      collapsibleGroup: "bookmarkFilter",
     }),
   ),
 ];
@@ -146,6 +167,18 @@ const premiumFreeToggles: ReadonlyArray<ToggleDescriptor> = [
     label: "Показывать прогресс загрузки",
     accessor: { kind: "scalar", key: "showPremiumFreeProgress" },
   },
+  {
+    label: "Персональные рекомендации",
+    caption: "Заменить рекомендации на главной с учётом ваших закладок",
+    accessor: { kind: "scalar", key: "personalRecommendations" },
+  },
+  ...PROVIDER_KEYS.map(
+    ([key, label]): ToggleDescriptor => ({
+      label,
+      accessor: { kind: "provider", key },
+      collapsibleGroup: "providerToggles",
+    }),
+  ),
 ];
 
 export const CATEGORY_KEYS: ReadonlyArray<CategoryKey> = ["site", "reader", "premium-free"];
@@ -172,6 +205,7 @@ export const readToggleValue = (
   if (a.kind === "scalar") return settings[a.key];
   if (a.kind === "header-button") return settings.hideHeaderButtons[a.key];
   if (a.kind === "bookmark-category") return settings.filterBookmarkCategories[a.key];
+  if (a.kind === "provider") return !settings.disabledProviders[a.key];
   return settings.hidePopups[a.key];
 };
 
@@ -194,6 +228,12 @@ export const applyToggleChange = (
     return {
       ...settings,
       filterBookmarkCategories: { ...settings.filterBookmarkCategories, [a.key]: next },
+    };
+  }
+  if (a.kind === "provider") {
+    return {
+      ...settings,
+      disabledProviders: { ...settings.disabledProviders, [a.key]: !next },
     };
   }
   return {

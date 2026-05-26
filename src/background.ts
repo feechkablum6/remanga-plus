@@ -316,6 +316,27 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
   }
 };
 
+export const getParserServerStatus = async (
+  fetchImpl: typeof fetch = fetch,
+): Promise<ParserServerStatus> => {
+  await restoreDiscoveredPort();
+
+  if (await checkParserServerHealth(discoveredPort, fetchImpl)) {
+    return { status: "ok", port: discoveredPort };
+  }
+
+  if (
+    discoveredPort !== PARSER_SERVER_DEFAULT_PORT &&
+    (await checkParserServerHealth(PARSER_SERVER_DEFAULT_PORT, fetchImpl))
+  ) {
+    discoveredPort = PARSER_SERVER_DEFAULT_PORT;
+    persistDiscoveredPort(discoveredPort);
+    return { status: "ok", port: discoveredPort };
+  }
+
+  return { status: "down" };
+};
+
 const handleProxyImage = async (
   proxyPath: string,
 ): Promise<{ data: string; contentType: string } | { error: string }> => {
@@ -691,14 +712,7 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
     }
 
     if (message.type === STATUS_PARSER_SERVER_MESSAGE_TYPE) {
-      void (async () => {
-        await restoreDiscoveredPort();
-        const healthy = await checkParserServerHealth(discoveredPort);
-        const result: ParserServerStatus = healthy
-          ? { status: "ok", port: discoveredPort }
-          : { status: "down" };
-        sendResponse(result);
-      })();
+      void getParserServerStatus().then(sendResponse);
       return true;
     }
 

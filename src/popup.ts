@@ -17,7 +17,7 @@ import {
   applyToggleChange,
   type ToggleDescriptor,
   type CategoryKey,
-  type SiteSubsection,
+  COLLAPSIBLE_GROUPS,
 } from "./popup-categories.js";
 import {
   renderServerStatus,
@@ -253,19 +253,140 @@ function buildToggles(
 ): Node[] {
   const toggles = CATEGORIES[key].toggles;
   const nodes: Node[] = [];
-  let lastSubsection: SiteSubsection | undefined = undefined;
 
-  for (const toggle of toggles) {
-    if (toggle.subsection && toggle.subsection !== lastSubsection) {
-      const heading = doc.createElement("h3");
-      heading.className = "drill-subheading";
-      heading.textContent = toggle.subsection;
-      nodes.push(heading);
-      lastSubsection = toggle.subsection;
+  let i = 0;
+  while (i < toggles.length) {
+    const toggle = toggles[i];
+
+    if (toggle.subsection) {
+      const subName = toggle.subsection;
+      const subToggles: ToggleDescriptor[] = [];
+      while (i < toggles.length && toggles[i].subsection === subName) {
+        subToggles.push(toggles[i]);
+        i++;
+      }
+      nodes.push(buildCollapsibleSection(doc, subName, `rre-collapsible-${subName}`, true, buildToggleListNodes(doc, subToggles, settings, commit)));
+      continue;
     }
+
+    if (toggle.collapsibleGroup) {
+      const groupName = toggle.collapsibleGroup;
+      const groupToggles: ToggleDescriptor[] = [];
+      while (i < toggles.length && toggles[i].collapsibleGroup === groupName) {
+        groupToggles.push(toggles[i]);
+        i++;
+      }
+      nodes.push(buildCollapsibleSection(
+        doc,
+        COLLAPSIBLE_GROUPS[groupName] ?? groupName,
+        `rre-collapsible-${groupName}`,
+        false,
+        groupToggles.map((t) => buildToggleRow(doc, t, settings, commit)),
+      ));
+      continue;
+    }
+
     nodes.push(buildToggleRow(doc, toggle, settings, commit));
+    i++;
   }
   return nodes;
+}
+
+function buildToggleListNodes(
+  doc: Document,
+  toggles: ReadonlyArray<ToggleDescriptor>,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): Node[] {
+  const nodes: Node[] = [];
+  let i = 0;
+  while (i < toggles.length) {
+    const toggle = toggles[i];
+
+    if (toggle.collapsibleGroup) {
+      const groupName = toggle.collapsibleGroup;
+      const groupToggles: ToggleDescriptor[] = [];
+      while (i < toggles.length && toggles[i].collapsibleGroup === groupName) {
+        groupToggles.push(toggles[i]);
+        i++;
+      }
+      nodes.push(buildCollapsibleSection(
+        doc,
+        COLLAPSIBLE_GROUPS[groupName] ?? groupName,
+        `rre-collapsible-${groupName}`,
+        false,
+        groupToggles.map((t) => buildToggleRow(doc, t, settings, commit)),
+      ));
+      continue;
+    }
+
+    nodes.push(buildToggleRow(doc, toggle, settings, commit));
+    i++;
+  }
+  return nodes;
+}
+
+function buildCollapsibleSection(
+  doc: Document,
+  label: string,
+  storageKey: string,
+  defaultExpanded: boolean,
+  contentNodes: Node[],
+): HTMLElement {
+  const container = doc.createElement("div");
+  container.className = "collapsible-group";
+
+  let expanded = defaultExpanded;
+
+  const win = doc.defaultView;
+  if (win) {
+    try {
+      if (win.localStorage) {
+        const stored = win.localStorage.getItem(storageKey);
+        if (stored === "true") {
+          expanded = true;
+        } else if (stored === "false") {
+          expanded = false;
+        }
+      }
+    } catch {
+      // Ignore security errors in JSDOM / opaque origins
+    }
+  }
+
+  const body = doc.createElement("div");
+  body.className = "collapsible-group__body";
+  if (!expanded) {
+    body.setAttribute("hidden", "");
+  }
+  body.replaceChildren(...contentNodes);
+
+  const trigger = doc.createElement("button");
+  trigger.type = "button";
+  trigger.className = "collapsible-group__trigger";
+  trigger.setAttribute("aria-expanded", String(expanded));
+  trigger.textContent = label;
+  trigger.addEventListener("click", () => {
+    const nextExpanded = trigger.getAttribute("aria-expanded") !== "true";
+    trigger.setAttribute("aria-expanded", String(nextExpanded));
+    if (nextExpanded) {
+      body.removeAttribute("hidden");
+    } else {
+      body.setAttribute("hidden", "");
+    }
+    if (win) {
+      try {
+        if (win.localStorage) {
+          win.localStorage.setItem(storageKey, String(nextExpanded));
+        }
+      } catch {
+        // Ignore security errors
+      }
+    }
+  });
+
+  container.append(trigger, body);
+  return container;
 }
 
 function buildToggleRow(

@@ -12,7 +12,7 @@ export type ToolbarButtonKey =
   | "autoScroll"
   | "report";
 
-export type PopupSettingKey = "hints" | "giftsPromo" | "otherNonBlocking";
+export type PopupSettingKey = "hints" | "giftsPromo" | "premiumSubscription" | "otherNonBlocking";
 
 export type HeaderButtonKey =
   | "logo"
@@ -33,6 +33,14 @@ export type BookmarkFilterCategoryKey =
   | "dropped"
   | "notInterest"
   | "favorite";
+
+export type ProviderKey =
+  | "mangabuff"
+  | "senkuro"
+  | "inkstory"
+  | "telemanga"
+  | "teletype"
+  | "usagi";
 
 export type ReaderEnhancerSettings = {
   hideHeader: boolean;
@@ -55,13 +63,14 @@ export type ReaderEnhancerSettings = {
   personalRecommendations: boolean;
   filterHomeBookmarks: boolean;
   filterBookmarkCategories: Record<BookmarkFilterCategoryKey, boolean>;
+  disabledProviders: Record<ProviderKey, boolean>;
 };
 
 type PartialSettings = Partial<
   Omit<
     ReaderEnhancerSettings,
     "hideToolbarButtons" | "hidePopups" | "hideSettingsMenuItems" | "hideHeaderButtons"
-    | "filterBookmarkCategories"
+    | "filterBookmarkCategories" | "disabledProviders"
   >
 > & {
   hideBuyChapterBanner?: boolean;
@@ -70,6 +79,7 @@ type PartialSettings = Partial<
   hidePopups?: Partial<Record<PopupSettingKey, boolean>>;
   hideHeaderButtons?: Partial<Record<HeaderButtonKey, boolean>>;
   filterBookmarkCategories?: Partial<Record<BookmarkFilterCategoryKey, boolean>>;
+  disabledProviders?: Partial<Record<ProviderKey, boolean>>;
 };
 
 const createDefaultSettingsMenuItems = (): Record<SettingsMenuItemKey, boolean> =>
@@ -102,6 +112,7 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
   hidePopups: {
     hints: false,
     giftsPromo: false,
+    premiumSubscription: false,
     otherNonBlocking: false,
   },
   hideHeaderButtons: {
@@ -119,7 +130,7 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
   hideHomeGameBanner: false,
   hideHomePromoBanner: false,
   personalRecommendations: true,
-  filterHomeBookmarks: false,
+  filterHomeBookmarks: true,
   filterBookmarkCategories: {
     reading: true,
     planned: true,
@@ -127,6 +138,14 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
     dropped: false,
     notInterest: false,
     favorite: true,
+  },
+  disabledProviders: {
+    mangabuff: false,
+    senkuro: false,
+    inkstory: false,
+    telemanga: false,
+    teletype: false,
+    usagi: false,
   },
 };
 
@@ -153,6 +172,7 @@ export const cloneSettings = (
   personalRecommendations: settings.personalRecommendations,
   filterHomeBookmarks: settings.filterHomeBookmarks,
   filterBookmarkCategories: { ...settings.filterBookmarkCategories },
+  disabledProviders: { ...settings.disabledProviders },
 });
 
 export const mergeSettings = (
@@ -209,6 +229,10 @@ export const mergeSettings = (
   filterBookmarkCategories: {
     ...DEFAULT_SETTINGS.filterBookmarkCategories,
     ...partialSettings?.filterBookmarkCategories,
+  },
+  disabledProviders: {
+    ...DEFAULT_SETTINGS.disabledProviders,
+    ...partialSettings?.disabledProviders,
   },
 });
 

@@ -1,4 +1,4 @@
-export const PARSER_SERVER_DEFAULT_PORT = 3000;
+export const PARSER_SERVER_DEFAULT_PORT = 7845;
 export const PARSER_SERVER_HOST = "127.0.0.1";
 export const PARSER_SERVER_HEALTHCHECK_PATH = "/health";
 export const PROGRESS_PATH_PREFIX = "/api/chapters/progress/";

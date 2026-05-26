@@ -124,8 +124,8 @@ const CHIP_STATUS_CONFIG: Record<string, {
   found_title: { iconName: "search", borderColor: "#1d4ed8", textColor: "rgba(226, 232, 240, 0.8)" },
   loading_chapters: { iconName: "search", borderColor: "#1d4ed8", textColor: "rgba(226, 232, 240, 0.8)" },
   parsing: { iconName: "search", borderColor: "#1d4ed8", textColor: "rgba(226, 232, 240, 0.8)" },
-  success: { iconName: "check", borderColor: "#16a34a", textColor: "#4ade80" },
-  not_found: { iconName: "cross", borderColor: "#64748b", textColor: "rgba(226, 232, 240, 0.55)" },
+  success: { iconName: "check", borderColor: "#16a34a", textColor: "#4ade80", label: "найдено" },
+  not_found: { iconName: "cross", borderColor: "#64748b", textColor: "rgba(226, 232, 240, 0.55)", label: "не найдено" },
   provider_error: { iconName: "cross", borderColor: "#dc2626", textColor: "rgba(226, 232, 240, 0.7)", label: "ошибка" },
 };
 
@@ -270,15 +270,9 @@ const renderProviderChips = (container: HTMLElement, providers: ProviderChipInfo
 
     const nameSpan = chip.querySelector(`[${DATA_ATTR}="premium-free-chip-name"]`);
     if (nameSpan) {
-      let label = provider.displayName;
-      if (chipConfig.label) {
-        label = `${provider.displayName} \u2014 ${chipConfig.label}`;
-      }
-      if (provider.status === "pending") {
-        label = provider.displayName;
-      } else if (provider.status === "not_found" || provider.status === "success") {
-        label = provider.displayName;
-      }
+      const label = chipConfig.label
+        ? `${provider.displayName} \u2014 ${chipConfig.label}`
+        : provider.displayName;
       nameSpan.textContent = label;
     }
 

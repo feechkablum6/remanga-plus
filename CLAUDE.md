@@ -19,7 +19,11 @@ npm run check
 # Watch-режим (только content script)
 npm run dev
 
-# Сборка native host
+# Сборка native host (только tsc, оставляет shebang `#!/usr/bin/env node`)
+# Достаточно для type-check и для PKG-инсталлера. Для локального Chrome — мало:
+# `env node` не находит nvm-node в Chrome'овском PATH → host не стартует.
+# Для dev'а используй `native:install` (он же делает build + rewrite shebang
+# на абсолютный путь + регистрирует Native Messaging manifest для всех Chrome'ов).
 npm run native:build
 
 # Установка native host (macOS) — ID берётся из "key" в public/manifest.json
@@ -104,7 +108,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `popup-service-status.ts` | Рендеринг строки parser-server: статус + conditional refresh-кнопка (скрыта при OK, видна при down/busy/checking) |
 | `popup-auth-row.ts` | Рендеринг строки авторизации MangaLib/Remanga: 3 независимых состояния (ok/bad/checking) на каждый сайт, helper hint под строкой, `title` tooltip на disabled кнопке «Импорт →» |
 | `popup-dismissal.ts` | Селекторы и эвристики автозакрытия попапов на сайте remanga.org (НЕ про `popup.html`) |
-| `parser-server/src/providers/` | `mangabuff.ts` (HTML scrape), `senkuro.ts` (GraphQL), `inkstory.ts` (REST `api.inkstory.net`) — все реализуют `ExternalSourceProvider` |
+| `parser-server/src/providers/` | `mangabuff.ts` (HTML scrape), `senkuro.ts` (GraphQL), `inkstory.ts` (REST `api.inkstory.net`), `telemanga.ts` (REST `telemanga.me/api`, изображения с `storage.yandexcloud.net/telemangacnd`) — все реализуют `ExternalSourceProvider` |
 | `parser-server/src/http/client.ts` | `HttpClient` — UA, timeout (no retries; maxRetries removed) |
 | `parser-server/src/resolve-chapter.ts` | Параллельный резолв всех провайдеров через `Promise.all` + AbortController; progress callbacks; лучший failure по rank |
 | `parser-server/src/resolve-session.ts` | `ResolveSessionStore` — in-memory сессии для async resolve (POST → 202 → polling → result) |
@@ -141,7 +145,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT `first: 10000` у Senkuro `mangaChapters` — сервер 400. Пагинация `first: 100` + `after: endCursor`.
 - DO NOT использовать `/v2/branches?book=X` у InkStory как authoritative список — там top-20 с editorsChoice. Группировать chapters по `branchId` из `/v2/chapters?bookId=`.
 - DO NOT отдавать InkStory `pages[].image` как готовую картинку без проверки protected filename-маркера и расшифровки.
-- DO NOT запускать `node dist/index.js` parser-server руками параллельно с включённым Premium Free — native host сам поднимет, будет EADDRINUSE. `lsof -ti :3000 | xargs kill -9` перед ручным запуском.
+- DO NOT запускать `node dist/index.js` parser-server руками параллельно с включённым Premium Free — native host сам поднимет, будет EADDRINUSE. `lsof -ti :7845 | xargs kill -9` перед ручным запуском.
 - DO NOT забывать `manga { slug }` в `CHAPTER_QUERY` — иначе `chapterUrl` в response без slug манги.
 - DO NOT использовать non-ASCII символы в `installer.nsi`.
 - DO NOT использовать `SetCompressor /SOLID lzma` или `SetCompressor lzma` в `installer.nsi`.
@@ -166,6 +170,8 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT добавлять ретраи в HttpClient — ошибка = мгновенный failed провайдера.
 - DO NOT заменять весь `premium-free-feed-reader` при подгрузке следующей Premium Free главы — добавлять недостающие главы вниз.
 - DO NOT переключать Premium Free sync на новый нижний `BuyChapterActions`, если на странице уже есть `premium-free-root`.
+- DO NOT забывать `npm run native:build` после правок `native-host/*.ts` — Chrome исполняет `dist/host.js`, не source.
+- DO NOT использовать `native:build` для локального Chrome'а — он оставляет `#!/usr/bin/env node`, nvm-node не в Chrome'овском PATH. Используй `native:install`, он переписывает shebang на абсолютный путь.
 
 ## Visuals (gpt-image-prompt + frontend-design)
 
