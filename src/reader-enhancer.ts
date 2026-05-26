@@ -107,8 +107,6 @@ import {
 import {
   createStatusBlock,
   updateStatusBlock,
-  createMiniStatusBlock,
-  updateMiniStatusBlock,
   type StatusBlockUpdate,
 } from "./premium-free-status-ui.js";
 
@@ -1492,7 +1490,7 @@ const observePremiumFreeStreamPages = (container: HTMLElement): void => {
 };
 
 const createPremiumFreeStreamLoader = (): HTMLElement => {
-  return createMiniStatusBlock();
+  return createStatusBlock("connecting");
 };
 
 const createPremiumFreeUnverifiedBanner = (manualUrl: string): HTMLElement => {
@@ -1545,8 +1543,6 @@ const createPremiumFreeStreamError = (
   const card = createPremiumFreeStatusCard(
     description.title,
     description.copy,
-    description.linkHref,
-    description.linkLabel,
   );
   const actions = document.createElement("div");
   actions.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-actions");
@@ -1556,31 +1552,28 @@ const createPremiumFreeStreamError = (
   retryButton.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-retry");
   retryButton.textContent = "Повторить";
   retryButton.addEventListener("click", () => {
-    if (!premiumFreeChapterStream) {
+    const stream = premiumFreeChapterStream;
+    const lastEntry = stream?.entries.at(-1);
+    if (!stream || !lastEntry?.result.nextChapter) {
       return;
     }
 
-    premiumFreeChapterStream.status = "idle";
-    premiumFreeChapterStream.errorResult = null;
+    const nextReference = createPremiumFreeStreamReference(
+      lastEntry.reference,
+      lastEntry.result.nextChapter,
+    );
+    const nextKey = createPremiumFreeKey(nextReference);
+    premiumFreeResultCache.delete(nextKey);
+    premiumFreeNextRequest?.controller.abort();
+    premiumFreeNextRequest = null;
+
+    const statusBlock = createStatusBlock("connecting");
+    card.replaceWith(statusBlock);
+    stream.status = "idle";
+    stream.errorResult = null;
     void loadPremiumFreeNextChapter();
   });
   actions.append(retryButton);
-
-  const banner = findBuyChapterBanner();
-  if (banner) {
-    const fallbackButton = document.createElement("button");
-    fallbackButton.type = "button";
-    fallbackButton.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-retry");
-    fallbackButton.textContent = "Показать карточку ReManga";
-    fallbackButton.addEventListener("click", () => {
-      resetPremiumFreeChapterStream();
-      restorePremiumFreeBanner(banner);
-      banner
-        .querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="${PREMIUM_FREE_ROOT_KEY}"]`)
-        ?.remove();
-    });
-    actions.append(fallbackButton);
-  }
 
   card.append(actions);
   return card;
@@ -1674,6 +1667,7 @@ const clearPremiumFreeStreamTailControls = (streamReader: HTMLElement): void => 
         `[${CONTROL_ATTRIBUTE}="premium-free-stream-loader"]`,
         `[${CONTROL_ATTRIBUTE}="premium-free-stream-sentinel"]`,
         `[${CONTROL_ATTRIBUTE}="premium-free-status"]`,
+        `[${CONTROL_ATTRIBUTE}="premium-free-status-block"]`,
       ].join(", "),
     )
     .forEach((node) => node.remove());
@@ -1911,7 +1905,7 @@ const syncPremiumFreeBanner = (
           });
         };
         void requestPremiumFreeChapter(reference, key, controller, onStatusProgress);
-      });
+      }, cachedResult.reason === "resolve_timeout" ? "Повторить" : undefined);
     }
     return;
   }
@@ -4429,7 +4423,7 @@ const renderPremiumFreeError = (
       if (banner) {
         syncPremiumFreeBanner(banner, true);
       }
-    });
+    }, result.reason === "resolve_timeout" ? "Повторить" : undefined);
   }
 
   if (result.reason === "install_required" && isExtensionContextInvalidatedDetail(result.detail)) {
@@ -4454,6 +4448,10 @@ const appendPremiumFreeRemangaLink = (
   container: HTMLElement,
   result: Extract<PremiumFreeClientResolveResult, { status: "failure" }>,
 ): void => {
+  if (result.reason === "resolve_timeout") {
+    return;
+  }
+
   const card = container.querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="premium-free-status"]`)
     ?? container.querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="premium-free-status-block"]`);
   if (!card) return;
@@ -4472,9 +4470,12 @@ const appendPremiumFreeRemangaLink = (
 const appendPremiumFreeRetryButton = (
   container: HTMLElement,
   onClick: () => void,
+  label = "Запустить парсер",
 ): void => {
   const card = container.querySelector<HTMLElement>(
     `[${CONTROL_ATTRIBUTE}="premium-free-status"]`,
+  ) ?? container.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="premium-free-status-block"]`,
   );
   if (!card) {
     return;
@@ -4482,7 +4483,7 @@ const appendPremiumFreeRetryButton = (
 
   const button = document.createElement("button");
   button.setAttribute(CONTROL_ATTRIBUTE, "premium-free-link");
-  button.textContent = "Запустить парсер";
+  button.textContent = label;
   button.addEventListener("click", onClick, { once: true });
   card.append(button);
 };
@@ -4760,10 +4761,12 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   }, PREMIUM_FREE_RESOLVE_TIMEOUT_MS);
 
   let result: PremiumFreeClientResolveResult = createPremiumFreeResolveTimeoutFailure(nextReference);
-  const loaderElement = stream.container.querySelector<HTMLElement>(`[${CONTROL_ATTRIBUTE}="premium-free-stream-loader"]`);
+  const loaderElement = stream.container.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="premium-free-status-block"]`,
+  );
   const onProgress: ProgressCallback = (update) => {
     if (loaderElement?.isConnected) {
-      updateMiniStatusBlock(loaderElement, {
+      updateStatusBlock(loaderElement, {
         phase: update.phase === "connecting" ? "connecting" : "searching",
         providers: update.providers,
       });

@@ -418,9 +418,7 @@ export const describePremiumFreeFailure = (
   if (failure.reason === "resolve_timeout") {
     return {
       title: "Premium Free",
-      copy: "Поиск главы занял слишком много времени. Можно попробовать снова или открыть источник вручную.",
-      linkHref: fallbackUrl,
-      linkLabel: buildOpenLabel(failure.provider, { manual: true }),
+      copy: "Поиск главы занял слишком много времени. Можно попробовать снова.",
     };
   }
 

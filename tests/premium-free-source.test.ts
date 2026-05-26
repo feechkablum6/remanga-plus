@@ -103,6 +103,34 @@ test("contains feed-only chapter stream rendering contracts", () => {
   assert.match(readerEnhancerSource, /loadPremiumFreeNextChapter/);
 });
 
+test("stream timeout retry clears the cached failure and shows full resolve status", () => {
+  const streamError = readerEnhancerSource.match(
+    /const createPremiumFreeStreamError = \([\s\S]*?\n\};\n\nconst createPremiumFreeBranchSelector/u,
+  );
+
+  assert.ok(streamError, "expected createPremiumFreeStreamError function body");
+  assert.doesNotMatch(streamError[0], /Показать карточку ReManga/);
+  assert.doesNotMatch(streamError[0], /description\.linkHref/);
+  assert.match(streamError[0], /createPremiumFreeKey\(nextReference\)/);
+  assert.match(streamError[0], /premiumFreeResultCache\.delete\(nextKey\)/);
+  assert.match(streamError[0], /createStatusBlock\("connecting"\)/);
+});
+
+test("timeout failures keep a single retry action without remanga/source links", () => {
+  const remangaLink = readerEnhancerSource.match(
+    /const appendPremiumFreeRemangaLink = \([\s\S]*?\n\};\n\nconst appendPremiumFreeRetryButton/u,
+  );
+  const retryButton = readerEnhancerSource.match(
+    /const appendPremiumFreeRetryButton = \([\s\S]*?\n\};\n\nconst POLLING_INTERVAL_MS/u,
+  );
+
+  assert.ok(remangaLink, "expected appendPremiumFreeRemangaLink function body");
+  assert.ok(retryButton, "expected appendPremiumFreeRetryButton function body");
+  assert.match(remangaLink[0], /result\.reason === "resolve_timeout"/);
+  assert.match(retryButton[0], /label = "Запустить парсер"/);
+  assert.match(readerEnhancerSource, /result\.reason === "resolve_timeout" \? "Повторить"/);
+});
+
 test("synchronizes visible reader indicators for active premium-free stream chapters", () => {
   assert.match(readerEnhancerSource, /syncPremiumFreeReaderIndicators/);
   assert.match(readerEnhancerSource, /IntersectionObserver/);
