@@ -163,12 +163,23 @@ function applyBookmarkFilter(
   }
 
   const scope = (root as Element).querySelector?.("main") ?? root;
+  let continueReadingSection: Element | null = null;
+  const historyLink = (scope as Element).querySelector?.('a[href*="/user/history"]');
+  let ancestor: Element | null = historyLink;
+  while (ancestor && ancestor !== scope) {
+    if (ancestor.querySelector('a[href*="/manga/"], a[href*="/content/"]')) {
+      continueReadingSection = ancestor;
+      break;
+    }
+    ancestor = ancestor.parentElement;
+  }
   const links = (scope as Element).querySelectorAll?.(
     'a[href*="/content/"], a[href*="/manga/"]',
   ) ?? [];
   const targets = new Map<HTMLElement, boolean>();
   links.forEach((link) => {
     if (!(link instanceof HTMLAnchorElement)) return;
+    if (continueReadingSection && continueReadingSection.contains(link)) return;
     const dir = extractMangaDir(link.href);
     if (!dir) return;
     const target = getTitleCardElement(link, scope);

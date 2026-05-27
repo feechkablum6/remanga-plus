@@ -334,6 +334,62 @@ test("applyHomeEnhancements restores bookmark-filtered links when disabled", () 
   }
 });
 
+test("applyHomeEnhancements does NOT hide cards inside 'Продолжить чтение' section (link to /user/history)", () => {
+  const root = document.createElement("div");
+  root.innerHTML = `
+    <main>
+      <div data-section="continue-reading">
+        <div class="mb-4">
+          <p>Продолжить чтение</p>
+          <a href="/user/history">Больше</a>
+        </div>
+        <div>
+          <div data-card="reading-cr">
+            <a href="/manga/reading-title/main">Reading in CR</a>
+            <div role="progressbar"></div>
+          </div>
+          <div data-card="other-cr">
+            <a href="/manga/other-title/main">Other in CR</a>
+            <div role="progressbar"></div>
+          </div>
+        </div>
+      </div>
+      <div data-section="hot">
+        <p>Горячие новинки</p>
+        <a href="/manga/hot-updates">Больше</a>
+        <div>
+          <div data-card="reading-hot">
+            <a href="/manga/reading-title">Reading in Hot</a>
+          </div>
+          <div data-card="other-hot">
+            <a href="/manga/other-title">Other in Hot</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  `;
+  document.body.appendChild(root);
+  try {
+    applyHomeEnhancements(
+      root,
+      mergeSettings({ filterHomeBookmarks: true }),
+      new Set(["reading-title"]),
+    );
+
+    const crReading = root.querySelector('[data-card="reading-cr"]') as HTMLElement;
+    const crOther = root.querySelector('[data-card="other-cr"]') as HTMLElement;
+    const hotReading = root.querySelector('[data-card="reading-hot"]') as HTMLElement;
+    const hotOther = root.querySelector('[data-card="other-hot"]') as HTMLElement;
+
+    assert.notEqual(crReading.style.display, "none");
+    assert.notEqual(crOther.style.display, "none");
+    assert.equal(hotReading.style.display, "none");
+    assert.notEqual(hotOther.style.display, "none");
+  } finally {
+    root.remove();
+  }
+});
+
 test("applyHomeEnhancements hides home cards with visible bookmark badges when dirs are unavailable", () => {
   const root = document.createElement("div");
   root.innerHTML = `
