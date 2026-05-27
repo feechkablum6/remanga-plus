@@ -40,7 +40,8 @@ export type ProviderKey =
   | "inkstory"
   | "telemanga"
   | "teletype"
-  | "usagi";
+  | "usagi"
+  | "wamanga";
 
 export type ReaderEnhancerSettings = {
   hideHeader: boolean;
@@ -146,6 +147,7 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
     telemanga: false,
     teletype: false,
     usagi: false,
+    wamanga: false,
   },
 };
 

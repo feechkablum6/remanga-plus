@@ -12,6 +12,7 @@ import { SenkuroProvider } from "./providers/senkuro.js";
 import { TelemangaProvider } from "./providers/telemanga.js";
 import { TeletypeProvider } from "./providers/teletype.js";
 import { UsagiProvider } from "./providers/usagi.js";
+import { WamangaProvider } from "./providers/wamanga.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { ResolveSessionStore } from "./resolve-session.js";
 import { registerChapterResolveRoute } from "./routes/chapters.js";
@@ -60,6 +61,7 @@ export function buildApp(config: AppConfig) {
   registry.register(new TelemangaProvider(httpClient));
   registry.register(new TeletypeProvider(httpClient));
   registry.register(new UsagiProvider(httpClient));
+  registry.register(new WamangaProvider(httpClient));
 
   // Setup session store
   const sessionStore = new ResolveSessionStore();

@@ -3,7 +3,7 @@ export interface TitleOverride {
   titleId: string;
 }
 
-export const DEFAULT_PROVIDER_PRIORITY = ["mangabuff", "senkuro", "inkstory", "telemanga", "teletype", "usagi"];
+export const DEFAULT_PROVIDER_PRIORITY = ["mangabuff", "senkuro", "inkstory", "telemanga", "teletype", "usagi", "wamanga"];
 
 export const DEFAULT_TITLE_OVERRIDES: Record<string, TitleOverride> = {
   "the-return-of-the-immortals_": {

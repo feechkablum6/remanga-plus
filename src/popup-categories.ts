@@ -92,6 +92,7 @@ const PROVIDER_KEYS: ReadonlyArray<[ProviderKey, string]> = [
   ["telemanga", "Telemanga"],
   ["teletype", "Teletype"],
   ["usagi", "Usagi"],
+  ["wamanga", "WaManga"],
 ];
 
 const siteToggles: ReadonlyArray<ToggleDescriptor> = [

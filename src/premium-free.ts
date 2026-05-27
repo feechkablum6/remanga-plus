@@ -111,6 +111,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   telemanga: "Telemanga",
   teletype: "Teletype",
   usagi: "Usagi",
+  wamanga: "WaManga",
 };
 
 export const mapServerProgressToChips = (
@@ -560,6 +561,58 @@ export const createPremiumFreeStreamReference = (
   chapter: nextChapter.chapter,
   chapterUrl: currentReference.chapterUrl,
 });
+
+const incrementPremiumFreeChapterLabel = (chapter: string): string | null => {
+  const normalized = normalizeWhitespace(chapter);
+  const match = normalized.match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match) {
+    return null;
+  }
+
+  return String(Number(match[1]) + 1);
+};
+
+export const createPremiumFreeSyntheticNextReference = (
+  currentReference: RemangaChapterReference,
+): RemangaChapterReference | null => {
+  const nextChapter = incrementPremiumFreeChapterLabel(currentReference.chapter);
+  if (!nextChapter) {
+    return null;
+  }
+
+  return {
+    titleDir: currentReference.titleDir,
+    titleName: currentReference.titleName,
+    aliases: currentReference.aliases,
+    tome: currentReference.tome,
+    chapter: nextChapter,
+    chapterUrl: currentReference.chapterUrl,
+  };
+};
+
+const normalizeChapterForCompare = (chapter: string): string =>
+  normalizeWhitespace(chapter);
+
+export const isPremiumFreeResolveUsableForReference = (
+  reference: RemangaChapterReference,
+  result: PremiumFreeResolveSuccess,
+): boolean => {
+  if (result.totalPages <= 0 || result.pages.length <= 0) {
+    return false;
+  }
+
+  if (
+    normalizeChapterForCompare(result.matchedChapter.chapter) !==
+    normalizeChapterForCompare(reference.chapter)
+  ) {
+    return false;
+  }
+
+  return (
+    typeof reference.tome !== "number" ||
+    result.matchedChapter.volume === reference.tome
+  );
+};
 
 export const shouldPrefetchPremiumFreeNextChapter = (
   options: PremiumFreeStreamPrefetchOptions,
