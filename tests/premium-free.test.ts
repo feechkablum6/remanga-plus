@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   createPremiumFreeStreamReference,
+  createPremiumFreeSyntheticNextReference,
   createPremiumFreeCacheEntry,
   derivePremiumFreeTargetReference,
   describePremiumFreeFailure,
   extractRemangaChapterReference,
+  isPremiumFreeResolveUsableForReference,
   pickPremiumFreeActivePage,
   readPremiumFreeBranchPreference,
   readPremiumFreeCacheEntry,
@@ -184,6 +186,112 @@ test("builds synthetic follow-up references from parser next-chapter metadata", 
     chapter: "149",
     chapterUrl: "https://remanga.org/manga/the-return-of-the-immortals_/1910899?page=1",
   });
+});
+
+test("builds a synthetic follow-up reference when the provider omits nextChapter", () => {
+  const result = createPremiumFreeSyntheticNextReference({
+    titleDir: "hlmut",
+    titleName: "Хельмут",
+    aliases: [],
+    tome: 3,
+    chapter: "132",
+    chapterId: 1942733,
+    chapterUrl: "https://remanga.org/manga/hlmut/1942733",
+  });
+
+  assert.deepEqual(result, {
+    titleDir: "hlmut",
+    titleName: "Хельмут",
+    aliases: [],
+    tome: 3,
+    chapter: "133",
+    chapterUrl: "https://remanga.org/manga/hlmut/1942733",
+  });
+});
+
+test("does not guess a synthetic follow-up for non-numeric chapter labels", () => {
+  assert.equal(
+    createPremiumFreeSyntheticNextReference({
+      titleDir: "demo",
+      titleName: "Демо",
+      aliases: [],
+      chapter: "extra",
+      chapterUrl: "https://remanga.org/manga/demo/1",
+    }),
+    null,
+  );
+});
+
+test("rejects a premium-free success when the provider matched a different chapter", () => {
+  assert.equal(
+    isPremiumFreeResolveUsableForReference(
+      {
+        titleDir: "hlmut",
+        titleName: "Хельмут",
+        aliases: [],
+        tome: 3,
+        chapter: "133",
+        chapterUrl: "https://remanga.org/manga/hlmut/1942733",
+      },
+      {
+        status: "success",
+        provider: "senkuro",
+        matchedTitle: {
+          titleId: "hlmut",
+          slug: "hlmut",
+          titleName: "Хельмут",
+          titleUrl: "https://senkuro.test/hlmut",
+        },
+        matchedChapter: {
+          chapterId: "3-132",
+          chapter: "132",
+          volume: 3,
+          chapterUrl: "https://senkuro.test/hlmut/3/132",
+        },
+        manualUrl: "https://senkuro.test/hlmut/3/132",
+        nextChapter: null,
+        totalPages: 1,
+        pages: [{ index: 0, proxyUrl: "/api/images/test" }],
+      },
+    ),
+    false,
+  );
+});
+
+test("rejects a premium-free success without pages", () => {
+  assert.equal(
+    isPremiumFreeResolveUsableForReference(
+      {
+        titleDir: "hlmut",
+        titleName: "Хельмут",
+        aliases: [],
+        tome: 3,
+        chapter: "133",
+        chapterUrl: "https://remanga.org/manga/hlmut/1942733",
+      },
+      {
+        status: "success",
+        provider: "senkuro",
+        matchedTitle: {
+          titleId: "hlmut",
+          slug: "hlmut",
+          titleName: "Хельмут",
+          titleUrl: "https://senkuro.test/hlmut",
+        },
+        matchedChapter: {
+          chapterId: "3-133",
+          chapter: "133",
+          volume: 3,
+          chapterUrl: "https://senkuro.test/hlmut/3/133",
+        },
+        manualUrl: "https://senkuro.test/hlmut/3/133",
+        nextChapter: null,
+        totalPages: 0,
+        pages: [],
+      },
+    ),
+    false,
+  );
 });
 
 test("prefetches the next parser chapter when the last page of the last stream section becomes active", () => {

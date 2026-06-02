@@ -162,7 +162,12 @@ test("prewarmChapter is silent on network failure", async () => {
   await assert.doesNotReject(prewarmChapter(99));
 });
 
-import { prefetchNextChapter, resetPrefetchDedup } from "../src/chapter-prefetch.js";
+import {
+  prefetchNextChapter,
+  resetPrefetchDedup,
+  resolveRemangaChapterMetaByLabel,
+  resolveNextRemangaChapterMeta,
+} from "../src/chapter-prefetch.js";
 
 test("prefetchNextChapter looks up branch by index ordering and prewarms next", async () => {
   resetPrefetchDedup();
@@ -171,7 +176,7 @@ test("prefetchNextChapter looks up branch by index ordering and prewarms next", 
     "https://api.remanga.org/api/titles/chapters/1915807/": {
       content: { id: 1915807, branch_id: 48218, index: 149, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=48218&ordering=index&page=5": {
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=48218&ordering=index&page=5&count=100&user_data=1": {
       content: [
         { id: 1915807, index: 149 },
         { id: 1915808, index: 150 },
@@ -205,7 +210,7 @@ test("prefetchNextChapter dedups repeated calls for the same chapterId", async (
     "https://api.remanga.org/api/titles/chapters/100/": {
       content: { branch_id: 1, index: 1, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=1&ordering=index&page=1": {
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=1&ordering=index&page=1&count=100&user_data=1": {
       content: [{ id: 100, index: 1 }, { id: 101, index: 2 }],
     },
     "https://api.remanga.org/api/titles/chapters/101/": {
@@ -227,7 +232,7 @@ test("resetPrefetchDedup clears state when titleDir changes", async () => {
     "https://api.remanga.org/api/titles/chapters/200/": {
       content: { branch_id: 9, index: 1, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=9&ordering=index&page=1": {
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=9&ordering=index&page=1&count=100&user_data=1": {
       content: [{ id: 200, index: 1 }, { id: 201, index: 2 }],
     },
     "https://api.remanga.org/api/titles/chapters/201/": {
@@ -250,7 +255,7 @@ test("prefetchNextChapter is a no-op on the last chapter", async () => {
     "https://api.remanga.org/api/titles/chapters/300/": {
       content: { branch_id: 5, index: 1, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=5&ordering=index&page=1": {
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=5&ordering=index&page=1&count=100&user_data=1": {
       content: [{ id: 300, index: 1 }],
     },
   });
@@ -269,7 +274,7 @@ test("prefetchNextChapter computes correct page for chapter index 30 (boundary)"
       content: { branch_id: 7, index: 30, is_paid: false, pages: [] },
     },
     // index 31 lives on page 2 (ceil(31/30) = 2)
-    "https://api.remanga.org/api/titles/chapters/?branch_id=7&ordering=index&page=2": {
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=7&ordering=index&page=2&count=100&user_data=1": {
       content: [{ id: 501, index: 31 }, { id: 502, index: 32 }],
     },
     "https://api.remanga.org/api/titles/chapters/501/": {
@@ -343,7 +348,7 @@ test("prefetchNextChapter invokes onPaidNextChapter when next chapter is paid an
     "https://api.remanga.org/api/titles/chapters/700/": {
       content: { branch_id: 11, index: 50, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=11&ordering=index&page=2": {
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=11&ordering=index&page=2&count=100&user_data=1": {
       content: [
         { id: 700, index: 50, chapter: "49", tome: 3 },
         { id: 701, index: 51, chapter: "50", tome: 3 },
@@ -385,6 +390,114 @@ test("prefetchNextChapter invokes onPaidNextChapter when next chapter is paid an
   assert.equal(preloads.length, 0);
 });
 
+test("resolveNextRemangaChapterMeta returns Remanga metadata for the next branch chapter", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  installFetchStub({
+    "https://api.remanga.org/api/titles/chapters/900/": {
+      content: { branch_id: 21, index: 100, is_paid: true, pages: [] },
+    },
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=21&ordering=index&page=4&count=100&user_data=1": {
+      content: [
+        { id: 900, index: 100, chapter: "100", tome: 2 },
+        { id: 901, index: 101, chapter: "101", tome: 2 },
+      ],
+    },
+    "https://api.remanga.org/api/titles/chapters/901/": {
+      content: {
+        is_paid: true,
+        chapter: "101",
+        tome: 2,
+        pages: [],
+      },
+    },
+  });
+
+  const result = await resolveNextRemangaChapterMeta("title-pf", 900);
+
+  assert.deepEqual(result, {
+    titleDir: "title-pf",
+    chapterId: 901,
+    chapter: "101",
+    tome: 2,
+  });
+});
+
+test("resolveNextRemangaChapterMeta sends bearer auth for paid chapter lookup", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  const fetchOptions: Array<RequestInit | undefined> = [];
+  (globalThis as any).fetch = async (url: string, options?: RequestInit) => {
+    fetchOptions.push(options);
+    if (url === "https://api.remanga.org/api/titles/chapters/910/") {
+      return {
+        ok: true,
+        json: async () => ({
+          content: { branch_id: 22, index: 110, is_paid: true, pages: [] },
+        }),
+      };
+    }
+    if (url === "https://api.remanga.org/api/v2/titles/chapters/?branch_id=22&ordering=index&page=4&count=100&user_data=1") {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [
+            { id: 910, index: 110 },
+            { id: 911, index: 111 },
+          ],
+        }),
+      };
+    }
+    if (url === "https://api.remanga.org/api/titles/chapters/911/") {
+      return {
+        ok: true,
+        json: async () => ({
+          content: { is_paid: true, chapter: "111", tome: 2, pages: [] },
+        }),
+      };
+    }
+    return { ok: false, json: async () => ({}) };
+  };
+
+  const result = await resolveNextRemangaChapterMeta("title-pf", 910, {
+    authToken: "jwt-value",
+  });
+
+  assert.equal(result?.chapterId, 911);
+  assert.ok(fetchOptions.length > 0);
+  for (const options of fetchOptions) {
+    assert.deepEqual(options?.headers, { Authorization: "bearer jwt-value" });
+  }
+});
+
+test("resolveRemangaChapterMetaByLabel reads locked paid chapters from the active branch list", async () => {
+  resetPrefetchDedup();
+  installDomStub();
+  installFetchStub({
+    "https://api.remanga.org/api/v2/titles/hlmut/": {
+      active_branch: 52639,
+    },
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=52639&ordering=index&page=1&count=100&user_data=1": {
+      results: [
+        { id: 1942732, index: 139, tome: 3, chapter: "131" },
+        { id: 1870505, index: 118, tome: 2, chapter: "110" },
+      ],
+    },
+  });
+
+  const result = await resolveRemangaChapterMetaByLabel("hlmut", 3, "131", {
+    authToken: "jwt-value",
+  });
+
+  assert.deepEqual(result, {
+    titleDir: "hlmut",
+    chapterId: 1942732,
+    chapter: "131",
+    tome: 3,
+    index: 139,
+  });
+});
+
 test("prefetchNextChapter does NOT invoke onPaidNextChapter for free next chapter", async () => {
   resetPrefetchDedup();
   installDomStub();
@@ -392,7 +505,7 @@ test("prefetchNextChapter does NOT invoke onPaidNextChapter for free next chapte
     "https://api.remanga.org/api/titles/chapters/800/": {
       content: { branch_id: 12, index: 1, is_paid: false, pages: [] },
     },
-    "https://api.remanga.org/api/titles/chapters/?branch_id=12&ordering=index&page=1": {
+    "https://api.remanga.org/api/v2/titles/chapters/?branch_id=12&ordering=index&page=1&count=100&user_data=1": {
       content: [
         { id: 800, index: 1 },
         { id: 801, index: 2 },

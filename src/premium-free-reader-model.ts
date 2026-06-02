@@ -21,6 +21,8 @@ export type PremiumFreeStreamEntry = {
   reference: RemangaChapterReference;
   result: PremiumFreeSuccessResult;
   chapterLabel: string;
+  previousRemangaHref?: string;
+  nextRemangaHref?: string;
 };
 
 export type PremiumFreeVisiblePage = {
@@ -33,6 +35,8 @@ export type PremiumFreeIndicatorSnapshot = {
   chapterLabelText: string | null;
   pageCounterText: string | null;
   url: string;
+  previousRemangaHref: string | null;
+  nextRemangaHref: string | null;
 };
 
 export type PremiumFreeChapterStream = {
@@ -41,6 +45,7 @@ export type PremiumFreeChapterStream = {
   entries: PremiumFreeStreamEntry[];
   status: PremiumFreeStreamStatus;
   errorResult: PremiumFreeFailureResult | null;
+  exhaustedResult: PremiumFreeFailureResult | null;
   visiblePages: Map<HTMLElement, PremiumFreeVisiblePage>;
   indicatorSnapshot: PremiumFreeIndicatorSnapshot | null;
   activeHistoryUrl: string | null;
@@ -57,6 +62,10 @@ export const formatPremiumFreeChapterLabel = (
 export const createPremiumFreeStreamEntry = (
   reference: RemangaChapterReference,
   result: PremiumFreeSuccessResult,
+  navigation?: {
+    previousRemangaHref?: string;
+    nextRemangaHref?: string;
+  },
 ): PremiumFreeStreamEntry => ({
   key: createPremiumFreeKey(reference),
   reference,
@@ -65,4 +74,10 @@ export const createPremiumFreeStreamEntry = (
     reference.tome,
     result.matchedChapter.chapter,
   ),
+  ...(navigation?.previousRemangaHref
+    ? { previousRemangaHref: navigation.previousRemangaHref }
+    : {}),
+  ...(navigation?.nextRemangaHref
+    ? { nextRemangaHref: navigation.nextRemangaHref }
+    : {}),
 });

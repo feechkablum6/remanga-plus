@@ -165,6 +165,68 @@ test("appends premium-free stream chapters without replacing the existing feed",
   );
 });
 
+test("resolves Remanga ids before appending premium-free stream chapters", () => {
+  const nextLoader = readerEnhancerSource.match(
+    /const loadPremiumFreeNextChapter = async \(\): Promise<void> => \{[\s\S]*?\n\};\n\nconst requestPremiumFreeChapter/u,
+  );
+
+  assert.ok(nextLoader, "expected loadPremiumFreeNextChapter function body");
+  assert.match(readerEnhancerSource, /createPremiumFreeSyntheticNextReference/);
+  assert.match(nextLoader[0], /resolvePremiumFreeNextStreamReference/);
+  assert.match(readerEnhancerSource, /resolvePremiumFreeNextRemangaReference/);
+  assert.match(nextLoader[0], /createPremiumFreeStreamEntry\(resolvedNextReference, result,/);
+  assert.match(nextLoader[0], /syncPremiumFreeChapterAsViewed\(resolvedNextReference\.chapterId\)/);
+});
+
+test("renders a terminal premium-free explanation without retry when the next external chapter is missing", () => {
+  assert.match(readerEnhancerSource, /exhaustedResult/);
+  assert.match(readerEnhancerSource, /createPremiumFreeStreamExhausted/);
+  assert.match(readerEnhancerSource, /К произведению на Remanga/);
+  assert.match(readerEnhancerSource, /isPremiumFreeTerminalFailure/);
+  assert.match(readerEnhancerSource, /isSyntheticNextReference/);
+  assert.match(readerEnhancerSource, /nextTimedOut[\s\S]*isSyntheticNextReference[\s\S]*createPremiumFreeTerminalFailure/);
+  assert.match(readerEnhancerSource, /isPremiumFreeResolveUsableForReference/);
+  assert.match(readerEnhancerSource, /hasPremiumFreeFollowUpCandidate\(firstEntry\)/);
+});
+
+test("switches premium-free resolve UI from connecting to searching before waiting for session polling", () => {
+  const resolver = readerEnhancerSource.match(
+    /const resolvePremiumFreeChapterResult = async \([\s\S]*?\n\};\n\nconst handlePaidNextChapterPrefetch/u,
+  );
+
+  assert.ok(resolver, "expected resolvePremiumFreeChapterResult body");
+  assert.match(resolver[0], /phase: "searching", providers: \[\], complete: false/);
+});
+
+test("does not show synthetic next provider success before chapter validation", () => {
+  assert.match(readerEnhancerSource, /holdSyntheticNextSuccessUntilValidation/);
+  assert.match(readerEnhancerSource, /provider\.status === "success"/);
+  assert.match(readerEnhancerSource, /status: "parsing"/);
+  assert.match(readerEnhancerSource, /isSyntheticNextReference\s*\?\s*holdSyntheticNextSuccessUntilValidation/);
+});
+
+test("backfills viewed state through the active premium-free stream chapter", () => {
+  assert.match(readerEnhancerSource, /syncPremiumFreeStreamAsViewedThrough/);
+  assert.match(readerEnhancerSource, /resolvePremiumFreeEntryRemangaMeta/);
+  assert.match(readerEnhancerSource, /resolveRemangaChapterMetaByLabel/);
+  assert.match(readerEnhancerSource, /syncPremiumFreeChapterAsViewed\(meta\?\.chapterId/);
+});
+
+test("syncs native reader navigation links to the active premium-free stream chapter", () => {
+  assert.match(readerEnhancerSource, /syncPremiumFreeNativeNavigation/);
+  assert.match(readerEnhancerSource, /getPremiumFreeNativeChapterLinks/);
+  assert.match(readerEnhancerSource, /entry\.previousRemangaHref/);
+  assert.match(readerEnhancerSource, /entry\.nextRemangaHref/);
+});
+
+test("intercepts native premium-free stream navigation before Remanga router handles it", () => {
+  assert.match(readerEnhancerSource, /ensurePremiumFreeNativeNavigationListener/);
+  assert.match(readerEnhancerSource, /scrollPremiumFreeStreamToChapterHref/);
+  assert.match(readerEnhancerSource, /event\.preventDefault\(\)/);
+  assert.match(readerEnhancerSource, /event\.stopPropagation\(\)/);
+  assert.match(readerEnhancerSource, /document\.addEventListener\("click", handlePremiumFreeNativeNavigationClick, true\)/);
+});
+
 test("keeps premium-free sync anchored to the existing root banner", () => {
   const bannerFinder = domUtilsSource.match(
     /export const findBuyChapterBanner = \(\): HTMLElement \| null => \{[\s\S]*?\n\};/,

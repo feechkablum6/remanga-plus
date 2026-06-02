@@ -23,15 +23,18 @@ import {
   buildPremiumFreeSearchUrl,
   clearStalePremiumFreeBranchPreference,
   createPremiumFreeStreamReference,
+  createPremiumFreeSyntheticNextReference,
   createPremiumFreeCacheEntry,
   describePremiumFreeFailure,
   derivePremiumFreeTargetReference,
   ensureParserServerReady,
   isExtensionContextInvalidatedDetail,
   extractRemangaChapterReference,
+  isPremiumFreeResolveUsableForReference,
   mapParserServerFailure,
   markRemangaChapterAsViewed,
   pickPremiumFreeActivePage,
+  readRemangaAuthToken,
   readPremiumFreeBranchPreference,
   readPremiumFreeCacheEntry,
   shouldPrefetchPremiumFreeNextChapter,
@@ -71,6 +74,8 @@ import {
 } from "./popup-categories";
 import {
   prefetchNextChapter as prefetchRemangaNextChapter,
+  resolveRemangaChapterMetaByLabel,
+  resolveNextRemangaChapterMeta,
   type PaidNextChapterMeta,
 } from "./chapter-prefetch";
 import { prewarmPremiumFreeChapter } from "./premium-free-prefetch";
@@ -241,6 +246,7 @@ const getParserServerBaseUrl = (): string =>
 
 const premiumFreeResultCache = new Map<string, PremiumFreeCacheEntry>();
 const premiumFreePageIndex = new Map<string, number>();
+const premiumFreeRemangaMetaByLabelCache = new Map<string, Promise<PaidNextChapterMeta | null>>();
 /**
  * In-memory mirror of chrome.storage.sync[PREMIUM_FREE_BRANCH_PREF_STORAGE_KEY].
  * Populated on boot and when the user picks a non-default branch from the
@@ -325,6 +331,7 @@ let premiumFreeStreamPageObserver: IntersectionObserver | null = null;
 let premiumFreeStreamLoadObserver: IntersectionObserver | null = null;
 let premiumFreeViewportSyncHandle = 0;
 let premiumFreeViewportListenersAttached = false;
+let premiumFreeNativeNavigationListenerAttached = false;
 const premiumFreeMarkedViewedChapterIds = new Set<number>();
 
 const syncPremiumFreeChapterAsViewed = (chapterId: number | undefined): void => {
@@ -349,6 +356,72 @@ const syncPremiumFreeChapterAsViewed = (chapterId: number | undefined): void => 
     if (!marked) {
       premiumFreeMarkedViewedChapterIds.delete(chapterId);
     }
+  });
+};
+
+const getPremiumFreeRemangaMetaCacheKey = (
+  titleDir: string,
+  tome: number | undefined,
+  chapter: string,
+): string => [titleDir, tome ?? "untomed", chapter].join(":");
+
+const resolvePremiumFreeEntryRemangaMeta = (
+  entry: PremiumFreeStreamEntry,
+): Promise<PaidNextChapterMeta | null> => {
+  if (typeof entry.reference.chapterId === "number") {
+    return Promise.resolve({
+      titleDir: entry.reference.titleDir,
+      chapterId: entry.reference.chapterId,
+      chapter: entry.reference.chapter,
+      tome: entry.reference.tome ?? 0,
+    });
+  }
+
+  const key = getPremiumFreeRemangaMetaCacheKey(
+    entry.reference.titleDir,
+    entry.reference.tome,
+    entry.result.matchedChapter.chapter,
+  );
+  const cached = premiumFreeRemangaMetaByLabelCache.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const request = resolveRemangaChapterMetaByLabel(
+    entry.reference.titleDir,
+    entry.reference.tome,
+    entry.result.matchedChapter.chapter,
+    { authToken: readRemangaAuthToken(document.cookie) },
+  ).then((meta) => {
+    if (meta) {
+      entry.reference.chapterId = meta.chapterId;
+      entry.reference.chapter = meta.chapter;
+      entry.reference.tome = meta.tome > 0 ? meta.tome : entry.reference.tome;
+      entry.reference.chapterUrl = `https://remanga.org/manga/${meta.titleDir}/${meta.chapterId}`;
+    }
+    return meta;
+  });
+  premiumFreeRemangaMetaByLabelCache.set(key, request);
+  return request;
+};
+
+const syncPremiumFreeStreamAsViewedThrough = (
+  activeEntry: PremiumFreeStreamEntry,
+): void => {
+  const stream = premiumFreeChapterStream;
+  if (!stream) {
+    return;
+  }
+
+  const activeIndex = stream.entries.findIndex((entry) => entry.key === activeEntry.key);
+  if (activeIndex < 0) {
+    return;
+  }
+
+  stream.entries.slice(0, activeIndex + 1).forEach((entry) => {
+    void resolvePremiumFreeEntryRemangaMeta(entry).then((meta) => {
+      syncPremiumFreeChapterAsViewed(meta?.chapterId ?? entry.reference.chapterId);
+    });
   });
 };
 
@@ -1351,6 +1424,9 @@ const syncPremiumFreeVisibleStreamPage = (): void => {
     stream.entries.find((entry) => entry.key === activeKey) ?? null;
 
   syncPremiumFreeReaderIndicators(activeEntry, activePageIndex);
+  if (activeEntry) {
+    syncPremiumFreeStreamAsViewedThrough(activeEntry);
+  }
 
   const lastEntryKey = stream.entries.at(-1)?.key ?? null;
   if (
@@ -1371,7 +1447,7 @@ const syncPremiumFreeVisibleStreamPage = (): void => {
       distanceToViewportBottom:
         (lastViewportPage?.bottom ?? Number.POSITIVE_INFINITY) -
         getPremiumFreeViewportHeight(),
-      hasNextChapter: Boolean(stream.entries.at(-1)?.result.nextChapter),
+      hasNextChapter: hasPremiumFreeFollowUpCandidate(stream.entries.at(-1)),
       streamStatus: stream.status,
     })
   ) {
@@ -1535,10 +1611,40 @@ const createPremiumFreeUnverifiedBanner = (manualUrl: string): HTMLElement => {
   return banner;
 };
 
+const isPremiumFreeTerminalFailure = (failure: PremiumFreeFailureResult): boolean =>
+  failure.reason === "no_match" || failure.reason === "chapter_not_found";
+
+const createPremiumFreeStreamExhausted = (
+  failure: PremiumFreeFailureResult,
+  titleName: string,
+): HTMLElement => {
+  const remangaTitleUrl = `https://remanga.org/manga/${encodeURIComponent(
+    premiumFreeChapterStream?.entries.at(-1)?.reference.titleDir ?? "",
+  )}/main`;
+  return createPremiumFreeStatusCard(
+    "Дальше главы нет",
+    `Даже наше расширение и Premium Free не смогли найти следующую главу для «${titleName}».`,
+    remangaTitleUrl,
+    "К произведению на Remanga",
+  );
+};
+
+const hasPremiumFreeFollowUpCandidate = (
+  entry: PremiumFreeStreamEntry | undefined,
+): boolean =>
+  Boolean(
+    entry?.result.nextChapter ||
+      (entry && createPremiumFreeSyntheticNextReference(entry.reference)),
+  );
+
 const createPremiumFreeStreamError = (
   failure: PremiumFreeFailureResult,
   titleName: string,
 ): HTMLElement => {
+  if (isPremiumFreeTerminalFailure(failure)) {
+    return createPremiumFreeStreamExhausted(failure, titleName);
+  }
+
   const description = describePremiumFreeFailure(failure, titleName);
   const card = createPremiumFreeStatusCard(
     description.title,
@@ -1554,24 +1660,27 @@ const createPremiumFreeStreamError = (
   retryButton.addEventListener("click", () => {
     const stream = premiumFreeChapterStream;
     const lastEntry = stream?.entries.at(-1);
-    if (!stream || !lastEntry?.result.nextChapter) {
+    if (!stream || !lastEntry) {
       return;
     }
 
-    const nextReference = createPremiumFreeStreamReference(
-      lastEntry.reference,
-      lastEntry.result.nextChapter,
-    );
-    const nextKey = createPremiumFreeKey(nextReference);
-    premiumFreeResultCache.delete(nextKey);
-    premiumFreeNextRequest?.controller.abort();
-    premiumFreeNextRequest = null;
+    void resolvePremiumFreeNextStreamReference(lastEntry).then((nextReference) => {
+      if (!nextReference) {
+        return;
+      }
 
-    const statusBlock = createStatusBlock("connecting");
-    card.replaceWith(statusBlock);
-    stream.status = "idle";
-    stream.errorResult = null;
-    void loadPremiumFreeNextChapter();
+      const nextKey = createPremiumFreeKey(nextReference);
+      premiumFreeResultCache.delete(nextKey);
+      premiumFreeNextRequest?.controller.abort();
+      premiumFreeNextRequest = null;
+
+      const statusBlock = createStatusBlock("connecting");
+      card.replaceWith(statusBlock);
+      stream.status = "idle";
+      stream.errorResult = null;
+      stream.exhaustedResult = null;
+      void loadPremiumFreeNextChapter();
+    });
   });
   actions.append(retryButton);
 
@@ -1701,7 +1810,17 @@ const syncPremiumFreeStreamTailControls = (
     return;
   }
 
-  if (stream.status !== "exhausted" && stream.entries.at(-1)?.result.nextChapter) {
+  if (stream.status === "exhausted" && stream.exhaustedResult) {
+    tailSection.append(
+      createPremiumFreeStreamExhausted(
+        stream.exhaustedResult,
+        stream.entries.at(-1)?.reference.titleName ?? "Premium Free",
+      ),
+    );
+    return;
+  }
+
+  if (stream.status !== "exhausted" && hasPremiumFreeFollowUpCandidate(stream.entries.at(-1))) {
     const sentinel = document.createElement("div");
     sentinel.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-sentinel");
     sentinel.style.width = "100%";
@@ -1739,6 +1858,7 @@ const renderPremiumFreeFeedStream = (
   if (!existingStreamReader) {
     container.replaceChildren(streamReader);
   }
+  ensurePremiumFreeNativeNavigationListener();
   observePremiumFreeStreamPages(container);
   observePremiumFreeLoadSentinel();
   ensurePremiumFreeViewportListeners();
@@ -3952,6 +4072,107 @@ const findPremiumFreeNextChapterHref = (): string | null => {
   return chapterLinks.at(-1)?.href ?? null;
 };
 
+const getPremiumFreeNativeChapterLinks = (): {
+  previous: HTMLAnchorElement | null;
+  next: HTMLAnchorElement | null;
+} => {
+  const chapterLabelControl = findPremiumFreeChapterLabelControl();
+  const navigationRow = chapterLabelControl?.parentElement;
+  if (!navigationRow) {
+    return { previous: null, next: null };
+  }
+
+  const chapterLinks = Array.from(
+    navigationRow.querySelectorAll<HTMLAnchorElement>('a[href*="/manga/"]'),
+  ).filter((link) => !link.href.includes("/main"));
+
+  return {
+    previous: chapterLinks[0] ?? null,
+    next: chapterLinks.length > 1 ? chapterLinks.at(-1) ?? null : null,
+  };
+};
+
+const extractPremiumFreeRemangaChapterId = (
+  href: string | null | undefined,
+): number | null => {
+  if (!href) {
+    return null;
+  }
+
+  const match = href.match(/\/manga\/[^/]+\/(\d+)(?:[/?#]|$)/);
+  if (!match) {
+    return null;
+  }
+
+  const chapterId = Number(match[1]);
+  return Number.isInteger(chapterId) && chapterId > 0 ? chapterId : null;
+};
+
+const scrollPremiumFreeStreamToChapterHref = (href: string): boolean => {
+  const stream = premiumFreeChapterStream;
+  if (!stream?.container.isConnected) {
+    return false;
+  }
+
+  const targetChapterId = extractPremiumFreeRemangaChapterId(href);
+  if (targetChapterId === null) {
+    return false;
+  }
+
+  const targetEntry =
+    stream.entries.find((entry) => entry.reference.chapterId === targetChapterId) ??
+    null;
+  if (!targetEntry) {
+    return false;
+  }
+
+  const targetSection = stream.container.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"][data-rre-premium-free-stream-key="${CSS.escape(targetEntry.key)}"]`,
+  );
+  if (!targetSection) {
+    return false;
+  }
+
+  syncPremiumFreeReaderIndicators(targetEntry, 0);
+  targetSection.scrollIntoView({ block: "start", behavior: "auto" });
+  requestPremiumFreeViewportSync();
+  return true;
+};
+
+const handlePremiumFreeNativeNavigationClick = (event: MouseEvent): void => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const link = target.closest<HTMLAnchorElement>('a[href*="/manga/"]');
+  if (!link) {
+    return;
+  }
+
+  const nativeLinks = getPremiumFreeNativeChapterLinks();
+  if (link !== nativeLinks.previous && link !== nativeLinks.next) {
+    return;
+  }
+
+  if (!scrollPremiumFreeStreamToChapterHref(link.href)) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+};
+
+const ensurePremiumFreeNativeNavigationListener = (): void => {
+  if (premiumFreeNativeNavigationListenerAttached) {
+    return;
+  }
+
+  document.addEventListener("click", handlePremiumFreeNativeNavigationClick, true);
+  premiumFreeNativeNavigationListenerAttached = true;
+};
+
 const hasNativePremiumFreeReaderPages = (): boolean =>
   Array.from(document.querySelectorAll<HTMLElement>(".reader-container-width")).some(
     (node) =>
@@ -3993,7 +4214,21 @@ const capturePremiumFreeReaderIndicators = (): PremiumFreeIndicatorSnapshot => (
   chapterLabelText: findPremiumFreeChapterLabelControl()?.textContent?.trim() ?? null,
   pageCounterText: getReaderDom().pageCounterButton?.textContent?.trim() ?? null,
   url: window.location.href,
+  previousRemangaHref: getPremiumFreeNativeChapterLinks().previous?.href ?? null,
+  nextRemangaHref: getPremiumFreeNativeChapterLinks().next?.href ?? null,
 });
+
+const syncPremiumFreeNativeNavigation = (
+  entry: PremiumFreeStreamEntry | null,
+): void => {
+  const links = getPremiumFreeNativeChapterLinks();
+  if (links.previous && entry?.previousRemangaHref) {
+    links.previous.href = entry.previousRemangaHref;
+  }
+  if (links.next && entry?.nextRemangaHref) {
+    links.next.href = entry.nextRemangaHref;
+  }
+};
 
 const restorePremiumFreeReaderIndicators = (): void => {
   const stream = premiumFreeChapterStream;
@@ -4009,6 +4244,14 @@ const restorePremiumFreeReaderIndicators = (): void => {
   const pageCounterButton = getReaderDom().pageCounterButton;
   if (pageCounterButton && stream.indicatorSnapshot.pageCounterText) {
     pageCounterButton.textContent = stream.indicatorSnapshot.pageCounterText;
+  }
+
+  const nativeLinks = getPremiumFreeNativeChapterLinks();
+  if (nativeLinks.previous && stream.indicatorSnapshot.previousRemangaHref) {
+    nativeLinks.previous.href = stream.indicatorSnapshot.previousRemangaHref;
+  }
+  if (nativeLinks.next && stream.indicatorSnapshot.nextRemangaHref) {
+    nativeLinks.next.href = stream.indicatorSnapshot.nextRemangaHref;
   }
 
   if (stream.activeHistoryUrl && stream.indicatorSnapshot.url !== window.location.href) {
@@ -4043,6 +4286,7 @@ const syncPremiumFreeReaderIndicators = (
   if (pageCounterButton) {
     pageCounterButton.textContent = `${pageIndex + 1}/${entry.result.totalPages}`;
   }
+  syncPremiumFreeNativeNavigation(entry);
 
   if (entry.reference.chapterId) {
     if (stream.activeHistoryUrl) {
@@ -4142,6 +4386,7 @@ const ensurePremiumFreeChapterStream = (
       entries: [createPremiumFreeStreamEntry(reference, result)],
       status: "idle",
       errorResult: null,
+      exhaustedResult: null,
       visiblePages: new Map<HTMLElement, PremiumFreeVisiblePage>(),
       indicatorSnapshot: null,
       activeHistoryUrl: null,
@@ -4151,10 +4396,14 @@ const ensurePremiumFreeChapterStream = (
   }
 
   premiumFreeChapterStream.container = container;
-  premiumFreeChapterStream.entries[0] = createPremiumFreeStreamEntry(reference, result);
+  const firstEntry = createPremiumFreeStreamEntry(reference, result);
+  premiumFreeChapterStream.entries[0] = firstEntry;
   premiumFreeChapterStream.errorResult = null;
+  premiumFreeChapterStream.exhaustedResult = null;
   premiumFreeChapterStream.status =
-    premiumFreeChapterStream.status === "exhausted" && result.nextChapter ? "idle" : premiumFreeChapterStream.status;
+    premiumFreeChapterStream.status === "exhausted" && hasPremiumFreeFollowUpCandidate(firstEntry)
+      ? "idle"
+      : premiumFreeChapterStream.status;
   return premiumFreeChapterStream;
 };
 
@@ -4271,7 +4520,8 @@ const createPremiumFreeStatusCard = (
   if (
     copy.includes("Тайтл найден, но нужная глава не обнаружена") ||
     copy.includes("Поиск главы занял слишком много времени") ||
-    copy.includes("Не удалось надёжно сопоставить главу")
+    copy.includes("Не удалось надёжно сопоставить главу") ||
+    copy.includes("не смогли найти следующую главу")
   ) {
     const art = document.createElement("div");
     art.setAttribute(CONTROL_ATTRIBUTE, "premium-free-empty-art");
@@ -4498,6 +4748,15 @@ type ProgressCallback = (update: {
   complete: boolean;
 }) => void;
 
+const holdSyntheticNextSuccessUntilValidation = (
+  providers: ProviderChipInfo[],
+): ProviderChipInfo[] =>
+  providers.map((provider) =>
+    provider.status === "success"
+      ? { ...provider, status: "parsing" }
+      : provider,
+  );
+
 const pollForProviderProgress = (
   sessionId: string,
   controller: AbortController,
@@ -4577,6 +4836,7 @@ const resolvePremiumFreeChapterResult = async (
         reference.titleDir,
       );
       const requestedBranchId = pref?.branchId ?? null;
+      onProgress?.({ phase: "searching", providers: [], complete: false });
 
       const resolveResponse = await fetch(`${getParserServerBaseUrl()}/api/chapters/resolve`, {
         method: "POST",
@@ -4693,8 +4953,68 @@ const prefetchNextChapterWithFallback = (
 ): void => {
   void prefetchRemangaNextChapter(titleDir, chapterId, {
     onPaidNextChapter: handlePaidNextChapterPrefetch,
+    authToken: readRemangaAuthToken(document.cookie),
   });
 };
+
+const resolvePremiumFreeNextRemangaReference = async (
+  currentReference: RemangaChapterReference,
+  nextChapter: NonNullable<PremiumFreeSuccessResult["nextChapter"]>,
+): Promise<RemangaChapterReference> => {
+  const fallbackReference = createPremiumFreeStreamReference(
+    currentReference,
+    nextChapter,
+  );
+  if (typeof currentReference.chapterId !== "number") {
+    return fallbackReference;
+  }
+
+  const nextMeta =
+    (await resolveRemangaChapterMetaByLabel(
+      currentReference.titleDir,
+      nextChapter.volume,
+      nextChapter.chapter,
+      { authToken: readRemangaAuthToken(document.cookie) },
+    )) ??
+    (await resolveNextRemangaChapterMeta(
+      currentReference.titleDir,
+      currentReference.chapterId,
+      { authToken: readRemangaAuthToken(document.cookie) },
+    ));
+  if (!nextMeta) {
+    return fallbackReference;
+  }
+
+  return {
+    ...fallbackReference,
+    tome: nextMeta.tome > 0 ? nextMeta.tome : fallbackReference.tome,
+    chapter: nextMeta.chapter || fallbackReference.chapter,
+    chapterId: nextMeta.chapterId,
+    chapterUrl: `https://remanga.org/manga/${nextMeta.titleDir}/${nextMeta.chapterId}`,
+  };
+};
+
+const resolvePremiumFreeNextStreamReference = async (
+  currentEntry: PremiumFreeStreamEntry,
+): Promise<RemangaChapterReference | null> => {
+  if (currentEntry.result.nextChapter) {
+    return resolvePremiumFreeNextRemangaReference(
+      currentEntry.reference,
+      currentEntry.result.nextChapter,
+    );
+  }
+
+  return createPremiumFreeSyntheticNextReference(currentEntry.reference);
+};
+
+const createPremiumFreeTerminalFailure = (
+  reference: RemangaChapterReference,
+): PremiumFreeFailureResult => ({
+  status: "failure",
+  reason: "chapter_not_found",
+  provider: "unknown",
+  manualUrl: `https://remanga.org/manga/${encodeURIComponent(reference.titleDir)}/main`,
+});
 
 const loadPremiumFreeNextChapter = async (): Promise<void> => {
   const stream = premiumFreeChapterStream;
@@ -4703,19 +5023,25 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   }
 
   const lastEntry = stream.entries.at(-1);
-  if (!lastEntry?.result.nextChapter) {
+  if (!lastEntry) {
     stream.status = "exhausted";
     renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
     return;
   }
 
-  const nextReference = createPremiumFreeStreamReference(
-    lastEntry.reference,
-    lastEntry.result.nextChapter,
-  );
-  const nextKey = createPremiumFreeKey(nextReference);
+  const resolvedNextReference = await resolvePremiumFreeNextStreamReference(lastEntry);
+  if (!resolvedNextReference) {
+    stream.status = "exhausted";
+    stream.exhaustedResult = createPremiumFreeTerminalFailure(lastEntry.reference);
+    renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+    return;
+  }
+  const isSyntheticNextReference = !lastEntry.result.nextChapter;
+
+  const nextKey = createPremiumFreeKey(resolvedNextReference);
   if (stream.entries.some((entry) => entry.key === nextKey)) {
     stream.status = "exhausted";
+    stream.exhaustedResult = createPremiumFreeTerminalFailure(resolvedNextReference);
     renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
     return;
   }
@@ -4724,20 +5050,35 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   const cachedResult = cacheEntry ? readPremiumFreeCacheEntry(cacheEntry) : null;
   if (cachedResult) {
     if (cachedResult.status === "failure") {
-      stream.status = "error";
-      stream.errorResult = cachedResult;
+      stream.status = isPremiumFreeTerminalFailure(cachedResult) ? "exhausted" : "error";
+      stream.errorResult = isPremiumFreeTerminalFailure(cachedResult) ? null : cachedResult;
+      stream.exhaustedResult = isPremiumFreeTerminalFailure(cachedResult) ? cachedResult : null;
     } else {
-      stream.entries.push(createPremiumFreeStreamEntry(nextReference, cachedResult));
-      stream.status = cachedResult.nextChapter ? "idle" : "exhausted";
+      if (!isPremiumFreeResolveUsableForReference(resolvedNextReference, cachedResult)) {
+        stream.status = "exhausted";
+        stream.errorResult = null;
+        stream.exhaustedResult = createPremiumFreeTerminalFailure(resolvedNextReference);
+        renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+        return;
+      }
+
+      lastEntry.nextRemangaHref = resolvedNextReference.chapterUrl;
+      const nextEntry = createPremiumFreeStreamEntry(resolvedNextReference, cachedResult, {
+        previousRemangaHref: lastEntry.reference.chapterUrl,
+      });
+      stream.entries.push(nextEntry);
+      stream.status = hasPremiumFreeFollowUpCandidate(nextEntry) ? "idle" : "exhausted";
       stream.errorResult = null;
+      stream.exhaustedResult = null;
+      syncPremiumFreeChapterAsViewed(resolvedNextReference.chapterId);
       ensureProgressTracker();
       if (prefetchNextChapterEnabled) {
-        const { titleDir, chapterId } = nextReference;
+        const { titleDir, chapterId } = resolvedNextReference;
         if (typeof titleDir === "string" && typeof chapterId === "number") {
           prefetchNextChapterWithFallback(titleDir, chapterId);
         }
       }
-      prewarmPremiumFreeNextStreamChapter(nextReference, cachedResult);
+      prewarmPremiumFreeNextStreamChapter(resolvedNextReference, cachedResult);
     }
 
     renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
@@ -4746,6 +5087,7 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
 
   stream.status = "loading-next";
   stream.errorResult = null;
+  stream.exhaustedResult = null;
   renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
 
   premiumFreeNextRequest?.controller.abort();
@@ -4760,7 +5102,7 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
     controller.abort();
   }, PREMIUM_FREE_RESOLVE_TIMEOUT_MS);
 
-  let result: PremiumFreeClientResolveResult = createPremiumFreeResolveTimeoutFailure(nextReference);
+  let result: PremiumFreeClientResolveResult = createPremiumFreeResolveTimeoutFailure(resolvedNextReference);
   const loaderElement = stream.container.querySelector<HTMLElement>(
     `[${CONTROL_ATTRIBUTE}="premium-free-status-block"]`,
   );
@@ -4768,15 +5110,19 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
     if (loaderElement?.isConnected) {
       updateStatusBlock(loaderElement, {
         phase: update.phase === "connecting" ? "connecting" : "searching",
-        providers: update.providers,
+        providers: isSyntheticNextReference
+          ? holdSyntheticNextSuccessUntilValidation(update.providers)
+          : update.providers,
       });
     }
   };
   try {
-    result = await resolvePremiumFreeChapterResult(nextReference, controller, onProgress);
+    result = await resolvePremiumFreeChapterResult(resolvedNextReference, controller, onProgress);
   } catch {
     if (nextTimedOut) {
-      result = createPremiumFreeResolveTimeoutFailure(nextReference);
+      result = isSyntheticNextReference
+        ? createPremiumFreeTerminalFailure(resolvedNextReference)
+        : createPremiumFreeResolveTimeoutFailure(resolvedNextReference);
     } else if (controller.signal.aborted) {
       return;
     } else {
@@ -4802,23 +5148,38 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
   }
 
   if (result.status === "failure") {
-    stream.status = "error";
-    stream.errorResult = result;
+    stream.status = isPremiumFreeTerminalFailure(result) ? "exhausted" : "error";
+    stream.errorResult = isPremiumFreeTerminalFailure(result) ? null : result;
+    stream.exhaustedResult = isPremiumFreeTerminalFailure(result) ? result : null;
     renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
     return;
   }
 
-  stream.entries.push(createPremiumFreeStreamEntry(nextReference, result));
-  stream.status = result.nextChapter ? "idle" : "exhausted";
+  if (!isPremiumFreeResolveUsableForReference(resolvedNextReference, result)) {
+    stream.status = "exhausted";
+    stream.errorResult = null;
+    stream.exhaustedResult = createPremiumFreeTerminalFailure(resolvedNextReference);
+    renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+    return;
+  }
+
+  lastEntry.nextRemangaHref = resolvedNextReference.chapterUrl;
+  const nextEntry = createPremiumFreeStreamEntry(resolvedNextReference, result, {
+    previousRemangaHref: lastEntry.reference.chapterUrl,
+  });
+  stream.entries.push(nextEntry);
+  stream.status = hasPremiumFreeFollowUpCandidate(nextEntry) ? "idle" : "exhausted";
   stream.errorResult = null;
+  stream.exhaustedResult = null;
+  syncPremiumFreeChapterAsViewed(resolvedNextReference.chapterId);
   ensureProgressTracker();
   if (prefetchNextChapterEnabled) {
-    const { titleDir, chapterId } = nextReference;
+    const { titleDir, chapterId } = resolvedNextReference;
     if (typeof titleDir === "string" && typeof chapterId === "number") {
       prefetchNextChapterWithFallback(titleDir, chapterId);
     }
   }
-  prewarmPremiumFreeNextStreamChapter(nextReference, result);
+  prewarmPremiumFreeNextStreamChapter(resolvedNextReference, result);
   renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
 };
 

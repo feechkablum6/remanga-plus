@@ -80,7 +80,7 @@ const createChipIconSvg = (name: ChipIconName): SVGElement => {
 
 const PHASE_CONFIG = {
   connecting: {
-    text: "Подключение\u2026",
+    text: "Ищем следующую главу\u2026",
     iconName: "lightning" as IconName,
     borderColor: "#334155",
     bgColor: "transparent",
@@ -344,7 +344,7 @@ export const updateMiniStatusBlock = (
   if (text) {
     switch (update.phase) {
       case "connecting":
-        text.textContent = "Подключение\u2026";
+        text.textContent = "Ищем следующую главу\u2026";
         break;
       case "searching":
         text.textContent = "Ищем следующую главу\u2026";

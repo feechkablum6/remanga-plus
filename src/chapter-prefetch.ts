@@ -1,6 +1,8 @@
 export type BranchChapter = {
   id: number;
   index: number;
+  tome?: number;
+  chapter?: string;
 };
 
 // Remanga returns the branch list paginated, 30 chapters per page.
@@ -106,7 +108,9 @@ export const prewarmChapter = async (chapterId: number): Promise<void> => {
 // and pages are 30-deep, so without it any chapter outside the most recent
 // 30 falls off the first page and the lookup fails.
 const REMANGA_BRANCH_LIST_URL = (branchId: number, page: number = 1): string =>
-  `https://api.remanga.org/api/titles/chapters/?branch_id=${branchId}&ordering=index&page=${page}`;
+  `https://api.remanga.org/api/v2/titles/chapters/?branch_id=${branchId}&ordering=index&page=${page}&count=100&user_data=1`;
+const REMANGA_TITLE_DETAIL_URL = (titleDir: string): string =>
+  `https://api.remanga.org/api/v2/titles/${encodeURIComponent(titleDir)}/`;
 
 let prewarmedChapterIds = new Set<number>();
 let activeTitleDir: string | null = null;
@@ -116,11 +120,31 @@ export const resetPrefetchDedup = (): void => {
   activeTitleDir = null;
 };
 
+type RemangaChapterLookupOptions = {
+  authToken?: string | null;
+};
+
+const buildLookupFetchInit = (
+  options?: RemangaChapterLookupOptions,
+): RequestInit | undefined => {
+  const token = options?.authToken?.trim();
+  if (!token) {
+    return undefined;
+  }
+
+  return {
+    headers: {
+      Authorization: `bearer ${token}`,
+    },
+  };
+};
+
 const fetchChapterMeta = async (
   chapterId: number,
+  options?: RemangaChapterLookupOptions,
 ): Promise<{ branch_id?: number; index?: number } | null> => {
   try {
-    const res = await fetch(REMANGA_CHAPTER_URL(chapterId));
+    const res = await fetch(REMANGA_CHAPTER_URL(chapterId), buildLookupFetchInit(options));
     if (!res.ok) return null;
     const body = (await res.json()) as {
       content?: { branch_id?: number; index?: number };
@@ -134,13 +158,21 @@ const fetchChapterMeta = async (
 const fetchBranchChapters = async (
   branchId: number,
   page: number = 1,
+  options?: RemangaChapterLookupOptions,
 ): Promise<BranchChapter[]> => {
   try {
-    const res = await fetch(REMANGA_BRANCH_LIST_URL(branchId, page));
+    const res = await fetch(
+      REMANGA_BRANCH_LIST_URL(branchId, page),
+      buildLookupFetchInit(options),
+    );
     if (!res.ok) return [];
-    const body = (await res.json()) as { content?: unknown };
-    if (!Array.isArray(body.content)) return [];
-    return body.content.flatMap((item) => {
+    const body = (await res.json()) as { content?: unknown; results?: unknown };
+    const items = Array.isArray(body.content)
+      ? body.content
+      : Array.isArray(body.results)
+        ? body.results
+        : [];
+    return items.flatMap((item) => {
       if (
         item &&
         typeof item === "object" &&
@@ -149,7 +181,22 @@ const fetchBranchChapters = async (
         typeof (item as { id: unknown }).id === "number" &&
         typeof (item as { index: unknown }).index === "number"
       ) {
-        return [{ id: (item as { id: number }).id, index: (item as { index: number }).index }];
+        const raw = item as {
+          id: number;
+          index: number;
+          tome?: unknown;
+          chapter?: unknown;
+        };
+        return [
+          {
+            id: raw.id,
+            index: raw.index,
+            ...(typeof raw.tome === "number" ? { tome: raw.tome } : {}),
+            ...(typeof raw.chapter === "string" || typeof raw.chapter === "number"
+              ? { chapter: String(raw.chapter) }
+              : {}),
+          },
+        ];
       }
       return [];
     });
@@ -165,12 +212,18 @@ export type PaidNextChapterMeta = {
   tome: number;
 };
 
+export type RemangaChapterMeta = PaidNextChapterMeta & {
+  index: number;
+};
+
 export type PrefetchNextChapterOptions = {
   onPaidNextChapter?: (meta: PaidNextChapterMeta) => void | Promise<void>;
+  authToken?: string | null;
 };
 
 const fetchChapterDetail = async (
   chapterId: number,
+  options?: RemangaChapterLookupOptions,
 ): Promise<
   | {
       is_paid: boolean;
@@ -181,7 +234,7 @@ const fetchChapterDetail = async (
   | null
 > => {
   try {
-    const res = await fetch(REMANGA_CHAPTER_URL(chapterId));
+    const res = await fetch(REMANGA_CHAPTER_URL(chapterId), buildLookupFetchInit(options));
     if (!res.ok) return null;
     const body = (await res.json()) as { content?: unknown };
     if (!body.content || typeof body.content !== "object") return null;
@@ -196,6 +249,135 @@ const fetchChapterDetail = async (
   }
 };
 
+const fetchActiveBranchId = async (
+  titleDir: string,
+  options?: RemangaChapterLookupOptions,
+): Promise<number | null> => {
+  try {
+    const res = await fetch(REMANGA_TITLE_DETAIL_URL(titleDir), buildLookupFetchInit(options));
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      active_branch?: unknown;
+      branches?: Array<{ id?: unknown }>;
+    };
+    if (typeof body.active_branch === "number") {
+      return body.active_branch;
+    }
+
+    const firstBranchId = body.branches?.find((branch) => typeof branch.id === "number")?.id;
+    return typeof firstBranchId === "number" ? firstBranchId : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeChapterLabel = (chapter: string): string => chapter.trim();
+
+const chapterMatches = (
+  candidate: BranchChapter,
+  tome: number | undefined,
+  chapter: string,
+): boolean => {
+  if (candidate.chapter !== normalizeChapterLabel(chapter)) {
+    return false;
+  }
+
+  return typeof tome !== "number" || candidate.tome === tome;
+};
+
+export const resolveRemangaChapterMetaByLabel = async (
+  titleDir: string,
+  tome: number | undefined,
+  chapter: string,
+  options?: RemangaChapterLookupOptions,
+): Promise<RemangaChapterMeta | null> => {
+  const branchId = await fetchActiveBranchId(titleDir, options);
+  if (branchId === null) {
+    return null;
+  }
+
+  let page = 1;
+  for (;;) {
+    const chapters = await fetchBranchChapters(branchId, page, options);
+    const matched =
+      chapters.find((candidate) => chapterMatches(candidate, tome, chapter)) ??
+      (typeof tome === "number"
+        ? chapters.find((candidate) => chapterMatches(candidate, undefined, chapter))
+        : null);
+    if (matched) {
+      return {
+        titleDir,
+        chapterId: matched.id,
+        chapter: matched.chapter ?? chapter,
+        tome: matched.tome ?? tome ?? 0,
+        index: matched.index,
+      };
+    }
+
+    if (chapters.length === 0 || chapters.length < 100) {
+      return null;
+    }
+
+    page += 1;
+  }
+};
+
+const resolveNextRemangaChapterWithDetail = async (
+  titleDir: string,
+  currentChapterId: number,
+  options?: RemangaChapterLookupOptions,
+): Promise<{
+  meta: PaidNextChapterMeta;
+  detail: NonNullable<Awaited<ReturnType<typeof fetchChapterDetail>>>;
+} | null> => {
+  const meta = await fetchChapterMeta(currentChapterId, options);
+  if (
+    !meta ||
+    typeof meta.branch_id !== "number" ||
+    typeof meta.index !== "number"
+  ) {
+    return null;
+  }
+
+  const nextIndex = meta.index + 1;
+  const page = computeBranchPageForIndex(nextIndex);
+  const list = await fetchBranchChapters(meta.branch_id, page, options);
+  const next = findChapterByIndex(list, nextIndex);
+  if (!next) return null;
+
+  const detail = await fetchChapterDetail(next.id, options);
+  if (!detail) return null;
+
+  const chapterStr =
+    typeof detail.chapter === "string"
+      ? detail.chapter
+      : typeof detail.chapter === "number"
+        ? String(detail.chapter)
+        : "";
+  const tomeNum =
+    typeof detail.tome === "number" && Number.isFinite(detail.tome)
+      ? detail.tome
+      : 0;
+
+  return {
+    meta: {
+      titleDir,
+      chapterId: next.id,
+      chapter: chapterStr,
+      tome: tomeNum,
+    },
+    detail,
+  };
+};
+
+export const resolveNextRemangaChapterMeta = async (
+  titleDir: string,
+  currentChapterId: number,
+  options?: RemangaChapterLookupOptions,
+): Promise<PaidNextChapterMeta | null> =>
+  (await resolveNextRemangaChapterWithDetail(titleDir, currentChapterId, options))?.meta ??
+  null;
+
 export const prefetchNextChapter = async (
   titleDir: string,
   currentChapterId: number,
@@ -209,42 +391,17 @@ export const prefetchNextChapter = async (
   if (prewarmedChapterIds.has(currentChapterId)) return;
   prewarmedChapterIds.add(currentChapterId);
 
-  const meta = await fetchChapterMeta(currentChapterId);
-  if (
-    !meta ||
-    typeof meta.branch_id !== "number" ||
-    typeof meta.index !== "number"
-  ) {
-    return;
-  }
-
-  const nextIndex = meta.index + 1;
-  const page = computeBranchPageForIndex(nextIndex);
-  const list = await fetchBranchChapters(meta.branch_id, page);
-  const next = findChapterByIndex(list, nextIndex);
-  if (!next) return;
-
-  const detail = await fetchChapterDetail(next.id);
-  if (!detail) return;
+  const nextChapter = await resolveNextRemangaChapterWithDetail(
+    titleDir,
+    currentChapterId,
+    options,
+  );
+  if (!nextChapter) return;
+  const { meta: nextMeta, detail } = nextChapter;
 
   if (detail.is_paid) {
     if (options?.onPaidNextChapter) {
-      const chapterStr =
-        typeof detail.chapter === "string"
-          ? detail.chapter
-          : typeof detail.chapter === "number"
-            ? String(detail.chapter)
-            : "";
-      const tomeNum =
-        typeof detail.tome === "number" && Number.isFinite(detail.tome)
-          ? detail.tome
-          : 0;
-      await options.onPaidNextChapter({
-        titleDir,
-        chapterId: next.id,
-        chapter: chapterStr,
-        tome: tomeNum,
-      });
+      await options.onPaidNextChapter(nextMeta);
     }
     return;
   }

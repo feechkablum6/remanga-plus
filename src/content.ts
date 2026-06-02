@@ -13,6 +13,7 @@ import {
   type ReaderEnhancerSettings,
 } from "./settings";
 import { ENSURE_PARSER_SERVER_MESSAGE_TYPE } from "./parser-server";
+import { readRemangaAuthToken } from "./premium-free";
 import { shouldScheduleSettledRefresh } from "./settings-panel-transition";
 import {
   prefetchNextChapter,
@@ -67,6 +68,7 @@ async function bootstrap(): Promise<void> {
       onPaidNextChapter: currentSettings.premiumFree
         ? triggerPremiumFreePaidPrefetch
         : undefined,
+      authToken: readRemangaAuthToken(document.cookie),
     });
   };
 
