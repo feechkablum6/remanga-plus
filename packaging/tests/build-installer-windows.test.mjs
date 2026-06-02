@@ -53,7 +53,15 @@ test("build-installer-windows produces payload + Setup.exe", { timeout: 360_000 
   assert.equal(result.status, 0, `build failed: ${result.stderr}\n${result.stdout}`);
 
   // Payload must include all the artefacts the NSIS script File-includes.
-  for (const f of ["node.exe", "parser-server.js", "host.js", "host.bat", "extension/manifest.json"]) {
+  for (const f of [
+    "node.exe",
+    "parser-server.js",
+    "host.js",
+    "host.bat",
+    "open-extension-setup.bat",
+    "README-Windows.txt",
+    "extension/manifest.json",
+  ]) {
     assert.ok(existsSync(path.join(buildDir, f)), `missing payload file: ${f}`);
   }
 

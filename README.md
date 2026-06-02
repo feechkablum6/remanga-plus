@@ -97,10 +97,12 @@ Premium Free сейчас работает через локальный parser-
 1. Скачай **`Remanga-Plus-Setup.exe`** из последнего релиза в [Releases](https://github.com/feechkablum6/remanga-plus/releases/latest).
 2. Запусти установщик. Если Windows покажет **«Windows protected your PC»**, нажми **«More info»** → **«Run anyway»**.
 3. Пройди мастер установки: **Next** → **Install** → **Finish**. Установка идёт в `%LOCALAPPDATA%\Programs\Remanga Plus` без прав администратора.
-4. Открой Chrome, Edge, Brave или другой Chromium-браузер.
-5. Перейди в `chrome://extensions`, включи **«Режим разработчика»**.
-6. Нажми **«Загрузить распакованное»** и выбери папку `%LOCALAPPDATA%\Programs\Remanga Plus\extension`.
+4. В конце установщик предложит открыть setup helper. Он откроет папку `extension` и страницу расширений в Chrome или Edge.
+5. На странице расширений включи **«Режим разработчика»**.
+6. Нажми **«Загрузить распакованное»** и выбери открытую папку `extension`.
 7. Открой [remanga.org](https://remanga.org).
+
+После загрузки расширения parser-server запускается автоматически через Native Messaging. В меню Start появится папка **Remanga Plus** с ярлыками **Setup extension** и **Extension folder**.
 
 ### Удаление на Windows
 

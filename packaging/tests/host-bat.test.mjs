@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 const hostBatPath = path.join(repoRoot, "packaging/templates/host.bat");
+const setupBatPath = path.join(repoRoot, "packaging/templates/open-extension-setup.bat");
 
 test("host.bat is self-relative and forwards args to bundled node", () => {
   const content = readFileSync(hostBatPath, "utf8");
@@ -40,4 +41,15 @@ test("host.bat is self-relative and forwards args to bundled node", () => {
     const quoted = new RegExp(`"[^"\\n]*${ref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^"\\n]*"`);
     assert.match(content, quoted, `${ref} must be inside double quotes for paths with spaces`);
   }
+});
+
+test("open-extension-setup.bat opens extension folder and browser extensions page", () => {
+  const content = readFileSync(setupBatPath, "utf8");
+
+  assert.match(content, /^@echo off/m, "must start with @echo off");
+  assert.match(content, /%~dp0extension/, "must open the bundled extension folder");
+  assert.match(content, /chrome:\/\/extensions/, "must open the browser extensions page");
+  assert.match(content, /Google\\Chrome\\Application\\chrome\.exe/, "must prefer installed Chrome when present");
+  assert.match(content, /Microsoft\\Edge\\Application\\msedge\.exe/, "must fall back to Edge when present");
+  assert.match(content, /start\s+""\s+explorer\.exe\s+"%~dp0extension"/i, "must launch Explorer on extension folder");
 });

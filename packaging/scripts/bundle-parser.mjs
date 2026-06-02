@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import path from "node:path";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
@@ -20,15 +20,14 @@ mkdirSync(outputDir, { recursive: true });
 const require = createRequire(path.join(parserRoot, "package.json"));
 const esbuild = require("esbuild");
 
-// Compile TypeScript to dist/ if missing or stale-looking. Cheap when up-to-date.
-if (!existsSync(compiledEntry)) {
-  const tsc = spawnSync("npx", ["tsc", "-p", "tsconfig.json"], {
-    cwd: parserRoot,
-    stdio: "inherit",
-  });
-  if (tsc.status !== 0) {
-    throw new Error(`tsc -p parser-server/tsconfig.json exited ${tsc.status}`);
-  }
+// Always refresh parser-server/dist before bundling so installers never ship a
+// stale parser-server.js from a previous local build.
+const tsc = spawnSync("npx", ["tsc", "-p", "tsconfig.json"], {
+  cwd: parserRoot,
+  stdio: "inherit",
+});
+if (tsc.status !== 0) {
+  throw new Error(`tsc -p parser-server/tsconfig.json exited ${tsc.status}`);
 }
 
 await esbuild.build({

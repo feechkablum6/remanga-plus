@@ -69,6 +69,14 @@ const sharedBuildDir = path.join(repoRoot, "packaging/build");
 copyFileSync(path.join(sharedBuildDir, "parser-server.js"), path.join(buildDir, "parser-server.js"));
 copyFileSync(path.join(sharedBuildDir, "host.js"), path.join(buildDir, "host.js"));
 copyFileSync(path.join(templatesDir, "host.bat"), path.join(buildDir, "host.bat"));
+copyFileSync(
+  path.join(templatesDir, "open-extension-setup.bat"),
+  path.join(buildDir, "open-extension-setup.bat"),
+);
+copyFileSync(
+  path.join(templatesDir, "README-Windows.txt"),
+  path.join(buildDir, "README-Windows.txt"),
+);
 
 const distSource = path.join(repoRoot, "dist");
 if (!existsSync(distSource)) {

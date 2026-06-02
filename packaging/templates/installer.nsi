@@ -33,6 +33,8 @@ ShowUninstDetails show
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\open-extension-setup.bat"
+!define MUI_FINISHPAGE_RUN_TEXT "Open extension setup"
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -55,14 +57,18 @@ Section "Install"
     File "parser-server.js"
     File "host.js"
     File "host.bat"
+    File "open-extension-setup.bat"
+    File "README-Windows.txt"
     File /r "extension"
 
-    ; Generate Native Messaging manifest with absolute host path + extension id.
+    ; Generate Native Messaging manifest with extension id. On Windows, Chrome
+    ; supports paths relative to the manifest file directory. Keeping host.bat
+    ; relative avoids writing raw $INSTDIR backslashes into JSON.
     FileOpen $0 "$INSTDIR\nm-manifest.json" w
     FileWrite $0 '{$\n'
     FileWrite $0 '  "name": "${HOSTNAME}",$\n'
     FileWrite $0 '  "description": "Autostarts the local parser-server for ReManga Premium Free",$\n'
-    FileWrite $0 '  "path": "$INSTDIR\\host.bat",$\n'
+    FileWrite $0 '  "path": "host.bat",$\n'
     FileWrite $0 '  "type": "stdio",$\n'
     FileWrite $0 '  "allowed_origins": ["chrome-extension://${EXTENSION_ID}/"]$\n'
     FileWrite $0 '}$\n'
@@ -88,6 +94,11 @@ Section "Install"
     WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APPNAME}" "DisplayVersion" "${VERSION}"
     WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APPNAME}" "Publisher" "${COMPANYNAME}"
     WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APPNAME}" "InstallLocation" "$INSTDIR"
+
+    ; User-facing shortcuts for the one manual browser step Chrome still requires.
+    CreateDirectory "$SMPROGRAMS\Remanga Plus"
+    CreateShortcut "$SMPROGRAMS\Remanga Plus\Setup extension.lnk" "$INSTDIR\open-extension-setup.bat"
+    CreateShortcut "$SMPROGRAMS\Remanga Plus\Extension folder.lnk" "$WINDIR\explorer.exe" "$INSTDIR\extension"
 SectionEnd
 
 Section "Uninstall"
@@ -96,6 +107,8 @@ Section "Uninstall"
     Delete "$INSTDIR\parser-server.js"
     Delete "$INSTDIR\host.js"
     Delete "$INSTDIR\host.bat"
+    Delete "$INSTDIR\open-extension-setup.bat"
+    Delete "$INSTDIR\README-Windows.txt"
     Delete "$INSTDIR\nm-manifest.json"
     Delete "$INSTDIR\Uninstall.exe"
     RMDir /r "$INSTDIR\extension"
@@ -118,4 +131,9 @@ Section "Uninstall"
 
     ; Remove Add/Remove Programs entry.
     DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APPNAME}"
+
+    ; Remove Start Menu shortcuts.
+    Delete "$SMPROGRAMS\Remanga Plus\Setup extension.lnk"
+    Delete "$SMPROGRAMS\Remanga Plus\Extension folder.lnk"
+    RMDir "$SMPROGRAMS\Remanga Plus"
 SectionEnd

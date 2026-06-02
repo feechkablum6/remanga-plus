@@ -10,6 +10,17 @@ const repoRoot = path.resolve(here, "..", "..");
 const bundleScript = path.join(repoRoot, "packaging/scripts/bundle-parser.mjs");
 const outputPath = path.join(repoRoot, "packaging/build/parser-server.js");
 
+test("bundle-parser always refreshes parser-server dist before bundling", () => {
+  const script = readFileSync(bundleScript, "utf8");
+
+  assert.match(script, /spawnSync\("npx",\s*\["tsc",\s*"-p",\s*"tsconfig\.json"\]/, "must run parser-server tsc");
+  assert.doesNotMatch(
+    script,
+    /if\s*\(\s*!existsSync\(compiledEntry\)\s*\)/,
+    "must not skip tsc just because parser-server/dist/index.js already exists",
+  );
+});
+
 test("bundle-parser script produces a single executable JS bundle", () => {
   rmSync(outputPath, { force: true });
 
