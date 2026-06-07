@@ -10,7 +10,3 @@ export interface MangalibBookmark {
   lastReadChapter: number | null;
   itemsTotal: number | null;
 }
-
-export interface RemangaBookmarkExisting {
-  titleId: number;
-}

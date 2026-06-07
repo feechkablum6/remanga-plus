@@ -5,6 +5,7 @@ import {
   NATIVE_HOST_NAME,
   PARSER_SERVER_DEFAULT_PORT,
   PROXY_IMAGE_MESSAGE_TYPE,
+  READER_IMAGE_DATA_URL_MESSAGE_TYPE,
   buildParserServerBaseUrl,
   buildParserServerHealthcheckUrl,
   isParserServerEnsureResult,
@@ -37,6 +38,17 @@ import {
   type BookmarkType,
   type CachedBookmarkTypes,
 } from "./bookmark-types-resolver.js";
+import {
+  buildGenreProfile,
+  pickSupplements,
+  selectTopGenres,
+  parseCatalogCandidates,
+  parseTitleDetailGenres,
+  parseGenreIdMap,
+  type BookmarkTitle,
+  type RecCandidate,
+} from "./recommendations.js";
+import type { PersonalRecommendation } from "./recommendations-inject.js";
 
 const HEALTHCHECK_TIMEOUT_MS = 3_000;
 const HEALTHCHECK_MAX_ATTEMPTS = 5;
@@ -337,6 +349,16 @@ export const getParserServerStatus = async (
   return { status: "down" };
 };
 
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+};
+
 const handleProxyImage = async (
   proxyPath: string,
 ): Promise<{ data: string; contentType: string } | { error: string }> => {
@@ -348,13 +370,116 @@ const handleProxyImage = async (
     }
     const buffer = await response.arrayBuffer();
     const contentType = response.headers.get("content-type") ?? "image/jpeg";
-    const base64 = btoa(
-      new Uint8Array(buffer).reduce((s, b) => s + String.fromCharCode(b), ""),
-    );
-    return { data: `data:${contentType};base64,${base64}`, contentType };
+    return {
+      data: `data:${contentType};base64,${arrayBufferToBase64(buffer)}`,
+      contentType,
+    };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
+};
+
+const isAllowedReaderImageUrl = (imageUrl: string): boolean => {
+  try {
+    const url = new URL(imageUrl);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "remanga.org" ||
+        url.hostname.endsWith(".remanga.org") ||
+        url.hostname === "img.reimg.org" ||
+        url.hostname.endsWith(".reimg.org") ||
+        url.hostname.endsWith(".reimg2.org"))
+    );
+  } catch {
+    return false;
+  }
+};
+
+type FetchReaderImageDataUrlOptions = {
+  ensureParserServer?: () => Promise<ParserServerEnsureResult>;
+};
+
+const responseToImageDataUrl = async (
+  response: Response,
+): Promise<{ data: string; contentType: string } | { error: string }> => {
+  if (!response.ok) {
+    return { error: `HTTP ${response.status}` };
+  }
+
+  const contentType = response.headers.get("content-type") ?? "image/jpeg";
+  if (!contentType.toLowerCase().startsWith("image/")) {
+    return { error: "unsupported content type" };
+  }
+
+  const buffer = await response.arrayBuffer();
+  return {
+    data: `data:${contentType};base64,${arrayBufferToBase64(buffer)}`,
+    contentType,
+  };
+};
+
+const fetchReaderImageDataUrlViaParser = async (
+  imageUrl: string,
+  fetchImpl: typeof fetch,
+  ensureParser: () => Promise<ParserServerEnsureResult>,
+): Promise<{ data: string; contentType: string } | { error: string }> => {
+  const ensureResult = await ensureParser();
+  if (ensureResult.status !== "ready") {
+    return {
+      error: `parser-server unavailable: ${ensureResult.detail ?? ensureResult.status}`,
+    };
+  }
+
+  try {
+    const port = ensureResult.port ?? PARSER_SERVER_DEFAULT_PORT;
+    const url = `${buildParserServerBaseUrl(port)}/api/reader-image?url=${encodeURIComponent(imageUrl)}`;
+    const response = await fetchImpl(url, {
+      method: "GET",
+      cache: "no-store",
+    });
+    return responseToImageDataUrl(response);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+export const fetchReaderImageDataUrl = async (
+  imageUrl: string,
+  fetchImpl: typeof fetch = fetch,
+  options: FetchReaderImageDataUrlOptions = {},
+): Promise<{ data: string; contentType: string } | { error: string }> => {
+  if (!isAllowedReaderImageUrl(imageUrl)) {
+    return { error: "unsupported image host" };
+  }
+
+  let directError = "";
+  try {
+    const response = await fetchImpl(imageUrl, {
+      credentials: "include",
+      referrer: "https://remanga.org/",
+      referrerPolicy: "strict-origin-when-cross-origin",
+    });
+    const directResult = await responseToImageDataUrl(response);
+    if ("data" in directResult) {
+      return directResult;
+    }
+    directError = directResult.error;
+  } catch (error) {
+    directError = error instanceof Error ? error.message : String(error);
+  }
+
+  const parserResult = await fetchReaderImageDataUrlViaParser(
+    imageUrl,
+    fetchImpl,
+    options.ensureParserServer ?? ensureParserServer,
+  );
+  if ("data" in parserResult) {
+    return parserResult;
+  }
+
+  return {
+    error: `${directError}; parser fallback: ${parserResult.error}`,
+  };
 };
 
 async function sendWithBridgeFallback<T>(
@@ -384,6 +509,16 @@ const REMANGA_BOOKMARKS_URL = "https://remanga.org/user/bookmarks";
 const HOME_BOOKMARK_DIRS_CACHE_KEY = "rre:homeBookmarkDirs:v2";
 const HOME_BOOKMARK_DIRS_CACHE_TTL_MS = 30 * 60 * 1000;
 const LOAD_HOME_BOOKMARKS_MESSAGE_TYPE = "rre/load-home-bookmarks";
+const LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE = "rre/load-personal-recommendations";
+
+const PERSONAL_RECS_CACHE_KEY = "rre:personalRecommendations:v2";
+const PERSONAL_RECS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+// Building a genre profile costs one title-detail request per bookmark, so cap
+// the sample to the most relevant bookmarks rather than the whole shelf.
+const PERSONAL_RECS_PROFILE_SAMPLE = 40;
+const PERSONAL_RECS_TOP_GENRES = 3;
+const PERSONAL_RECS_MAX = 12;
+const PERSONAL_RECS_CATALOG_PAGES = 4;
 const HIDDEN_TAB_POLL_DEADLINE_MS = 15_000;
 const HIDDEN_TAB_POLL_INTERVAL_MS = 500;
 
@@ -682,6 +817,170 @@ async function loadHomeBookmarkDirs(): Promise<HomeBookmarkDirs> {
   return dirs;
 }
 
+const REMANGA_TITLE_DETAIL_URL = (dir: string): string =>
+  `https://api.remanga.org/api/v2/titles/${encodeURIComponent(dir)}/`;
+
+const REMANGA_CATALOG_URL = (genreId: number, page: number): string => {
+  const url = new URL("https://api.remanga.org/api/search/catalog/");
+  url.searchParams.set("count", "30");
+  url.searchParams.set("ordering", "-rating");
+  url.searchParams.set("genres", String(genreId));
+  url.searchParams.set("page", String(page));
+  return url.toString();
+};
+
+type CachedPersonalRecs = {
+  recommendations: PersonalRecommendation[];
+  userId: number;
+  updatedAt: number;
+};
+
+async function readPersonalRecsCache(): Promise<CachedPersonalRecs | null> {
+  const area = chrome.storage?.local;
+  if (!area) return null;
+  return await new Promise<CachedPersonalRecs | null>((resolve) => {
+    area.get(PERSONAL_RECS_CACHE_KEY, (items) => {
+      void chrome.runtime?.lastError;
+      const raw = items?.[PERSONAL_RECS_CACHE_KEY] as CachedPersonalRecs | undefined;
+      if (
+        !raw ||
+        typeof raw.updatedAt !== "number" ||
+        typeof raw.userId !== "number" ||
+        !Array.isArray(raw.recommendations)
+      ) {
+        resolve(null);
+        return;
+      }
+      resolve(raw);
+    });
+  });
+}
+
+async function writePersonalRecsCache(payload: CachedPersonalRecs): Promise<void> {
+  const area = chrome.storage?.local;
+  if (!area) return;
+  await new Promise<void>((resolve) => {
+    area.set({ [PERSONAL_RECS_CACHE_KEY]: payload }, () => {
+      void chrome.runtime?.lastError;
+      resolve();
+    });
+  });
+}
+
+async function fetchRemangaTitleDetail(
+  dir: string,
+  token: string,
+): Promise<unknown | null> {
+  try {
+    const response = await fetch(REMANGA_TITLE_DETAIL_URL(dir), {
+      credentials: "omit",
+      headers: { Authorization: "bearer " + token, Accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRemangaCatalogByGenre(
+  genreId: number,
+  token: string,
+): Promise<RecCandidate[]> {
+  const out: RecCandidate[] = [];
+  // Heavy bookmarkers already own most of a genre's top titles, so pull several
+  // catalog pages to leave enough not-yet-bookmarked candidates after dedup.
+  for (let page = 1; page <= PERSONAL_RECS_CATALOG_PAGES; page += 1) {
+    try {
+      const response = await fetch(REMANGA_CATALOG_URL(genreId, page), {
+        credentials: "omit",
+        headers: { Authorization: "bearer " + token, Accept: "application/json" },
+      });
+      if (!response.ok) break;
+      const candidates = parseCatalogCandidates(await response.json());
+      if (candidates.length === 0) break;
+      out.push(...candidates);
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
+async function loadPersonalRecommendations(): Promise<PersonalRecommendation[]> {
+  const cached = await readPersonalRecsCache();
+  if (cached && Date.now() - cached.updatedAt < PERSONAL_RECS_CACHE_TTL_MS) {
+    return cached.recommendations;
+  }
+
+  const token = await getRemangaToken();
+  if (!token) return cached?.recommendations ?? [];
+
+  const auth = await fetchRemangaAuthStatus(async () => token);
+  if (!auth.signedIn || typeof auth.userId !== "number") {
+    return cached?.recommendations ?? [];
+  }
+
+  const allDirs = Object.keys(await loadHomeBookmarkDirs());
+  if (allDirs.length === 0) return [];
+  // Genre weighting samples the first N bookmarks (one detail request each), but
+  // dedup must consider ALL bookmarks so we never recommend a title the user
+  // already has — even when they have hundreds of bookmarks.
+  const sampleDirs = allDirs.slice(0, PERSONAL_RECS_PROFILE_SAMPLE);
+
+  const bookmarks: BookmarkTitle[] = [];
+  const genreIds: Record<string, number> = {};
+  for (const dir of sampleDirs) {
+    const detail = await fetchRemangaTitleDetail(dir, token);
+    const parsed = detail ? parseTitleDetailGenres(detail) : null;
+    if (!parsed) continue;
+    bookmarks.push({
+      id: parsed.id,
+      dir: parsed.dir,
+      genres: parsed.genres,
+      categories: parsed.categories,
+      typeName: "",
+    });
+    Object.assign(genreIds, parseGenreIdMap(detail));
+  }
+  if (bookmarks.length === 0) return [];
+
+  const profile = buildGenreProfile(bookmarks);
+  // Expand the dedup set to every bookmarked dir, not just the sampled ones.
+  for (const dir of allDirs) profile.bookmarkDirs.add(dir);
+  const topGenres = selectTopGenres(profile, PERSONAL_RECS_TOP_GENRES);
+
+  const candidatesByDir = new Map<string, RecCandidate>();
+  for (const genre of topGenres) {
+    const genreId = genreIds[genre];
+    if (typeof genreId !== "number") continue;
+    for (const candidate of await fetchRemangaCatalogByGenre(genreId, token)) {
+      candidatesByDir.set(candidate.dir, candidate);
+    }
+  }
+
+  const picks = pickSupplements(
+    Array.from(candidatesByDir.values()),
+    profile,
+    PERSONAL_RECS_MAX,
+  );
+  const recommendations: PersonalRecommendation[] = picks.map((c) => ({
+    dir: c.dir,
+    name: c.mainName,
+    img: c.img,
+    rating: c.rating,
+    typeName: c.typeName,
+    issueYear: c.issueYear,
+  }));
+
+  await writePersonalRecsCache({
+    recommendations,
+    userId: auth.userId,
+    updatedAt: Date.now(),
+  });
+  return recommendations;
+}
+
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (!message || typeof message !== "object" || !("type" in message)) {
@@ -704,6 +1003,17 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       return true;
     }
 
+    if (
+      message.type === READER_IMAGE_DATA_URL_MESSAGE_TYPE &&
+      "imageUrl" in message &&
+      typeof (message as { imageUrl: unknown }).imageUrl === "string"
+    ) {
+      void fetchReaderImageDataUrl(
+        (message as { imageUrl: string }).imageUrl,
+      ).then(sendResponse);
+      return true;
+    }
+
     if (message.type === RESTART_PARSER_SERVER_MESSAGE_TYPE) {
       readyUntil = 0;
       activeEnsureRequest = null;
@@ -718,6 +1028,13 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
 
     if (message.type === LOAD_HOME_BOOKMARKS_MESSAGE_TYPE) {
       void loadHomeBookmarkDirs().then((dirs) => sendResponse({ dirs }));
+      return true;
+    }
+
+    if (message.type === LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE) {
+      void loadPersonalRecommendations().then((recommendations) =>
+        sendResponse({ recommendations }),
+      );
       return true;
     }
 

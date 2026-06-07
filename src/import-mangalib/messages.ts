@@ -7,12 +7,6 @@ export interface ReadRemangaBookmarkTypesResponse {
   types: Array<{ typeId: number; name: string }>;
 }
 
-export interface MangalibProxiedFetchRequest {
-  type: typeof MANGALIB_PROXIED_FETCH_MESSAGE_TYPE;
-  url: string;
-  headers: Record<string, string>;
-}
-
 export type MangalibProxiedFetchResponse =
   | { ok: true; status: number; httpOk: boolean; body: string }
   | { ok: false; error: string };
@@ -22,18 +16,13 @@ export interface CheckAuthRequest {
   site: "mangalib" | "remanga";
 }
 
-export type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network" | "no-permission";
+type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network" | "no-permission";
 
 export interface CheckAuthResponse {
   signedIn: boolean;
   username?: string;
   userId?: number;
   reason?: AuthFailReason;
-  debug?: { status?: number; tokenLen?: number };
-}
-
-export interface ReadMangalibTokenRequest {
-  type: typeof READ_MANGALIB_TOKEN_MESSAGE_TYPE;
 }
 
 export interface ReadMangalibTokenResponse {

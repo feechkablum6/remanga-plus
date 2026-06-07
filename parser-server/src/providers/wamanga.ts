@@ -232,11 +232,4 @@ export class WamangaProvider implements ExternalSourceProvider {
   }
 }
 
-const WAMANGA_CHAPTER_UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const resolveChapterId = (ref: string): string => {
-  const trimmed = ref.trim();
-  if (WAMANGA_CHAPTER_UUID_RE.test(trimmed)) return trimmed;
-  return trimmed;
-};
+const resolveChapterId = (ref: string): string => ref.trim();

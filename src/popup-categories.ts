@@ -38,11 +38,6 @@ export type ToggleAccessor =
   | { kind: "popup"; key: PopupSettingKey }
   | { kind: "provider"; key: ProviderKey };
 
-export type CollapsibleGroupDef = {
-  name: string;
-  label: string;
-};
-
 export type ToggleDescriptor = {
   label: string;
   caption?: string;

@@ -8,13 +8,6 @@ export type BranchChapter = {
 // Remanga returns the branch list paginated, 30 chapters per page.
 const BRANCH_PAGE_SIZE = 30;
 
-export const extractCurrentChapterIdFromUrl = (url: string): number | null => {
-  const match = url.match(/\/manga\/[^/]+\/(\d+)(?:[/?#]|$)/);
-  if (!match) return null;
-  const id = Number(match[1]);
-  return Number.isInteger(id) && id > 0 ? id : null;
-};
-
 export const findChapterByIndex = (
   chapters: ReadonlyArray<BranchChapter>,
   targetIndex: number,
@@ -24,19 +17,6 @@ export const findChapterByIndex = (
 export const computeBranchPageForIndex = (chapterIndex: number): number => {
   if (!Number.isFinite(chapterIndex) || chapterIndex < 1) return 1;
   return Math.max(1, Math.ceil(chapterIndex / BRANCH_PAGE_SIZE));
-};
-
-// Kept for backwards compatibility with the old contract; unused by the
-// orchestrator now that we look up the next chapter by `index` directly.
-export const findNextChapterId = (
-  chapters: ReadonlyArray<BranchChapter>,
-  currentId: number,
-): number | null => {
-  if (chapters.length === 0) return null;
-  const sorted = [...chapters].sort((a, b) => a.id - b.id);
-  const currentIdx = sorted.findIndex((c) => c.id === currentId);
-  if (currentIdx === -1 || currentIdx === sorted.length - 1) return null;
-  return sorted[currentIdx + 1].id;
 };
 
 const REMANGA_CHAPTER_URL = (id: number): string =>
@@ -79,29 +59,6 @@ const addImagePreload = (href: string): void => {
   // would prevent the browser from reusing this preload from cache.
   link.setAttribute("data-rre-control", "chapter-prefetch-image");
   document.head.appendChild(link);
-};
-
-export const prewarmChapter = async (chapterId: number): Promise<void> => {
-  if (!Number.isInteger(chapterId) || chapterId <= 0) return;
-  try {
-    // No credentials: api.remanga.org/api/titles/chapters/<id>/ does not send
-    // Access-Control-Allow-Credentials, so the browser rejects credentialed
-    // CORS requests with a network error. The endpoint works for anonymous
-    // requests for free chapters, which is exactly what we need to read
-    // pages[].link for image preload.
-    const response = await fetch(REMANGA_CHAPTER_URL(chapterId));
-    if (!response.ok) return;
-    const body = (await response.json()) as {
-      content?: { is_paid?: boolean; pages?: unknown };
-    };
-    const content = body.content;
-    if (!content || content.is_paid) return;
-    for (const page of flattenPages(content.pages)) {
-      addImagePreload(page.link);
-    }
-  } catch {
-    /* silent — prefetch is best-effort */
-  }
 };
 
 // `ordering=index` is critical: the default order is reverse-chronological
@@ -212,9 +169,7 @@ export type PaidNextChapterMeta = {
   tome: number;
 };
 
-export type RemangaChapterMeta = PaidNextChapterMeta & {
-  index: number;
-};
+export type RemangaChapterMeta = PaidNextChapterMeta;
 
 export type PrefetchNextChapterOptions = {
   onPaidNextChapter?: (meta: PaidNextChapterMeta) => void | Promise<void>;
@@ -310,7 +265,6 @@ export const resolveRemangaChapterMetaByLabel = async (
         chapterId: matched.id,
         chapter: matched.chapter ?? chapter,
         tome: matched.tome ?? tome ?? 0,
-        index: matched.index,
       };
     }
 

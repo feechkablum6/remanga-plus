@@ -36,15 +36,6 @@ export const SETTINGS_MENU_ITEM_KEYS = Object.keys(
   SETTINGS_MENU_ITEMS,
 ) as SettingsMenuItemKey[];
 
-export const matchSettingsMenuItemKey = (
-  text: string | null | undefined,
-): SettingsMenuItemKey | null => {
-  return (
-    SETTINGS_MENU_ITEM_KEYS.find((key) => matchesSettingsMenuItemText(key, text)) ??
-    null
-  );
-};
-
 export const matchesSettingsMenuItemText = (
   key: SettingsMenuItemKey,
   text: string | null | undefined,

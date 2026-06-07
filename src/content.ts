@@ -24,8 +24,13 @@ import {
   getEnabledBookmarkDirs,
   type HomeBookmarkDirs,
 } from "./home-enhancer";
+import {
+  injectPersonalRecommendations,
+  type PersonalRecommendation,
+} from "./recommendations-inject";
 
 const LOAD_HOME_BOOKMARKS_MESSAGE_TYPE = "rre/load-home-bookmarks";
+const LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE = "rre/load-personal-recommendations";
 
 declare global {
   interface Window {
@@ -50,6 +55,9 @@ async function bootstrap(): Promise<void> {
   let lastUrl = window.location.href;
   let lastTitleDir: string | null = null;
   let homeBookmarkDirs: HomeBookmarkDirs | null = null;
+  let personalRecommendations: PersonalRecommendation[] | null = null;
+  let recsObserver: MutationObserver | null = null;
+  let recsHealHandle = 0;
 
   const triggerPrefetchForCurrentUrl = () => {
     if (!currentSettings.prefetchNextChapter) return;
@@ -78,6 +86,14 @@ async function bootstrap(): Promise<void> {
         ? getEnabledBookmarkDirs(homeBookmarkDirs, currentSettings.filterBookmarkCategories)
         : null;
     applyHomeEnhancements(document, currentSettings, enabledBookmarkDirs);
+
+    if (
+      currentSettings.personalRecommendations &&
+      personalRecommendations &&
+      personalRecommendations.length > 0
+    ) {
+      injectPersonalRecommendations(document, personalRecommendations);
+    }
 
     if (!isReaderPage()) {
       clearEnhancerArtifacts();
@@ -122,6 +138,72 @@ async function bootstrap(): Promise<void> {
         }
       },
     );
+  };
+
+  const requestPersonalRecommendations = () => {
+    if (!currentSettings.personalRecommendations) {
+      personalRecommendations = null;
+      recsObserver?.disconnect();
+      recsObserver = null;
+      document
+        .querySelectorAll('[data-rre-control="personal-recommendations-block"]')
+        .forEach((node) => node.remove());
+      return;
+    }
+
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      { type: LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE },
+      (response: unknown) => {
+        void chrome.runtime?.lastError;
+        if (
+          response &&
+          typeof response === "object" &&
+          "recommendations" in response &&
+          Array.isArray((response as { recommendations: unknown }).recommendations)
+        ) {
+          personalRecommendations = (response as {
+            recommendations: PersonalRecommendation[];
+          }).recommendations;
+          requestRefresh();
+          startRecsSelfHeal();
+        }
+      },
+    );
+  };
+
+  // Re-inject our recommendations block whenever it is missing. The home
+  // carousel is a hydrating Next.js subtree that React rebuilds for a few
+  // seconds after load, discarding any block we insert early; this observer
+  // simply puts it back each time, and no-ops once the block is present (so it
+  // never churns on its own insertion).
+  const ensureRecsInjected = () => {
+    if (
+      !currentSettings.personalRecommendations ||
+      !personalRecommendations ||
+      personalRecommendations.length === 0
+    ) {
+      return;
+    }
+    if (
+      document.querySelector('[data-rre-control="personal-recommendations-block"]')
+    ) {
+      return;
+    }
+    injectPersonalRecommendations(document, personalRecommendations);
+  };
+
+  const startRecsSelfHeal = () => {
+    ensureRecsInjected();
+    if (recsObserver || typeof MutationObserver === "undefined") return;
+    recsObserver = new MutationObserver(() => {
+      window.clearTimeout(recsHealHandle);
+      recsHealHandle = window.setTimeout(ensureRecsInjected, 150);
+    });
+    recsObserver.observe(document.body, { childList: true, subtree: true });
   };
 
   const clearSettledRefreshes = () => {
@@ -261,6 +343,7 @@ async function bootstrap(): Promise<void> {
   watchSettings((nextSettings) => {
     const previousPremiumFree = currentSettings.premiumFree;
     const previousFilterHomeBookmarks = currentSettings.filterHomeBookmarks;
+    const previousPersonalRecommendations = currentSettings.personalRecommendations;
     currentSettings = nextSettings;
     if (!previousPremiumFree && currentSettings.premiumFree) {
       requestParserServerWarmup(currentSettings);
@@ -268,12 +351,19 @@ async function bootstrap(): Promise<void> {
     if (!previousFilterHomeBookmarks && currentSettings.filterHomeBookmarks) {
       requestHomeBookmarks();
     }
+    if (
+      !previousPersonalRecommendations &&
+      currentSettings.personalRecommendations
+    ) {
+      requestPersonalRecommendations();
+    }
     requestRefresh();
   });
 
   requestParserServerWarmup(currentSettings);
   requestRefresh();
   requestHomeBookmarks();
+  requestPersonalRecommendations();
 }
 
 function shouldRefreshForMutation(mutation: MutationRecord): boolean {

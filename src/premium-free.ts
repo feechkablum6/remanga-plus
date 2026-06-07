@@ -59,10 +59,6 @@ export type PremiumFreeResolveFailure = {
   manualUrl: string;
 };
 
-export type PremiumFreeResolveResult =
-  | PremiumFreeResolveSuccess
-  | PremiumFreeResolveFailure;
-
 export type PremiumFreeClientFailureReason =
   | PremiumFreeResolveFailure["reason"]
   | "resolver_unavailable"
@@ -81,8 +77,6 @@ export type PremiumFreeClientResolveResult =
   | PremiumFreeResolveSuccess
   | PremiumFreeClientFailure;
 
-export type ProviderPhase = "connecting" | "searching" | "found" | "not_found";
-
 export type ProviderChipStatus =
   | "pending"
   | "searching"
@@ -97,11 +91,6 @@ export type ProviderChipInfo = {
   name: string;
   displayName: string;
   status: ProviderChipStatus;
-};
-
-export type StatusBlockPhase = {
-  phase: ProviderPhase;
-  providers: ProviderChipInfo[];
 };
 
 export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
@@ -279,9 +268,6 @@ const extractAliases = (
 export const buildPremiumFreeSearchUrl = (titleName: string): string =>
   `https://mangabuff.ru/search?type=manga&q=${encodeURIComponent(titleName)}`;
 
-export const isResolverUnavailableError = (error: unknown): boolean =>
-  error instanceof TypeError;
-
 const displayProviderName = (provider: string): string =>
   PROVIDER_DISPLAY_NAMES[provider] ?? provider;
 
@@ -303,9 +289,6 @@ const isExtensionContextInvalidated = (): boolean => {
   if (!chrome.runtime?.id) return true;
   return false;
 };
-
-export const EXTENSION_CONTEXT_INVALIDATED_DETAIL =
-  "Extension context invalidated. Reload the page.";
 
 export const isExtensionContextInvalidatedDetail = (detail: string | undefined): boolean =>
   typeof detail === "string" && detail.includes("Extension context invalidated");

@@ -5,6 +5,10 @@ import {
   buildGenreProfile,
   filterNativeCards,
   pickSupplements,
+  selectTopGenres,
+  parseCatalogCandidates,
+  parseTitleDetailGenres,
+  parseGenreIdMap,
   type BookmarkTitle,
   type GenreProfile,
   type NativeCard,
@@ -109,6 +113,7 @@ test("pickSupplements returns candidates not in bookmarkIds, sorted by genre mat
       issueYear: 2024,
       rating: 8.5,
       genres: ["Комедия", "Фэнтези"],
+      bookmarkType: null,
     },
     {
       id: 4,
@@ -119,6 +124,7 @@ test("pickSupplements returns candidates not in bookmarkIds, sorted by genre mat
       issueYear: 2023,
       rating: 9.0,
       genres: ["Драма"],
+      bookmarkType: null,
     },
     {
       id: 2,
@@ -129,12 +135,30 @@ test("pickSupplements returns candidates not in bookmarkIds, sorted by genre mat
       issueYear: 2023,
       rating: 9.0,
       genres: ["Комедия"],
+      bookmarkType: null,
     },
   ];
   const result = pickSupplements(candidates, profile, 10);
   assert.equal(result.length, 2);
   assert.equal(result[0].id, 3);
   assert.equal(result[1].id, 4);
+});
+
+test("pickSupplements excludes candidates the viewer already bookmarked (bookmarkType set)", () => {
+  const profile: GenreProfile = {
+    genres: { "Комедия": 5 },
+    categories: {},
+    bookmarkIds: new Set(),
+    bookmarkDirs: new Set(),
+    updatedAt: Date.now(),
+  };
+  const candidates: RecCandidate[] = [
+    { id: 1, dir: "a", img: "", mainName: "A", typeName: "Манхва", issueYear: 2024, rating: 9, genres: ["Комедия"], bookmarkType: "Прочитано" },
+    { id: 2, dir: "b", img: "", mainName: "B", typeName: "Манхва", issueYear: 2024, rating: 8, genres: ["Комедия"], bookmarkType: null },
+  ];
+  const result = pickSupplements(candidates, profile, 10);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 2);
 });
 
 test("pickSupplements respects the max count", () => {
@@ -154,7 +178,108 @@ test("pickSupplements respects the max count", () => {
     issueYear: 2024,
     rating: 8.0,
     genres: ["Комедия"],
+    bookmarkType: null,
   }));
   const result = pickSupplements(candidates, profile, 3);
   assert.equal(result.length, 3);
+});
+
+test("selectTopGenres returns the highest-weighted genre names, capped", () => {
+  const profile: GenreProfile = {
+    genres: { "Фэнтези": 10, "Комедия": 6, "Драма": 3, "Спорт": 1 },
+    categories: {},
+    bookmarkIds: new Set(),
+    bookmarkDirs: new Set(),
+    updatedAt: Date.now(),
+  };
+  assert.deepEqual(selectTopGenres(profile, 2), ["Фэнтези", "Комедия"]);
+  assert.deepEqual(selectTopGenres(profile, 0), []);
+});
+
+test("parseCatalogCandidates maps catalog rows to RecCandidate with flattened genres", () => {
+  const raw = {
+    content: [
+      {
+        id: 2060,
+        dir: "solo-leveling_",
+        main_name: "Поднятие уровня в одиночку",
+        type: "Манхва",
+        issue_year: 2018,
+        avg_rating: 9.7,
+        bookmark_type: "Прочитано",
+        cover: { low: "/l.webp", mid: "/m.webp", high: "/h.webp" },
+        genres: [
+          { id: 2, name: "Экшен" },
+          { id: 38, name: "Фэнтези" },
+        ],
+      },
+      { id: "bad", dir: "skip-me" },
+    ],
+  };
+  const result = parseCatalogCandidates(raw);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0], {
+    id: 2060,
+    dir: "solo-leveling_",
+    img: "/m.webp",
+    mainName: "Поднятие уровня в одиночку",
+    typeName: "Манхва",
+    issueYear: 2018,
+    rating: 9.7,
+    genres: ["Экшен", "Фэнтези"],
+    bookmarkType: "Прочитано",
+  });
+});
+
+test("parseCatalogCandidates tolerates string avg_rating and missing content", () => {
+  assert.deepEqual(parseCatalogCandidates({}), []);
+  assert.deepEqual(parseCatalogCandidates(null), []);
+  const result = parseCatalogCandidates({
+    content: [
+      { id: 1, dir: "a", avg_rating: "7.3", type: { id: 2, name: "Манхва" } },
+    ],
+  });
+  assert.equal(result[0].rating, 7.3);
+  assert.equal(result[0].typeName, "Манхва");
+  assert.equal(result[0].img, "");
+  assert.equal(result[0].bookmarkType, null);
+});
+
+test("parseTitleDetailGenres reads dir/genres/categories from content wrapper", () => {
+  const raw = {
+    content: {
+      id: 2060,
+      dir: "solo-leveling_",
+      genres: [
+        { id: 2, name: "Экшен", dir: "ekshen" },
+        { id: 38, name: "Фэнтези", dir: "fentezi" },
+      ],
+      categories: [{ id: 6, name: "В цвете" }],
+    },
+  };
+  assert.deepEqual(parseTitleDetailGenres(raw), {
+    id: 2060,
+    dir: "solo-leveling_",
+    genres: ["Экшен", "Фэнтези"],
+    categories: ["В цвете"],
+  });
+});
+
+test("parseTitleDetailGenres returns null when dir is absent", () => {
+  assert.equal(parseTitleDetailGenres({ content: { genres: [] } }), null);
+  assert.equal(parseTitleDetailGenres(null), null);
+});
+
+test("parseGenreIdMap maps genre names to ids from a detail payload", () => {
+  const raw = {
+    content: {
+      genres: [
+        { id: 2, name: "Экшен" },
+        { id: 38, name: "Фэнтези" },
+        { name: "NoId" },
+      ],
+    },
+  };
+  assert.deepEqual(parseGenreIdMap(raw), { "Экшен": 2, "Фэнтези": 38 });
+  assert.deepEqual(parseGenreIdMap({}), {});
 });

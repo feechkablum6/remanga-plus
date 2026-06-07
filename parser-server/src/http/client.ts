@@ -3,11 +3,9 @@ const DEFAULT_USER_AGENT =
   "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_MAX_RETRIES = 0;
 
 export interface HttpClientOptions {
   fetchImpl?: typeof fetch;
-  userAgent?: string;
   timeoutMs?: number;
 }
 
@@ -38,12 +36,10 @@ const mergeAbortSignals = (
 
 export class HttpClient {
   private readonly fetchImpl: typeof fetch;
-  private readonly userAgent: string;
   private readonly timeoutMs: number;
 
   constructor(options: HttpClientOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
-    this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
@@ -79,7 +75,7 @@ export class HttpClient {
   private buildHeaders(initHeaders: RequestInit["headers"]): Headers {
     const headers = new Headers(initHeaders);
     if (!headers.has("User-Agent")) {
-      headers.set("User-Agent", this.userAgent);
+      headers.set("User-Agent", DEFAULT_USER_AGENT);
     }
     return headers;
   }

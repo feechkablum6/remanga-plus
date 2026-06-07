@@ -5,7 +5,7 @@ const REMANGA_API = "https://api.remanga.org";
 
 export type RemangaTokenProvider = () => Promise<string | null>;
 
-export type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network";
+type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network";
 
 export interface AuthStatus {
   signedIn: boolean;

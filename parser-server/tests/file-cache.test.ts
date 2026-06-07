@@ -30,12 +30,6 @@ describe('FileCache', () => {
     assert.deepEqual(result, data);
   });
 
-  it('reports has() correctly', async () => {
-    assert.equal(await cache.has('key'), false);
-    await cache.set('key', Buffer.from('data'));
-    assert.equal(await cache.has('key'), true);
-  });
-
   it('handles keys with special characters', async () => {
     const data = Buffer.from('special-data');
     await cache.set('folder/id-with:special', data);

@@ -21,13 +21,4 @@ export class FileCache {
     await fs.mkdir(this.cacheDir, { recursive: true });
     await fs.writeFile(this.keyPath(key), data);
   }
-
-  async has(key: string): Promise<boolean> {
-    try {
-      await fs.access(this.keyPath(key));
-      return true;
-    } catch {
-      return false;
-    }
-  }
 }

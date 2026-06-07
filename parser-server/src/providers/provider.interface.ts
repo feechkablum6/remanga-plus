@@ -122,7 +122,6 @@ export type ExternalResolveResult = ExternalResolveSuccess | ExternalResolveFail
 
 export interface SourceProvider {
   name: string;
-  canHandle?(url: string): boolean;
   searchTitles?(query: string): Promise<SourceTitleSearchResult[]>;
   getTitleDetails?(titleRef: string, options?: TitleDetailsOptions): Promise<SourceTitleDetails>;
   manualSearchUrl?(query: string): string;

@@ -3,7 +3,7 @@ import type { MangalibBookmark } from "./types.js";
 
 const MANGALIB_API_BASE = "https://api.cdnlibs.org";
 
-export type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network";
+type AuthFailReason = "no-tab" | "no-token" | "unauthorized" | "network";
 
 export interface MangalibToken {
   token: string | null;
@@ -12,11 +12,10 @@ export interface MangalibToken {
 }
 export type MangalibTokenProvider = () => Promise<MangalibToken>;
 
-export interface AuthStatus {
+interface AuthStatus {
   signedIn: boolean;
   username?: string;
   reason?: AuthFailReason;
-  debug?: { status?: number; tokenLen?: number };
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -52,17 +51,16 @@ export async function fetchMangalibAuthStatus(
 ): Promise<AuthStatus> {
   const t = await tokenProvider();
   if (!t.token) return { signedIn: false, reason: t.reason ?? "no-token" };
-  const tokenLen = t.token.length;
   try {
     const r = await customFetch(`${MANGALIB_API_BASE}/api/auth/me`, authHeaders(t.token));
-    if (r.status === 401 || r.status === 403) return { signedIn: false, reason: "unauthorized", debug: { status: r.status, tokenLen } };
-    if (!r.ok) return { signedIn: false, reason: "network", debug: { status: r.status, tokenLen } };
+    if (r.status === 401 || r.status === 403) return { signedIn: false, reason: "unauthorized" };
+    if (!r.ok) return { signedIn: false, reason: "network" };
     const body = (await r.json()) as { data?: { username?: string } };
     const username = body?.data?.username;
-    if (!username) return { signedIn: false, reason: "unauthorized", debug: { status: r.status, tokenLen } };
+    if (!username) return { signedIn: false, reason: "unauthorized" };
     return { signedIn: true, username };
   } catch {
-    return { signedIn: false, reason: "network", debug: { tokenLen } };
+    return { signedIn: false, reason: "network" };
   }
 }
 
