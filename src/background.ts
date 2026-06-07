@@ -49,6 +49,7 @@ import {
   type RecCandidate,
 } from "./recommendations.js";
 import type { PersonalRecommendation } from "./recommendations-inject.js";
+import { mapWithConcurrency } from "./async-pool.js";
 
 const HEALTHCHECK_TIMEOUT_MS = 3_000;
 const HEALTHCHECK_MAX_ATTEMPTS = 5;
@@ -519,6 +520,9 @@ const PERSONAL_RECS_PROFILE_SAMPLE = 40;
 const PERSONAL_RECS_TOP_GENRES = 3;
 const PERSONAL_RECS_MAX = 12;
 const PERSONAL_RECS_CATALOG_PAGES = 4;
+// Cap simultaneous in-flight requests to Remanga's API so parallelising the
+// per-bookmark / per-page loops stays fast without hammering the server.
+const REMANGA_REQUEST_CONCURRENCY = 6;
 const HIDDEN_TAB_POLL_DEADLINE_MS = 15_000;
 const HIDDEN_TAB_POLL_INTERVAL_MS = 500;
 
@@ -742,18 +746,75 @@ async function writeHomeBookmarkDirsCache(payload: CachedHomeBookmarkDirs): Prom
   });
 }
 
-async function loadHomeBookmarkDirs(): Promise<HomeBookmarkDirs> {
+type HomeBookmarkPageBody = {
+  count?: unknown;
+  next?: unknown;
+  results?: Array<{
+    title?: { dir?: unknown };
+    type?: unknown;
+    bookmark_type_id?: unknown;
+  }>;
+};
+
+async function fetchHomeBookmarkPage(
+  userId: number,
+  token: string,
+  page: number,
+): Promise<HomeBookmarkPageBody | null> {
+  const url = new URL(`https://api.remanga.org/api/v2/users/${userId}/bookmarks/`);
+  url.searchParams.set("page", String(page));
+  try {
+    const response = await fetch(url.toString(), {
+      credentials: "omit",
+      headers: { Authorization: "bearer " + token, Accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as HomeBookmarkPageBody;
+    return body && Array.isArray(body.results) ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectHomeBookmarkDirs(
+  dirs: HomeBookmarkDirs,
+  body: HomeBookmarkPageBody,
+  categoryByTypeId: Map<number, HomeBookmarkCategoryKey>,
+): void {
+  for (const row of body.results ?? []) {
+    const dir = row.title?.dir;
+    const typeId = row.type ?? row.bookmark_type_id;
+    if (typeof dir !== "string" || typeof typeId !== "number") continue;
+    const category = categoryByTypeId.get(typeId) ?? DEFAULT_HOME_BOOKMARK_CATEGORY_KEY;
+    dirs[dir] ??= [];
+    if (!dirs[dir].includes(category)) {
+      dirs[dir].push(category);
+    }
+  }
+}
+
+async function loadHomeBookmarkDirs(
+  prefetched?: { token: string; userId: number },
+): Promise<HomeBookmarkDirs> {
   const cached = await readHomeBookmarkDirsCache();
   if (cached && Date.now() - cached.updatedAt < HOME_BOOKMARK_DIRS_CACHE_TTL_MS) {
     return cached.dirs;
   }
 
-  const token = await getRemangaToken();
-  if (!token) return cached?.dirs ?? {};
-
-  const auth = await fetchRemangaAuthStatus(async () => token);
-  if (!auth.signedIn || typeof auth.userId !== "number") {
-    return cached?.dirs ?? {};
+  let token: string;
+  let userId: number;
+  if (prefetched) {
+    token = prefetched.token;
+    userId = prefetched.userId;
+  } else {
+    const fetched = await getRemangaToken();
+    if (!fetched) return cached?.dirs ?? {};
+    const auth = await fetchRemangaAuthStatus(async () => fetched);
+    if (!auth.signedIn || typeof auth.userId !== "number") {
+      return cached?.dirs ?? {};
+    }
+    token = fetched;
+    userId = auth.userId;
   }
 
   const categoryByTypeId = new Map<number, HomeBookmarkCategoryKey>();
@@ -771,47 +832,42 @@ async function loadHomeBookmarkDirs(): Promise<HomeBookmarkDirs> {
   }
 
   const dirs: HomeBookmarkDirs = {};
-  let page = 1;
-  for (;;) {
-    const url = new URL(`https://api.remanga.org/api/v2/users/${auth.userId}/bookmarks/`);
-    url.searchParams.set("page", String(page));
-    const response = await fetch(url.toString(), {
-      credentials: "omit",
-      headers: {
-        Authorization: "bearer " + token,
-        Accept: "application/json",
-      },
-    });
-    if (!response.ok) break;
-    const body = (await response.json()) as {
-      next?: unknown;
-      results?: Array<{
-        title?: { dir?: unknown };
-        type?: unknown;
-        bookmark_type_id?: unknown;
-      }>;
-    };
-    if (!body || !Array.isArray(body.results)) break;
+  const first = await fetchHomeBookmarkPage(userId, token, 1);
+  if (first) {
+    collectHomeBookmarkDirs(dirs, first, categoryByTypeId);
 
-    for (const row of body.results) {
-      const dir = row.title?.dir;
-      const typeId = row.type ?? row.bookmark_type_id;
-      if (typeof dir !== "string" || typeof typeId !== "number") continue;
-      const category = categoryByTypeId.get(typeId) ?? DEFAULT_HOME_BOOKMARK_CATEGORY_KEY;
-      dirs[dir] ??= [];
-      if (!dirs[dir].includes(category)) {
-        dirs[dir].push(category);
+    // DRF pagination reports a total `count`, so the remaining pages can be
+    // fetched in parallel instead of discovered one-by-one via `next`.
+    const pageSize = first.results?.length ?? 0;
+    const totalCount = typeof first.count === "number" ? first.count : 0;
+    const totalPages =
+      pageSize > 0 && totalCount > pageSize ? Math.ceil(totalCount / pageSize) : 1;
+
+    if (totalPages > 1) {
+      const restPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+      const bodies = await mapWithConcurrency(
+        restPages,
+        REMANGA_REQUEST_CONCURRENCY,
+        (page) => fetchHomeBookmarkPage(userId, token, page),
+      );
+      for (const body of bodies) {
+        if (body) collectHomeBookmarkDirs(dirs, body, categoryByTypeId);
+      }
+    } else {
+      // Fallback when no usable count is present: walk pages sequentially.
+      let nextPage = extractHomeBookmarkNextPage(first.next, 1);
+      while (nextPage !== null) {
+        const body = await fetchHomeBookmarkPage(userId, token, nextPage);
+        if (!body) break;
+        collectHomeBookmarkDirs(dirs, body, categoryByTypeId);
+        nextPage = extractHomeBookmarkNextPage(body.next, nextPage);
       }
     }
-
-    const nextPage = extractHomeBookmarkNextPage(body.next, page);
-    if (nextPage === null) break;
-    page = nextPage;
   }
 
   await writeHomeBookmarkDirsCache({
     dirs,
-    userId: auth.userId,
+    userId,
     updatedAt: Date.now(),
   });
   return dirs;
@@ -883,28 +939,21 @@ async function fetchRemangaTitleDetail(
   }
 }
 
-async function fetchRemangaCatalogByGenre(
+async function fetchRemangaCatalogPage(
   genreId: number,
+  page: number,
   token: string,
 ): Promise<RecCandidate[]> {
-  const out: RecCandidate[] = [];
-  // Heavy bookmarkers already own most of a genre's top titles, so pull several
-  // catalog pages to leave enough not-yet-bookmarked candidates after dedup.
-  for (let page = 1; page <= PERSONAL_RECS_CATALOG_PAGES; page += 1) {
-    try {
-      const response = await fetch(REMANGA_CATALOG_URL(genreId, page), {
-        credentials: "omit",
-        headers: { Authorization: "bearer " + token, Accept: "application/json" },
-      });
-      if (!response.ok) break;
-      const candidates = parseCatalogCandidates(await response.json());
-      if (candidates.length === 0) break;
-      out.push(...candidates);
-    } catch {
-      break;
-    }
+  try {
+    const response = await fetch(REMANGA_CATALOG_URL(genreId, page), {
+      credentials: "omit",
+      headers: { Authorization: "bearer " + token, Accept: "application/json" },
+    });
+    if (!response.ok) return [];
+    return parseCatalogCandidates(await response.json());
+  } catch {
+    return [];
   }
-  return out;
 }
 
 async function loadPersonalRecommendations(): Promise<PersonalRecommendation[]> {
@@ -921,17 +970,25 @@ async function loadPersonalRecommendations(): Promise<PersonalRecommendation[]> 
     return cached?.recommendations ?? [];
   }
 
-  const allDirs = Object.keys(await loadHomeBookmarkDirs());
+  const allDirs = Object.keys(
+    await loadHomeBookmarkDirs({ token, userId: auth.userId }),
+  );
   if (allDirs.length === 0) return [];
   // Genre weighting samples the first N bookmarks (one detail request each), but
   // dedup must consider ALL bookmarks so we never recommend a title the user
   // already has — even when they have hundreds of bookmarks.
   const sampleDirs = allDirs.slice(0, PERSONAL_RECS_PROFILE_SAMPLE);
 
+  // Fetch sampled title details in parallel; mapWithConcurrency preserves order,
+  // so the genre profile is identical to the old sequential walk.
+  const details = await mapWithConcurrency(
+    sampleDirs,
+    REMANGA_REQUEST_CONCURRENCY,
+    (dir) => fetchRemangaTitleDetail(dir, token),
+  );
   const bookmarks: BookmarkTitle[] = [];
   const genreIds: Record<string, number> = {};
-  for (const dir of sampleDirs) {
-    const detail = await fetchRemangaTitleDetail(dir, token);
+  for (const detail of details) {
     const parsed = detail ? parseTitleDetailGenres(detail) : null;
     if (!parsed) continue;
     bookmarks.push({
@@ -950,11 +1007,24 @@ async function loadPersonalRecommendations(): Promise<PersonalRecommendation[]> 
   for (const dir of allDirs) profile.bookmarkDirs.add(dir);
   const topGenres = selectTopGenres(profile, PERSONAL_RECS_TOP_GENRES);
 
-  const candidatesByDir = new Map<string, RecCandidate>();
+  // Flatten (genre × page) into one job list and fetch all catalog pages in
+  // parallel. Job order matches the old nested loops, so dedup is stable.
+  const catalogJobs: Array<{ genreId: number; page: number }> = [];
   for (const genre of topGenres) {
     const genreId = genreIds[genre];
     if (typeof genreId !== "number") continue;
-    for (const candidate of await fetchRemangaCatalogByGenre(genreId, token)) {
+    for (let page = 1; page <= PERSONAL_RECS_CATALOG_PAGES; page += 1) {
+      catalogJobs.push({ genreId, page });
+    }
+  }
+  const catalogPages = await mapWithConcurrency(
+    catalogJobs,
+    REMANGA_REQUEST_CONCURRENCY,
+    (job) => fetchRemangaCatalogPage(job.genreId, job.page, token),
+  );
+  const candidatesByDir = new Map<string, RecCandidate>();
+  for (const candidates of catalogPages) {
+    for (const candidate of candidates) {
       candidatesByDir.set(candidate.dir, candidate);
     }
   }
