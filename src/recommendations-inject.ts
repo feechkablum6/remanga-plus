@@ -173,13 +173,102 @@ const applyRecommendation = (
   }
 };
 
+const TEAL = "#3EDAE0";
+const TEAL_BG = "rgba(62,218,224,0.06)";
+
+const createFrameIcon = (
+  x: string,
+  y: string,
+  tx: string,
+  ty: string,
+): SVGSVGElement => {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "480");
+  svg.setAttribute("height", "480");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "currentColor");
+  svg.style.cssText = [
+    "position:absolute",
+    `left:${x}`,
+    `top:${y}`,
+    "height:220px",
+    "width:220px",
+    `transform:${tx} ${ty}`,
+    `color:${TEAL}`,
+    "opacity:0.22",
+    "filter:blur(64px)",
+  ].join(";");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M12 2L22 12L12 22L2 12Z");
+  svg.appendChild(path);
+  return svg;
+};
+
+const createScrollButton = (direction: "prev" | "next"): HTMLButtonElement => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("aria-label", direction === "prev" ? "Previous slide" : "Next slide");
+  const isPrev = direction === "prev";
+  btn.style.cssText = [
+    "position:absolute",
+    "top:50%",
+    isPrev ? "left:-16px" : "right:-16px",
+    "transform:translateY(-50%)",
+    "z-index:20",
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "width:40px",
+    "height:40px",
+    "border-radius:50%",
+    "border:1.5px solid rgba(62,218,224,0.35)",
+    "background:rgba(24,25,27,0.94)",
+    "color:#e2e8f0",
+    "cursor:pointer",
+    "opacity:0",
+    "transition:opacity 180ms ease, transform 180ms ease, border-color 180ms ease",
+    "box-shadow:0 4px 16px rgba(0,0,0,0.4)",
+  ].join(";");
+  btn.innerHTML = isPrev
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+  return btn;
+};
+
+const scrollCarouselBy = (
+  track: HTMLElement,
+  direction: "prev" | "next",
+): void => {
+  const cardWidth =
+    (track.firstElementChild as HTMLElement | null)?.offsetWidth ?? 150;
+  const gap = 16;
+  const scrollAmount = (cardWidth + gap) * 3;
+  track.scrollBy({
+    left: direction === "next" ? scrollAmount : -scrollAmount,
+    behavior: "smooth",
+  });
+};
+
+const updateScrollButtons = (
+  track: HTMLElement,
+  prevBtn: HTMLButtonElement,
+  nextBtn: HTMLButtonElement,
+): void => {
+  const atStart = track.scrollLeft <= 1;
+  const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+  prevBtn.style.opacity = atStart ? "0" : "1";
+  prevBtn.style.pointerEvents = atStart ? "none" : "auto";
+  nextBtn.style.opacity = atEnd ? "0" : "1";
+  nextBtn.style.pointerEvents = atEnd ? "none" : "auto";
+};
+
 export const injectPersonalRecommendations = (
   root: ParentNode,
   recommendations: PersonalRecommendation[],
 ): number => {
   const found = findRecommendationsSection(root);
   if (!found) return 0;
-  const { section, headingText } = found;
+  const { section } = found;
 
   const links = Array.from(section.querySelectorAll<HTMLAnchorElement>(CARD_LINK_SELECTOR));
   if (links.length === 0) return 0;
@@ -196,16 +285,12 @@ export const injectPersonalRecommendations = (
 
   const fresh = recommendations.filter((rec) => rec.dir && !nativeDirs.has(rec.dir));
 
-  // Build the signature string while we validate — avoids an extra pass.
   const orderedDirs = new Array<string>();
   for (const rec of fresh) {
     if (rec.dir) orderedDirs.push(rec.dir);
   }
   const signature = orderedDirs.sort().join(",");
 
-  // Idempotent: if a block with the same signature is already in the DOM, skip
-  // the entire injection. No removal → no flicker even when React re-reconciles
-  // the page and triggers a self-heal.
   const existing = root.querySelector<HTMLElement>(
     `[${BLOCK_ATTR}="${BLOCK_VALUE}"]`,
   );
@@ -218,39 +303,176 @@ export const injectPersonalRecommendations = (
     return 0;
   }
 
+  // --- Build the block ---
+
   const block = document.createElement("div");
   block.setAttribute(BLOCK_ATTR, BLOCK_VALUE);
-  block.className = section.className;
   block.setAttribute(BLOCK_SIG_ATTR, signature);
+  block.style.cssText = "position:relative;width:100%;padding-bottom:20px;";
 
-  const heading = document.createElement("div");
-  heading.style.cssText =
-    "display:flex;align-items:center;gap:8px;padding:0 0 12px;font-weight:700;" +
-    "font-size:16px;color:#e2e8f0;text-transform:uppercase;letter-spacing:0.02em;";
-  heading.textContent = headingText
-    ? `${headingText} — по жанрам`
-    : "Рекомендации по жанрам";
-  block.appendChild(heading);
+  // Decorative frame overlay — gradient bg + rounded border + blurred icons.
+  const frameOverlay = document.createElement("div");
+  frameOverlay.style.cssText = [
+    "pointer-events:none",
+    "position:absolute",
+    "left:0",
+    "right:0",
+    "top:18px",
+    "bottom:0",
+    "overflow:hidden",
+    "border-radius:22px",
+    `background:linear-gradient(180deg, ${TEAL_BG} 0%, rgba(19,20,22,0) 55%)`,
+  ].join(";");
 
-  const grid = document.createElement("div");
-  grid.style.cssText =
-    "display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;";
-  block.appendChild(grid);
+  const frameBorder = document.createElement("div");
+  frameBorder.style.cssText = [
+    "position:absolute",
+    "inset:0",
+    "border-radius:22px",
+    "border:2px solid #3EDAE0",
+  ].join(";");
+  frameOverlay.appendChild(frameBorder);
+
+  // Three blurred icons, matching the native three-position decoration.
+  frameOverlay.appendChild(createFrameIcon("-64px", "50%", "translateY(-50%)", ""));
+  frameOverlay.appendChild(createFrameIcon("50%", "-100px", "translateX(-50%)", ""));
+  frameOverlay.appendChild(createFrameIcon("calc(100% + 64px)", "100%", "", "translateY(50%)"));
+
+  block.appendChild(frameOverlay);
+
+  // Badge row with scroll buttons.
+  const contentRow = document.createElement("div");
+  contentRow.style.cssText = [
+    "position:relative",
+    "z-index:10",
+    "display:flex",
+    "align-items:center",
+    "justify-content:space-between",
+    "padding:0 32px 16px",
+  ].join(";");
+
+  const badge = document.createElement("div");
+  badge.style.cssText = [
+    "display:flex",
+    "height:40px",
+    "align-items:center",
+    "gap:8px",
+    "border-radius:8px",
+    "border:2px solid #3EDAE0",
+    "background:#3EDAE0",
+    "padding-right:20px",
+    "padding-left:12px",
+  ].join(";");
+
+  const iconWrapper = document.createElement("div");
+  iconWrapper.style.cssText = "position:relative;color:#0f1729;display:flex;";
+  iconWrapper.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">' +
+    '<path d="M12 2L22 12L12 22L2 12Z"/>' +
+    "</svg>";
+
+  const label = document.createElement("span");
+  label.style.cssText = [
+    "font-size:18px",
+    "line-height:1",
+    "font-weight:600",
+    "color:#fff",
+    "text-transform:uppercase",
+    "font-style:italic",
+  ].join(";");
+  label.textContent = "Remanga PLUS";
+
+  badge.append(iconWrapper, label);
+
+  // Scroll buttons (shown on hover).
+  const prevBtn = createScrollButton("prev");
+  const nextBtn = createScrollButton("next");
+
+  contentRow.append(badge, prevBtn, nextBtn);
+  block.appendChild(contentRow);
+
+  // Horizontal scroll track.
+  const carouselWrapper = document.createElement("div");
+  carouselWrapper.style.cssText = [
+    "position:relative",
+    "z-index:10",
+    "padding:0 32px",
+  ].join(";");
+
+  const scrollTrack = document.createElement("div");
+  scrollTrack.setAttribute(BLOCK_ATTR, "personal-recommendations-track");
+  scrollTrack.style.cssText = [
+    "display:flex",
+    "gap:16px",
+    "overflow-x:auto",
+    "scroll-snap-type:x mandatory",
+    "scrollbar-width:none",
+    "-ms-overflow-style:none",
+    "padding-bottom:4px",
+  ].join(";");
+
+  // Hide webkit scrollbar.
+  const styleTag = document.createElement("style");
+  styleTag.textContent =
+    `[${BLOCK_ATTR}="personal-recommendations-track"]::-webkit-scrollbar{display:none}`;
+  scrollTrack.appendChild(styleTag);
 
   let injected = 0;
   for (const rec of fresh) {
     const clone = templateCard.cloneNode(true) as HTMLElement;
     clone.setAttribute(BLOCK_ATTR, CARD_ATTR_VALUE);
     clone.setAttribute("data-rre-rec-dir", rec.dir);
-    // Drop carousel sizing classes so cards lay out in the grid.
     clone.className = "min-w-0";
-    clone.style.cssText = "";
+    clone.style.cssText = [
+      "flex:0 0 150px",
+      "scroll-snap-align:start",
+    ].join(";");
     applyRecommendation(clone, rec);
-    grid.appendChild(clone);
+    scrollTrack.appendChild(clone);
     injected += 1;
   }
 
-  // Atomic DOM swap: replace old block with new in one paint frame (no gap).
+  // Wire scroll buttons.
+  const onScroll = () => updateScrollButtons(scrollTrack, prevBtn, nextBtn);
+  scrollTrack.addEventListener("scroll", onScroll, { passive: true });
+
+  prevBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    scrollCarouselBy(scrollTrack, "prev");
+  });
+  nextBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    scrollCarouselBy(scrollTrack, "next");
+  });
+
+  // Show buttons on hover over the carousel area.
+  carouselWrapper.addEventListener("pointerenter", () => {
+    prevBtn.style.opacity = scrollTrack.scrollLeft > 1 ? "1" : "0";
+    if (scrollTrack.scrollLeft > 1) prevBtn.style.pointerEvents = "auto";
+    nextBtn.style.opacity =
+      scrollTrack.scrollLeft + scrollTrack.clientWidth < scrollTrack.scrollWidth - 1
+        ? "1"
+        : "0";
+    if (scrollTrack.scrollLeft + scrollTrack.clientWidth < scrollTrack.scrollWidth - 1) {
+      nextBtn.style.pointerEvents = "auto";
+    }
+  });
+  carouselWrapper.addEventListener("pointerleave", () => {
+    prevBtn.style.opacity = "0";
+    prevBtn.style.pointerEvents = "none";
+    nextBtn.style.opacity = "0";
+    nextBtn.style.pointerEvents = "none";
+  });
+
+  carouselWrapper.appendChild(scrollTrack);
+  block.appendChild(carouselWrapper);
+
+  // Initial button state.
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => updateScrollButtons(scrollTrack, prevBtn, nextBtn));
+  }
+
+  // Atomic DOM swap.
   if (existing) {
     existing.replaceWith(block);
   } else {
