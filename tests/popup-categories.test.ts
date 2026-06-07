@@ -4,8 +4,13 @@ import {
   CATEGORY_KEYS,
   CATEGORIES,
   countCategoryToggles,
+  cycleRecTypeState,
+  applyRecTypeChange,
+  readToggleValue,
+  applyToggleChange,
   type CategoryKey,
 } from "../src/popup-categories.js";
+import { DEFAULT_SETTINGS, cloneSettings } from "../src/settings.js";
 
 test("CATEGORY_KEYS lists exactly three categories in display order", () => {
   assert.deepEqual(CATEGORY_KEYS, ["site", "reader", "premium-free"]);
@@ -33,8 +38,8 @@ test("Читалка has 8 toggles (5 visual + 3 popup auto-dismiss)", () => {
   assert.equal(countCategoryToggles("reader"), 8);
 });
 
-test("Premium Free has 4 toggles", () => {
-  assert.equal(countCategoryToggles("premium-free"), 4);
+test("Premium Free has 14 toggles (4 core + 3 rec-type + 7 providers)", () => {
+  assert.equal(countCategoryToggles("premium-free"), 14);
 });
 
 test("Сайт toggles include all 10 header button keys with Russian labels", () => {
@@ -74,14 +79,20 @@ test("Читалка toggles match the 8 spec labels in display order", () => {
   ]);
 });
 
-test("Premium Free toggles are: режим + префетч + прогресс + рекомендации", () => {
+test("Premium Free toggles: core → rec-type → providers", () => {
   const labels = CATEGORIES["premium-free"].toggles.map((t) => t.label);
-  assert.deepEqual(labels, [
+  assert.deepEqual(labels.slice(0, 7), [
     "Premium Free режим",
     "Префетч следующей главы",
     "Показывать прогресс загрузки",
     "Персональные рекомендации",
+    "Манга",
+    "Манхва",
+    "Маньхуа",
   ]);
+  // Providers follow rec-type
+  assert.ok(labels.includes("Mangabuff"));
+  assert.ok(labels.includes("WaManga"));
 });
 
 test("Premium Free 'режим' toggle has a caption from spec", () => {
@@ -132,4 +143,45 @@ test("premium-free toggles include personalRecommendations", () => {
   const rec = toggles.find(t => t.label === "Персональные рекомендации");
   assert.ok(rec, "toggle not found");
   assert.deepEqual(rec?.accessor, { kind: "scalar", key: "personalRecommendations" });
+});
+
+test("rec-type toggles sit in recTypeFilter collapsible group", () => {
+  const toggles = CATEGORIES["premium-free"].toggles;
+  for (const label of ["Манга", "Манхва", "Маньхуа"]) {
+    const t = toggles.find((x) => x.label === label);
+    assert.ok(t, `missing toggle: ${label}`);
+    assert.equal(t?.collapsibleGroup, "recTypeFilter");
+    assert.equal(t?.accessor.kind, "rec-type");
+  }
+});
+
+test("cycleRecTypeState cycles neutral → priority → excluded → neutral", () => {
+  assert.equal(cycleRecTypeState("neutral"), "priority");
+  assert.equal(cycleRecTypeState("priority"), "excluded");
+  assert.equal(cycleRecTypeState("excluded"), "neutral");
+});
+
+test("applyRecTypeChange updates exactly one key in recommendationTypePreferences", () => {
+  const s = applyRecTypeChange(DEFAULT_SETTINGS, "manga", "priority");
+  assert.equal(s.recommendationTypePreferences.manga, "priority");
+  assert.equal(s.recommendationTypePreferences.manhwa, "neutral");
+  assert.equal(s.recommendationTypePreferences.manhua, "neutral");
+  // Original is not mutated
+  assert.equal(DEFAULT_SETTINGS.recommendationTypePreferences.manga, "neutral");
+});
+
+test("rec-type toggle is not a checkbox (readToggleValue always true)", () => {
+  const toggles = CATEGORIES["premium-free"].toggles;
+  const manga = toggles.find((t) => t.label === "Манга")!;
+  assert.equal(readToggleValue(DEFAULT_SETTINGS, manga), true);
+  const excluded = applyRecTypeChange(DEFAULT_SETTINGS, "manga", "excluded");
+  assert.equal(readToggleValue(excluded, manga), false);
+});
+
+test("rec-type accessor is no-op in applyToggleChange (checkbox path)", () => {
+  const toggles = CATEGORIES["premium-free"].toggles;
+  const manga = toggles.find((t) => t.label === "Манга")!;
+  const result = applyToggleChange(DEFAULT_SETTINGS, manga, false);
+  // Should return same settings (no change via checkbox path)
+  assert.equal(result.recommendationTypePreferences.manga, "neutral");
 });

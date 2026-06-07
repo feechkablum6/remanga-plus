@@ -45,6 +45,9 @@ import {
   parseCatalogCandidates,
   parseTitleDetailGenres,
   parseGenreIdMap,
+  applyTypePreferences,
+  classifyRecommendationType,
+  sanitizeTypePreferences,
   type BookmarkTitle,
   type RecCandidate,
 } from "./recommendations.js";
@@ -512,8 +515,13 @@ const HOME_BOOKMARK_DIRS_CACHE_TTL_MS = 30 * 60 * 1000;
 const LOAD_HOME_BOOKMARKS_MESSAGE_TYPE = "rre/load-home-bookmarks";
 const LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE = "rre/load-personal-recommendations";
 
-const PERSONAL_RECS_CACHE_KEY = "rre:personalRecommendations:v2";
+const PERSONAL_RECS_CACHE_KEY = "rre:personalRecommendations:v3";
 const PERSONAL_RECS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+// We fetch a generous pool of candidates from all queried pages and then slice
+// to PERSONAL_RECS_MAX inside loadPersonalRecommendations — after applying the
+// user's per-type preferences (exclude, prioritise). This way switching prefs
+// never invalidates the cached pool.
+const PERSONAL_RECS_POOL_MAX = 150;
 // Building a genre profile costs one title-detail request per bookmark, so cap
 // the sample to the most relevant bookmarks rather than the whole shelf.
 const PERSONAL_RECS_PROFILE_SAMPLE = 40;
@@ -956,10 +964,17 @@ async function fetchRemangaCatalogPage(
   }
 }
 
-async function loadPersonalRecommendations(): Promise<PersonalRecommendation[]> {
+async function loadPersonalRecommendations(
+  prefs: unknown,
+): Promise<PersonalRecommendation[]> {
+  const safePrefs = sanitizeTypePreferences(prefs);
   const cached = await readPersonalRecsCache();
   if (cached && Date.now() - cached.updatedAt < PERSONAL_RECS_CACHE_TTL_MS) {
-    return cached.recommendations;
+    return applyTypePreferences(
+      cached.recommendations,
+      safePrefs,
+      (r) => classifyRecommendationType(r.typeName),
+    ).slice(0, PERSONAL_RECS_MAX);
   }
 
   const token = await getRemangaToken();
@@ -1032,7 +1047,7 @@ async function loadPersonalRecommendations(): Promise<PersonalRecommendation[]> 
   const picks = pickSupplements(
     Array.from(candidatesByDir.values()),
     profile,
-    PERSONAL_RECS_MAX,
+    PERSONAL_RECS_POOL_MAX,
   );
   const recommendations: PersonalRecommendation[] = picks.map((c) => ({
     dir: c.dir,
@@ -1048,7 +1063,11 @@ async function loadPersonalRecommendations(): Promise<PersonalRecommendation[]> 
     userId: auth.userId,
     updatedAt: Date.now(),
   });
-  return recommendations;
+  return applyTypePreferences(
+    recommendations,
+    safePrefs,
+    (r) => classifyRecommendationType(r.typeName),
+  ).slice(0, PERSONAL_RECS_MAX);
 }
 
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
@@ -1102,7 +1121,9 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
     }
 
     if (message.type === LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE) {
-      void loadPersonalRecommendations().then((recommendations) =>
+      const typePrefs =
+        "typePrefs" in message ? (message as { typePrefs: unknown }).typePrefs : undefined;
+      void loadPersonalRecommendations(typePrefs).then((recommendations) =>
         sendResponse({ recommendations }),
       );
       return true;

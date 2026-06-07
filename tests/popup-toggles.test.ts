@@ -43,10 +43,10 @@ test("reader drill-down has АВТО-СКРЫТИЯ subsection trigger", () => {
   assert.deepEqual(texts, ["АВТО-СКРЫТИЯ"]);
 });
 
-test("premium-free drill-down has 10 toggles", () => {
+test("premium-free drill-down has 14 toggles (4 core + 3 rec-type + 7 providers)", () => {
   const { dom } = setup();
   const list = dom.window.document.querySelector('[data-toggle-list="premium-free"]');
-  assert.equal(list?.querySelectorAll(".toggle").length, 10);
+  assert.equal(list?.querySelectorAll(".toggle").length, 14);
 });
 
 test("toggling 'auto-dismiss hints' commits hidePopups.hints = true", async () => {

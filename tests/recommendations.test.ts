@@ -9,6 +9,9 @@ import {
   parseCatalogCandidates,
   parseTitleDetailGenres,
   parseGenreIdMap,
+  classifyRecommendationType,
+  applyTypePreferences,
+  sanitizeTypePreferences,
   type BookmarkTitle,
   type GenreProfile,
   type NativeCard,
@@ -282,4 +285,109 @@ test("parseGenreIdMap maps genre names to ids from a detail payload", () => {
   };
   assert.deepEqual(parseGenreIdMap(raw), { "Экшен": 2, "Фэнтези": 38 });
   assert.deepEqual(parseGenreIdMap({}), {});
+});
+
+test("classifyRecommendationType maps known type names to keys", () => {
+  assert.equal(classifyRecommendationType("Манга"), "manga");
+  assert.equal(classifyRecommendationType("Манхва"), "manhwa");
+  assert.equal(classifyRecommendationType("Маньхуа"), "manhua");
+});
+
+test("classifyRecommendationType is case-insensitive and trims", () => {
+  assert.equal(classifyRecommendationType("  МАНГА  "), "manga");
+  assert.equal(classifyRecommendationType("манхва"), "manhwa");
+});
+
+test("classifyRecommendationType returns null for unknown types", () => {
+  assert.equal(classifyRecommendationType("Западный"), null);
+  assert.equal(classifyRecommendationType("OEL"), null);
+  assert.equal(classifyRecommendationType(""), null);
+  assert.equal(classifyRecommendationType(undefined), null);
+});
+
+test("applyTypePreferences returns all items unchanged with all-neutral prefs", () => {
+  const items = [{ dir: "a", typeName: "Манга" }, { dir: "b", typeName: "Манхва" }];
+  const prefs = { manga: "neutral", manhwa: "neutral", manhua: "neutral" } as const;
+  const result = applyTypePreferences(items, prefs, (r) =>
+    classifyRecommendationType(r.typeName),
+  );
+  assert.equal(result.length, 2);
+  assert.equal(result[0].dir, "a");
+  assert.equal(result[1].dir, "b");
+});
+
+test("applyTypePreferences removes excluded types", () => {
+  const items = [
+    { dir: "a", t: "Манга" },
+    { dir: "b", t: "Манхва" },
+    { dir: "c", t: "Маньхуа" },
+  ];
+  const prefs = { manga: "neutral", manhwa: "excluded", manhua: "neutral" } as const;
+  const result = applyTypePreferences(items, prefs, (r) =>
+    classifyRecommendationType(r.t),
+  );
+  assert.equal(result.length, 2);
+  assert.equal(result[0].dir, "a");
+  assert.equal(result[1].dir, "c");
+});
+
+test("applyTypePreferences lifts priority types to the front (stable)", () => {
+  const items = [
+    { dir: "a", t: "Манга" },
+    { dir: "b", t: "Манхва" },
+    { dir: "c", t: "Маньхуа" },
+    { dir: "d", t: "Манхва" },
+  ];
+  const prefs = { manga: "neutral", manhwa: "priority", manhua: "neutral" } as const;
+  const result = applyTypePreferences(items, prefs, (r) =>
+    classifyRecommendationType(r.t),
+  );
+  // Priority (manhwa) first, then neutral (manga, manhua)
+  assert.equal(result.length, 4);
+  assert.equal(result[0].dir, "b");
+  assert.equal(result[1].dir, "d");
+  assert.equal(result[2].dir, "a");
+  assert.equal(result[3].dir, "c");
+});
+
+test("applyTypePreferences keeps unclassified items as neutral", () => {
+  const items = [
+    { dir: "a", t: "Западный" },
+    { dir: "b", t: "Манхва" },
+  ];
+  const prefs = { manga: "neutral", manhwa: "excluded", manhua: "neutral" } as const;
+  const result = applyTypePreferences(items, prefs, (r) =>
+    classifyRecommendationType(r.t),
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0].dir, "a");
+});
+
+test("sanitizeTypePreferences accepts valid states and drops invalid ones", () => {
+  assert.deepEqual(sanitizeTypePreferences({ manga: "priority" }), {
+    manga: "priority",
+    manhwa: "neutral",
+    manhua: "neutral",
+  });
+  assert.deepEqual(sanitizeTypePreferences({ manhwa: "excluded" }), {
+    manga: "neutral",
+    manhwa: "excluded",
+    manhua: "neutral",
+  });
+});
+
+test("sanitizeTypePreferences drops invalid keys and states", () => {
+  assert.deepEqual(
+    sanitizeTypePreferences({ manga: "bad", unknown: "excluded", manhua: "priority" }),
+    {
+      manga: "neutral",
+      manhwa: "neutral",
+      manhua: "priority",
+    },
+  );
+  assert.deepEqual(sanitizeTypePreferences(null), {
+    manga: "neutral",
+    manhwa: "neutral",
+    manhua: "neutral",
+  });
 });

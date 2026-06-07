@@ -43,6 +43,18 @@ export type ProviderKey =
   | "usagi"
   | "wamanga";
 
+export type RecommendationTypeKey = "manga" | "manhwa" | "manhua";
+
+// Tri-state per content type: neutral = recommend as usual, priority = lift to the
+// front of the recommendations block, excluded = never recommend this type.
+export type RecommendationTypeState = "neutral" | "priority" | "excluded";
+
+export const RECOMMENDATION_TYPE_KEYS: ReadonlyArray<RecommendationTypeKey> = [
+  "manga",
+  "manhwa",
+  "manhua",
+];
+
 export type ReaderEnhancerSettings = {
   hideHeader: boolean;
   hideRightRail: boolean;
@@ -65,6 +77,7 @@ export type ReaderEnhancerSettings = {
   filterHomeBookmarks: boolean;
   filterBookmarkCategories: Record<BookmarkFilterCategoryKey, boolean>;
   disabledProviders: Record<ProviderKey, boolean>;
+  recommendationTypePreferences: Record<RecommendationTypeKey, RecommendationTypeState>;
 };
 
 type PartialSettings = Partial<
@@ -72,6 +85,7 @@ type PartialSettings = Partial<
     ReaderEnhancerSettings,
     "hideToolbarButtons" | "hidePopups" | "hideSettingsMenuItems" | "hideHeaderButtons"
     | "filterBookmarkCategories" | "disabledProviders"
+    | "recommendationTypePreferences"
   >
 > & {
   hideBuyChapterBanner?: boolean;
@@ -81,6 +95,7 @@ type PartialSettings = Partial<
   hideHeaderButtons?: Partial<Record<HeaderButtonKey, boolean>>;
   filterBookmarkCategories?: Partial<Record<BookmarkFilterCategoryKey, boolean>>;
   disabledProviders?: Partial<Record<ProviderKey, boolean>>;
+  recommendationTypePreferences?: Partial<Record<RecommendationTypeKey, RecommendationTypeState>>;
 };
 
 const createDefaultSettingsMenuItems = (): Record<SettingsMenuItemKey, boolean> =>
@@ -149,6 +164,11 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
     usagi: false,
     wamanga: false,
   },
+  recommendationTypePreferences: {
+    manga: "neutral",
+    manhwa: "neutral",
+    manhua: "neutral",
+  },
 };
 
 export const cloneSettings = (
@@ -175,6 +195,7 @@ export const cloneSettings = (
   filterHomeBookmarks: settings.filterHomeBookmarks,
   filterBookmarkCategories: { ...settings.filterBookmarkCategories },
   disabledProviders: { ...settings.disabledProviders },
+  recommendationTypePreferences: { ...settings.recommendationTypePreferences },
 });
 
 export const mergeSettings = (
@@ -235,6 +256,10 @@ export const mergeSettings = (
   disabledProviders: {
     ...DEFAULT_SETTINGS.disabledProviders,
     ...partialSettings?.disabledProviders,
+  },
+  recommendationTypePreferences: {
+    ...DEFAULT_SETTINGS.recommendationTypePreferences,
+    ...partialSettings?.recommendationTypePreferences,
   },
 });
 

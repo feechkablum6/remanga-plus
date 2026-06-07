@@ -217,6 +217,7 @@ test("DEFAULT_SETTINGS exposes disabledProviders with all providers enabled by d
     telemanga: false,
     teletype: false,
     usagi: false,
+    wamanga: false,
   });
 });
 
@@ -236,4 +237,31 @@ test("cloneSettings makes independent copy of disabledProviders", () => {
   const c = cloneSettings(s);
   c.disabledProviders.inkstory = false;
   assert.equal(s.disabledProviders.inkstory, true);
+});
+
+test("DEFAULT_SETTINGS exposes recommendationTypePreferences with all neutral defaults", () => {
+  assert.deepEqual(DEFAULT_SETTINGS.recommendationTypePreferences, {
+    manga: "neutral",
+    manhwa: "neutral",
+    manhua: "neutral",
+  });
+});
+
+test("cloneSettings copies recommendationTypePreferences independently", () => {
+  const s = mergeSettings({ recommendationTypePreferences: { manga: "priority" } });
+  const c = cloneSettings(s);
+  c.recommendationTypePreferences.manga = "neutral";
+  assert.equal(s.recommendationTypePreferences.manga, "priority");
+});
+
+test("mergeSettings merges partial recommendationTypePreferences", () => {
+  const merged = mergeSettings({ recommendationTypePreferences: { manhwa: "excluded" } });
+  assert.equal(merged.recommendationTypePreferences.manga, "neutral");
+  assert.equal(merged.recommendationTypePreferences.manhwa, "excluded");
+  assert.equal(merged.recommendationTypePreferences.manhua, "neutral");
+});
+
+test("mergeSettings allows priority state", () => {
+  const merged = mergeSettings({ recommendationTypePreferences: { manhua: "priority" } });
+  assert.equal(merged.recommendationTypePreferences.manhua, "priority");
 });

@@ -15,6 +15,7 @@ export type PersonalRecommendation = {
 
 const HEADING_RE = /рекоменд/i;
 const BLOCK_ATTR = "data-rre-control";
+const BLOCK_SIG_ATTR = "data-rre-sig";
 const BLOCK_VALUE = "personal-recommendations-block";
 const CARD_ATTR_VALUE = "personal-recommendation";
 
@@ -176,12 +177,6 @@ export const injectPersonalRecommendations = (
   root: ParentNode,
   recommendations: PersonalRecommendation[],
 ): number => {
-  // Remove any previously injected block FIRST so it can never be mistaken for
-  // the native section during detection below (idempotent + self-heal safe).
-  root
-    .querySelectorAll(`[${BLOCK_ATTR}="${BLOCK_VALUE}"]`)
-    .forEach((node) => node.remove());
-
   const found = findRecommendationsSection(root);
   if (!found) return 0;
   const { section, headingText } = found;
@@ -200,11 +195,33 @@ export const injectPersonalRecommendations = (
   }
 
   const fresh = recommendations.filter((rec) => rec.dir && !nativeDirs.has(rec.dir));
-  if (fresh.length === 0) return 0;
+
+  // Build the signature string while we validate — avoids an extra pass.
+  const orderedDirs = new Array<string>();
+  for (const rec of fresh) {
+    if (rec.dir) orderedDirs.push(rec.dir);
+  }
+  const signature = orderedDirs.sort().join(",");
+
+  // Idempotent: if a block with the same signature is already in the DOM, skip
+  // the entire injection. No removal → no flicker even when React re-reconciles
+  // the page and triggers a self-heal.
+  const existing = root.querySelector<HTMLElement>(
+    `[${BLOCK_ATTR}="${BLOCK_VALUE}"]`,
+  );
+  if (existing && existing.getAttribute(BLOCK_SIG_ATTR) === signature) {
+    return fresh.length;
+  }
+
+  if (fresh.length === 0) {
+    existing?.remove();
+    return 0;
+  }
 
   const block = document.createElement("div");
   block.setAttribute(BLOCK_ATTR, BLOCK_VALUE);
   block.className = section.className;
+  block.setAttribute(BLOCK_SIG_ATTR, signature);
 
   const heading = document.createElement("div");
   heading.style.cssText =
@@ -233,6 +250,11 @@ export const injectPersonalRecommendations = (
     injected += 1;
   }
 
-  section.after(block);
+  // Atomic DOM swap: replace old block with new in one paint frame (no gap).
+  if (existing) {
+    existing.replaceWith(block);
+  } else {
+    section.after(block);
+  }
   return injected;
 };

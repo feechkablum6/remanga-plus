@@ -15,6 +15,10 @@ import {
   countCategoryToggles,
   readToggleValue,
   applyToggleChange,
+  applyRecTypeChange,
+  cycleRecTypeState,
+  REC_TYPE_KEY_TO_LABEL,
+  REC_TYPE_STATE_LABEL,
   type ToggleDescriptor,
   type CategoryKey,
   COLLAPSIBLE_GROUPS,
@@ -395,6 +399,10 @@ function buildToggleRow(
   settings: ReaderEnhancerSettings,
   commit: CommitSettings,
 ): HTMLLabelElement {
+  if (toggle.accessor.kind === "rec-type") {
+    return buildRecTypeRow(doc, toggle, settings, commit);
+  }
+
   const wrapper = doc.createElement("label");
   wrapper.className = "toggle";
 
@@ -426,6 +434,46 @@ function buildToggleRow(
   });
 
   wrapper.append(body, input, switchEl);
+  return wrapper;
+}
+
+function buildRecTypeRow(
+  doc: Document,
+  toggle: ToggleDescriptor,
+  settings: ReaderEnhancerSettings,
+  commit: CommitSettings,
+): HTMLLabelElement {
+  const a = toggle.accessor;
+  if (a.kind !== "rec-type") throw new Error("buildRecTypeRow: bad accessor");
+
+  const wrapper = doc.createElement("label");
+  wrapper.className = "toggle";
+
+  const body = doc.createElement("span");
+  body.className = "toggle__body";
+
+  const labelText = doc.createElement("span");
+  labelText.className = "toggle__label";
+  labelText.textContent = toggle.label;
+  body.appendChild(labelText);
+
+  const state = settings.recommendationTypePreferences[a.key];
+
+  const stateBtn = doc.createElement("button");
+  stateBtn.type = "button";
+  stateBtn.className = `rec-type__state rec-type__state--${state}`;
+  stateBtn.textContent = REC_TYPE_STATE_LABEL[state];
+  stateBtn.setAttribute("aria-label", `${toggle.label}: ${REC_TYPE_STATE_LABEL[state]}`);
+
+  stateBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextState = cycleRecTypeState(state);
+    const next = applyRecTypeChange(settings, a.key, nextState);
+    void commit(next);
+  });
+
+  wrapper.append(body, stateBtn);
   return wrapper;
 }
 

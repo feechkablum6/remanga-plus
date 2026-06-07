@@ -156,7 +156,10 @@ async function bootstrap(): Promise<void> {
     }
 
     chrome.runtime.sendMessage(
-      { type: LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE },
+      {
+        type: LOAD_PERSONAL_RECOMMENDATIONS_MESSAGE_TYPE,
+        typePrefs: currentSettings.recommendationTypePreferences,
+      },
       (response: unknown) => {
         void chrome.runtime?.lastError;
         if (
@@ -201,7 +204,7 @@ async function bootstrap(): Promise<void> {
     if (recsObserver || typeof MutationObserver === "undefined") return;
     recsObserver = new MutationObserver(() => {
       window.clearTimeout(recsHealHandle);
-      recsHealHandle = window.setTimeout(ensureRecsInjected, 150);
+      recsHealHandle = window.setTimeout(ensureRecsInjected, 30);
     });
     recsObserver.observe(document.body, { childList: true, subtree: true });
   };
@@ -344,6 +347,9 @@ async function bootstrap(): Promise<void> {
     const previousPremiumFree = currentSettings.premiumFree;
     const previousFilterHomeBookmarks = currentSettings.filterHomeBookmarks;
     const previousPersonalRecommendations = currentSettings.personalRecommendations;
+    const previousTypePrefsJson = JSON.stringify(
+      currentSettings.recommendationTypePreferences,
+    );
     currentSettings = nextSettings;
     if (!previousPremiumFree && currentSettings.premiumFree) {
       requestParserServerWarmup(currentSettings);
@@ -354,6 +360,13 @@ async function bootstrap(): Promise<void> {
     if (
       !previousPersonalRecommendations &&
       currentSettings.personalRecommendations
+    ) {
+      requestPersonalRecommendations();
+    }
+    if (
+      currentSettings.personalRecommendations &&
+      JSON.stringify(currentSettings.recommendationTypePreferences) !==
+        previousTypePrefsJson
     ) {
       requestPersonalRecommendations();
     }

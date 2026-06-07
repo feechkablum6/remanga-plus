@@ -1,3 +1,8 @@
+import type {
+  RecommendationTypeKey,
+  RecommendationTypeState,
+} from "./settings.js";
+
 export type BookmarkTitle = {
   id: number;
   dir: string;
@@ -219,4 +224,72 @@ export const parseTitleDetailGenres = (
     genres: readNamedList(content.genres),
     categories: readNamedList(content.categories),
   };
+};
+
+// Maps a remanga content type name to a three-state toggle key.
+// Unknown types (Западный, Руманга, Комикс, OEL etc.) return null —
+// they pass through as neutral and cannot be excluded or prioritised.
+const REC_TYPE_NAME_TO_KEY: Record<string, RecommendationTypeKey> = {
+  манга: "manga",
+  манхва: "manhwa",
+  маньхуа: "manhua",
+};
+
+export const classifyRecommendationType = (
+  typeName: string | undefined,
+): RecommendationTypeKey | null => {
+  if (!typeName) return null;
+  const normalized = typeName.trim().toLowerCase();
+  return REC_TYPE_NAME_TO_KEY[normalized] ?? null;
+};
+
+// Stable filter + reorder: excluded types are removed; priority types come first
+// (original order preserved within each group); neutral/unclassified types follow.
+// Items that cannot be classified by getTypeKey are treated as neutral.
+export const applyTypePreferences = <T>(
+  items: readonly T[],
+  prefs: Record<RecommendationTypeKey, RecommendationTypeState>,
+  getTypeKey: (item: T) => RecommendationTypeKey | null,
+): T[] => {
+  const excluded = new Set<RecommendationTypeKey>();
+  const priority = new Set<RecommendationTypeKey>();
+  for (const key of ["manga", "manhwa", "manhua"] as const) {
+    if (prefs[key] === "excluded") excluded.add(key);
+    else if (prefs[key] === "priority") priority.add(key);
+  }
+
+  const front: T[] = [];
+  const rest: T[] = [];
+  for (const item of items) {
+    const typeKey = getTypeKey(item);
+    if (typeKey !== null && excluded.has(typeKey)) continue;
+    if (typeKey !== null && priority.has(typeKey)) {
+      front.push(item);
+    } else {
+      rest.push(item);
+    }
+  }
+  return front.concat(rest);
+};
+
+// Accepts an arbitrary value and returns a valid preference map, ignoring
+// unknown keys and invalid states. Used before storing or passing prefs between
+// extension components.
+export const sanitizeTypePreferences = (
+  raw: unknown,
+): Record<RecommendationTypeKey, RecommendationTypeState> => {
+  const prefs: Record<RecommendationTypeKey, RecommendationTypeState> = {
+    manga: "neutral",
+    manhwa: "neutral",
+    manhua: "neutral",
+  };
+  if (!raw || typeof raw !== "object") return prefs;
+  const obj = raw as Record<string, unknown>;
+  for (const key of ["manga", "manhwa", "manhua"] as const) {
+    const val = obj[key];
+    if (val === "neutral" || val === "priority" || val === "excluded") {
+      prefs[key] = val;
+    }
+  }
+  return prefs;
 };

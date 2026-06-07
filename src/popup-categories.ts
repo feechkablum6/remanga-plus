@@ -4,6 +4,8 @@ import type {
   BookmarkFilterCategoryKey,
   PopupSettingKey,
   ProviderKey,
+  RecommendationTypeKey,
+  RecommendationTypeState,
 } from "./settings.js";
 
 export type CategoryKey = "site" | "reader" | "premium-free";
@@ -36,7 +38,8 @@ export type ToggleAccessor =
   | { kind: "header-button"; key: HeaderButtonKey }
   | { kind: "bookmark-category"; key: BookmarkFilterCategoryKey }
   | { kind: "popup"; key: PopupSettingKey }
-  | { kind: "provider"; key: ProviderKey };
+  | { kind: "provider"; key: ProviderKey }
+  | { kind: "rec-type"; key: RecommendationTypeKey };
 
 export type ToggleDescriptor = {
   label: string;
@@ -56,6 +59,7 @@ export const COLLAPSIBLE_GROUPS: Record<string, string> = {
   homeHiding: "Скрытие на главной",
   bookmarkFilter: "Фильтровать закладки",
   providerToggles: "Провайдеры",
+  recTypeFilter: "Типы в рекомендациях",
 };
 
 const HEADER_BUTTONS: ReadonlyArray<[HeaderButtonKey, string]> = [
@@ -89,6 +93,43 @@ const PROVIDER_KEYS: ReadonlyArray<[ProviderKey, string]> = [
   ["usagi", "Usagi"],
   ["wamanga", "WaManga"],
 ];
+
+export const REC_TYPE_KEY_TO_LABEL: Record<RecommendationTypeKey, string> = {
+  manga: "Манга",
+  manhwa: "Манхва",
+  manhua: "Маньхуа",
+};
+
+export const REC_TYPE_STATE_LABEL: Record<RecommendationTypeState, string> = {
+  neutral: "Не важно",
+  priority: "Приоритет",
+  excluded: "Скрыто",
+};
+
+const REC_TYPE_STATE_ORDER: ReadonlyArray<RecommendationTypeState> = [
+  "neutral",
+  "priority",
+  "excluded",
+];
+
+export const cycleRecTypeState = (
+  current: RecommendationTypeState,
+): RecommendationTypeState => {
+  const idx = REC_TYPE_STATE_ORDER.indexOf(current);
+  return REC_TYPE_STATE_ORDER[(idx + 1) % REC_TYPE_STATE_ORDER.length];
+};
+
+export const applyRecTypeChange = (
+  settings: ReaderEnhancerSettings,
+  key: RecommendationTypeKey,
+  next: RecommendationTypeState,
+): ReaderEnhancerSettings => ({
+  ...settings,
+  recommendationTypePreferences: {
+    ...settings.recommendationTypePreferences,
+    [key]: next,
+  },
+});
 
 const siteToggles: ReadonlyArray<ToggleDescriptor> = [
   ...HEADER_BUTTONS.map(
@@ -168,6 +209,21 @@ const premiumFreeToggles: ReadonlyArray<ToggleDescriptor> = [
     caption: "Заменить рекомендации на главной с учётом ваших закладок",
     accessor: { kind: "scalar", key: "personalRecommendations" },
   },
+  {
+    label: "Манга",
+    accessor: { kind: "rec-type", key: "manga" },
+    collapsibleGroup: "recTypeFilter",
+  },
+  {
+    label: "Манхва",
+    accessor: { kind: "rec-type", key: "manhwa" },
+    collapsibleGroup: "recTypeFilter",
+  },
+  {
+    label: "Маньхуа",
+    accessor: { kind: "rec-type", key: "manhua" },
+    collapsibleGroup: "recTypeFilter",
+  },
   ...PROVIDER_KEYS.map(
     ([key, label]): ToggleDescriptor => ({
       label,
@@ -202,6 +258,7 @@ export const readToggleValue = (
   if (a.kind === "header-button") return settings.hideHeaderButtons[a.key];
   if (a.kind === "bookmark-category") return settings.filterBookmarkCategories[a.key];
   if (a.kind === "provider") return !settings.disabledProviders[a.key];
+  if (a.kind === "rec-type") return settings.recommendationTypePreferences[a.key] !== "excluded";
   return settings.hidePopups[a.key];
 };
 
@@ -231,6 +288,11 @@ export const applyToggleChange = (
       ...settings,
       disabledProviders: { ...settings.disabledProviders, [a.key]: !next },
     };
+  }
+  if (a.kind === "rec-type") {
+    // rec-type toggles use a cycling state button, not a checkbox;
+    // the full state change goes through applyRecTypeChange instead.
+    return settings;
   }
   return {
     ...settings,
