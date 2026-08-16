@@ -6,12 +6,16 @@ import {
   PARSER_SERVER_DEFAULT_PORT,
   PROXY_IMAGE_MESSAGE_TYPE,
   READER_IMAGE_DATA_URL_MESSAGE_TYPE,
+  buildLocalEndpoint,
   buildParserServerBaseUrl,
-  buildParserServerHealthcheckUrl,
+  buildParserServerHeaders,
   isParserServerEnsureResult,
+  PARSER_SERVER_HEALTHCHECK_PATH,
+  type ParserServerEndpoint,
   type ParserServerEnsureResult,
   type ParserServerStatus,
 } from "./parser-server.js";
+import { loadSettings } from "./settings.js";
 import {
   fetchMangalibAuthStatus,
   type MangalibFetch,
@@ -103,6 +107,25 @@ type HealthcheckResult = {
   error?: string;
 };
 
+/**
+ * A self-hosted parser configured in the popup. When present the extension never
+ * touches Native Messaging — there is no local server to launch.
+ */
+const readRemoteEndpoint = async (): Promise<ParserServerEndpoint | null> => {
+  try {
+    const settings = await loadSettings();
+    if (!settings.parserServerUrl) {
+      return null;
+    }
+    return {
+      baseUrl: settings.parserServerUrl,
+      token: settings.parserServerToken,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   let timeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
 
@@ -141,11 +164,11 @@ const extractPort = (result: ParserServerEnsureResult): number =>
     ? result.port
     : PARSER_SERVER_DEFAULT_PORT;
 
-const performParserServerHealthcheck = async (
-  port: number,
+const performHealthcheckAt = async (
+  baseUrl: string,
   fetchImpl: typeof fetch,
 ): Promise<HealthcheckResult> => {
-  const url = buildParserServerHealthcheckUrl(port);
+  const url = `${baseUrl}${PARSER_SERVER_HEALTHCHECK_PATH}`;
 
   try {
     const response = await withTimeout(
@@ -185,11 +208,32 @@ const performParserServerHealthcheck = async (
   }
 };
 
+const performParserServerHealthcheck = async (
+  port: number,
+  fetchImpl: typeof fetch,
+): Promise<HealthcheckResult> =>
+  performHealthcheckAt(buildParserServerBaseUrl(port), fetchImpl);
+
 export const checkParserServerHealth = async (
   port: number = discoveredPort,
   fetchImpl: typeof fetch = fetch,
 ): Promise<boolean> => {
   const result = await performParserServerHealthcheck(port, fetchImpl);
+  return result.healthy;
+};
+
+const checkRemoteHealth = async (
+  endpoint: ParserServerEndpoint,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> => {
+  const result = await performHealthcheckAt(endpoint.baseUrl, fetchImpl);
+  if (!result.healthy) {
+    console.warn("[RRE] Remote parser-server healthcheck failed.", {
+      url: result.url,
+      statusCode: result.statusCode,
+      error: result.error,
+    });
+  }
   return result.healthy;
 };
 
@@ -289,8 +333,19 @@ const sendNativeEnsureMessage = async (): Promise<ParserServerEnsureResult> => {
 };
 
 export const ensureParserServer = async (): Promise<ParserServerEnsureResult> => {
+  const remote = await readRemoteEndpoint();
+  if (remote) {
+    if (await checkRemoteHealth(remote)) {
+      return { status: "ready", endpoint: remote };
+    }
+    return {
+      status: "failed",
+      detail: `Свой сервер ${remote.baseUrl} не отвечает.`,
+    };
+  }
+
   if (readyUntil > Date.now() && (await checkParserServerHealth(discoveredPort))) {
-    return { status: "ready", port: discoveredPort };
+    return { status: "ready", port: discoveredPort, endpoint: buildLocalEndpoint(discoveredPort) };
   }
 
   if (activeEnsureRequest) {
@@ -300,7 +355,11 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
   activeEnsureRequest = (async () => {
     if (await checkParserServerHealth(discoveredPort)) {
       readyUntil = Date.now() + READY_CACHE_TTL_MS;
-      return { status: "ready", port: discoveredPort } as const;
+      return {
+        status: "ready",
+        port: discoveredPort,
+        endpoint: buildLocalEndpoint(discoveredPort),
+      } as const;
     }
 
     if (
@@ -310,7 +369,11 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
       discoveredPort = PARSER_SERVER_DEFAULT_PORT;
       persistDiscoveredPort(discoveredPort);
       readyUntil = Date.now() + READY_CACHE_TTL_MS;
-      return { status: "ready", port: discoveredPort } as const;
+      return {
+        status: "ready",
+        port: discoveredPort,
+        endpoint: buildLocalEndpoint(discoveredPort),
+      } as const;
     }
 
     const nativeResult = await sendNativeEnsureMessage();
@@ -322,7 +385,11 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
     discoveredPort = extractPort(nativeResult);
     persistDiscoveredPort(discoveredPort);
     readyUntil = Date.now() + READY_CACHE_TTL_MS;
-    return { status: "ready", port: discoveredPort } as const;
+    return {
+        status: "ready",
+        port: discoveredPort,
+        endpoint: buildLocalEndpoint(discoveredPort),
+      } as const;
   })();
 
   try {
@@ -335,6 +402,13 @@ export const ensureParserServer = async (): Promise<ParserServerEnsureResult> =>
 export const getParserServerStatus = async (
   fetchImpl: typeof fetch = fetch,
 ): Promise<ParserServerStatus> => {
+  const remote = await readRemoteEndpoint();
+  if (remote) {
+    return (await checkRemoteHealth(remote, fetchImpl))
+      ? { status: "ok", endpoint: remote }
+      : { status: "down" };
+  }
+
   await restoreDiscoveredPort();
 
   if (await checkParserServerHealth(discoveredPort, fetchImpl)) {
@@ -366,9 +440,13 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
 const handleProxyImage = async (
   proxyPath: string,
 ): Promise<{ data: string; contentType: string } | { error: string }> => {
-  const url = `${buildParserServerBaseUrl(discoveredPort)}${proxyPath}`;
+  const endpoint =
+    (await readRemoteEndpoint()) ?? buildLocalEndpoint(discoveredPort);
+  const url = `${endpoint.baseUrl}${proxyPath}`;
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: buildParserServerHeaders(endpoint),
+    });
     if (!response.ok) {
       return { error: `HTTP ${response.status}` };
     }
@@ -435,11 +513,14 @@ const fetchReaderImageDataUrlViaParser = async (
   }
 
   try {
-    const port = ensureResult.port ?? PARSER_SERVER_DEFAULT_PORT;
-    const url = `${buildParserServerBaseUrl(port)}/api/reader-image?url=${encodeURIComponent(imageUrl)}`;
+    const endpoint =
+      ensureResult.endpoint ??
+      buildLocalEndpoint(ensureResult.port ?? PARSER_SERVER_DEFAULT_PORT);
+    const url = `${endpoint.baseUrl}/api/reader-image?url=${encodeURIComponent(imageUrl)}`;
     const response = await fetchImpl(url, {
       method: "GET",
       cache: "no-store",
+      headers: buildParserServerHeaders(endpoint),
     });
     return responseToImageDataUrl(response);
   } catch (error) {
@@ -881,8 +962,18 @@ async function loadHomeBookmarkDirs(
   return dirs;
 }
 
+// The dir may already be percent encoded when it comes from a page URL; encoding
+// it twice yields a 404.
+const decodeTitleDir = (dir: string): string => {
+  try {
+    return decodeURIComponent(dir);
+  } catch {
+    return dir;
+  }
+};
+
 const REMANGA_TITLE_DETAIL_URL = (dir: string): string =>
-  `https://api.remanga.org/api/v2/titles/${encodeURIComponent(dir)}/`;
+  `https://api.remanga.org/api/v2/titles/${encodeURIComponent(decodeTitleDir(dir))}/`;
 
 const REMANGA_CATALOG_URL = (genreId: number, page: number): string => {
   const url = new URL("https://api.remanga.org/api/search/catalog/");

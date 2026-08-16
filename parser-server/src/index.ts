@@ -4,6 +4,7 @@ const config = {
   cacheDir: process.env.CACHE_DIR ?? "./cache",
   port: Number(process.env.PORT) || 7845,
   host: process.env.HOST ?? "0.0.0.0",
+  accessToken: process.env.ACCESS_TOKEN || undefined,
 };
 
 const app = buildApp(config);

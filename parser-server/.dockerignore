@@ -1,0 +1,9 @@
+# Anchored to the build context root: a bare "cache" would also match
+# src/cache/, which holds real source files.
+/node_modules
+/dist
+/cache
+/tests
+/fixtures
+/scripts
+.env

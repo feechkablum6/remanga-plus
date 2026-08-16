@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -9,8 +9,14 @@ Chrome-расширение (Manifest V3) для remanga.org — убирает 
 ## Команды
 
 ```bash
-# Сборка расширения (content.js + background.js → dist/)
-# Обязательно после правок extension-кода: браузер загружает dist/, без build изменения не попадут в расширение.
+# Сборка и обновление установленного расширения
+# ОБЯЗАТЕЛЬНО запускать после реализации любой фичи или исправления.
+# Команда собирает все bundles в dist/, затем атомарно заменяет содержимое
+# %LOCALAPPDATA%\Programs\Remanga Plus\extension, если эта папка установлена.
+# После успешной сборки нажми «Перезагрузить» в chrome://extensions.
+# Все ручные изменения внутри установленной extension-папки будут удалены.
+# Команда НЕ обновляет parser-server, native host или Setup.exe: для них нужны
+# соответствующие native/package-команды ниже.
 npm run build
 
 # Проверка типов (extension + tests)
@@ -50,6 +56,12 @@ cd parser-server && npm install
 cd parser-server && npm run dev      # dev с hot reload
 cd parser-server && npm run check    # проверка типов
 cd parser-server && npm test         # тесты backend
+
+# Тесты parser-server зависают без --test-force-exit: buildApp вешает
+# setInterval для prune сессий, и процесс не выходит после прогона.
+cd parser-server && npx tsx --test --test-force-exit tests/*.test.ts
+
+# Свой parser-server на VPS (деплой, обновление, диагностика) — docs/self-hosted-parser.md
 ```
 
 ### Тесты расширения
@@ -72,12 +84,17 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 
 ## Архитектура
 
-### Два Vite-бандла (IIFE)
+### Vite-бандлы (IIFE)
 
 - `vite.config.ts` — собирает `src/content.ts` → `dist/content.js` (content script)
 - `vite.background.config.ts` — собирает `src/background.ts` → `dist/background.js` (service worker)
+- `vite.popup.config.ts` — собирает `src/popup.ts` → `dist/popup.js`
+- `vite.import.config.ts` — собирает `src/import-page.ts` → `dist/import.js`
+- `vite.bridge.config.ts` — собирает MangaLib bridge
+- `vite.remanga-bridge.config.ts` — собирает Remanga bridge
+- `vite.fullscreen-bridge.config.ts` — собирает fullscreen bridge
 
-Оба бандла — IIFE формат, sourcemaps включены. `npm run build` запускает обе сборки последовательно.
+Все бандлы используют IIFE и sourcemaps. `npm run build` запускает их последовательно, затем `scripts/sync-installed-extension.mjs` зеркалирует `dist/` в установленную Windows-папку расширения.
 
 ### Три компонента системы
 
@@ -91,7 +108,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 
 5. **Packaging** (`packaging/`) — One-click installer `.pkg` для macOS arm64. `bundle-parser.mjs` esbuild'ит весь parser-server в один JS, `bundle-host.mjs` — host.ts. `download-node.mjs` тянет Node arm64 binary. `build-pkg.mjs` оркестрирует всё + кладёт payload в `/Applications/Remanga Plus/` через `pkgbuild`/`productbuild`. Postinstall (`packaging/templates/postinstall`) вычисляет extension ID из `manifest.json` "key" и регистрирует Native Messaging manifest для всех Chromium-браузеров пользователя (Chrome/Brave/Edge/Vivaldi/Arc/...). Без подписи Apple Developer — друг открывает через правый клик → «Открыть».
 
-   Windows-аналог: `build-installer-windows.mjs` — переиспользует `bundle-parser.mjs` / `bundle-host.mjs` (платформо-нейтральные esbuild-выходы), тянет `node.exe` через `download-node-windows.mjs`, копирует `host.bat` shim, setup-helper и README, собирает payload в `packaging/build-windows/` и зовёт `makensis -DEXTENSION_ID=... -DVERSION=... installer.nsi` → `Remanga-Plus-Setup.exe`. NSIS-скрипт сам генерирует `nm-manifest.json` (на Windows `path` оставлять относительным `host.bat`, иначе raw `$INSTDIR` backslashes ломают JSON), пишет ключи `HKCU\Software\<browser>\NativeMessagingHosts\org.remanga.parser_host` для 10 Chromium-браузеров (Chrome stable/beta/dev/canary, Edge, Brave, Vivaldi, Chromium, Yandex, Opera), создаёт Start Menu shortcuts; per-user install в `%LOCALAPPDATA%\Programs\Remanga Plus`, без UAC, zlib-компрессор. Сам `.exe` собирается на CI через `.github/workflows/build-windows-installer.yml` (ubuntu-latest + apt nsis) — Homebrew `makensis 3.12` на arm64 macOS Tahoe сломан (std::bad_alloc). Без подписи Windows — друг через SmartScreen жмёт «More info → Run anyway».
+   Windows-аналог: `build-installer-windows.mjs` — переиспользует `bundle-parser.mjs` / `bundle-host.mjs` (платформо-нейтральные esbuild-выходы), собирает Win32 launcher `host.exe` через `build-windows-launcher.mjs`, получает `node.exe` через `download-node-windows.mjs`, копирует setup-helper и README, собирает payload в `packaging/build-windows/` и зовёт `makensis -DEXTENSION_ID=... -DVERSION=... installer.nsi` → `Remanga-Plus-Setup.exe`. NSIS-скрипт сам генерирует `nm-manifest.json` с относительным `path: "host.exe"`, пишет ключи `HKCU\Software\<browser>\NativeMessagingHosts\org.remanga.parser_host` для 10 Chromium-браузеров (Chrome stable/beta/dev/canary, Edge, Brave, Vivaldi, Chromium, Yandex, Opera), создаёт Start Menu shortcuts; per-user install в `%LOCALAPPDATA%\Programs\Remanga Plus`, без UAC, zlib-компрессор. Сам `.exe` собирается на CI через `.github/workflows/build-windows-installer.yml` (`ubuntu-latest` + NSIS + MinGW-w64) — Homebrew `makensis 3.12` на arm64 macOS Tahoe сломан (`std::bad_alloc`). Без подписи Windows — друг через SmartScreen жмёт «More info → Run anyway».
 
 ### Ключевые модули
 
@@ -100,6 +117,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 | `settings.ts` | Контракт `chrome.storage.sync` — defaults, merge, clone |
 | `reader-enhancer.ts` | Все UI-мутации читалки |
 | `premium-free.ts` | Premium Free client: metadata extraction, response shapes, remanga read-state sync (`markRemangaChapterAsViewed` → `POST /api/activity/views/`) |
+| `premium-free-upgrade.ts` | Тихое улучшение качества уже открытой главы: опрос `/api/chapters/upgrade/:sessionId` + чистый расчёт нового `scrollTop` (`computeScrollAfterSwap`). Сервер отдаёт первый ответивший источник, потом досматривает более приоритетные; когда приходит лучший — страницы подменяются на месте |
 | `premium-free-prefetch.ts` | PF prewarm: `prewarmPremiumFreeChapter(ref, resolver, { prewarmImage })` resolves a PF chapter and prewarms each page's `proxyUrl` via the in-memory `imageBlobCache` (NOT `<link rel=preload>` — PF images bypass HTTP cache by going through `chrome.runtime.sendMessage(PROXY_IMAGE_MESSAGE_TYPE)` → background → base64 → blob URL). Triggered (a) when next remanga chapter is paid via `prefetchNextChapter` `onPaidNextChapter` callback, (b) at PF stream root render to prewarm X+1, (c) after each stream entry add to chain X+2. |
 | `parser-server.ts` | Shared constants: URLs, message types, host names |
 | `popup.ts` | Тонкий orchestrator попапа расширения: загружает настройки, создаёт router, рендерит карточки + drill-down тогглы + сервис-блок |
@@ -129,6 +147,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - **Настройки** — `settings.ts` — единственный source of truth для defaults и merge. Любой новый toggle добавляется и в контракт, и в defaults.
 - **AGENTS.md** — содержит подробные behavior patterns и failure patterns. Читай его перед работой с reader-enhancer, premium-free, popup-dismissal.
 - **dist/** — только build output. Не редактировать напрямую.
+- **Завершение фичи/фикса** — всегда запускай `npm run build`. Помни о побочном эффекте: при существующей Windows-установке команда полностью заменяет `%LOCALAPPDATA%\Programs\Remanga Plus\extension`; после неё требуется reload расширения в Chrome. Parser-server, native host и `.exe` этой командой не переустанавливаются.
 - **Provider logic** — title overrides и приоритеты провайдеров живут в `parser-server/src/config.ts`, не в расширении.
 - **Provider interface** — `SourceProvider`: `name`, `searchTitles`, `getTitleDetails(ref, options?)`, `parseChapter`, `fetchImage`, `manualSearchUrl`. Опциональные `branches[]` + `selectedBranchId` в `SourceTitleDetails` для multi-branch источников (InkStory). UI лейблы «Открыть X» — через `PROVIDER_DISPLAY_NAMES` в `premium-free.ts`.
 - **Translation picker** — `chrome.storage.sync.premiumFreeBranchPreferences: { [titleDir]: {provider, branchId} }`. Клиент шлёт `forcedBranchId` в resolve-body. Stale prefs автоматически purge'атся при несовпадении `selectedBranchId`.
@@ -158,6 +177,7 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT забывать про `chrome.scripting.executeScript` fallback при `chrome.tabs.sendMessage` — content scripts не пере-инжектируются автоматически в существующие вкладки после reload extension.
 - DO NOT забывать про переустановку расширения при изменении `permissions` / `host_permissions` / `content_scripts.matches` — Chrome не активирует новые declarations на reload.
 - DO NOT использовать `<a href target="_blank">` в попапе для открытия вкладки. Popup закрывается при клике, native navigation может не успеть — нужен `event.preventDefault()` + явный `chrome.tabs.create({url})`.
+- DO NOT сохранять ввод текстовых полей попапа по событию `change`/`blur` — Chrome уничтожает попап при потере фокуса, и значение теряется. Писать по `input` с дебаунсом, напрямую через `chrome.storage.sync.set`, без предварительного `await loadSettings()` (попап умрёт на первом await).
 - DO NOT добавлять `setInterval` без cleanup в `popup.ts` — Chrome убивает popup-процесс при закрытии, но это не повод плодить таймеры. Если нужен polling — один `setInterval` на весь lifecycle попапа.
 - DO NOT держать listener-подписки в render-функциях попапа. Pattern: `renderX(doc, state)` чистая (idempotent — `replaceChildren`), `wireX(doc, handler)` цепляет listener один раз в `main()`. Иначе при `watchSettings` re-render будут дублирующиеся listeners.
 - DO NOT добавлять новый toggle в попап минуя `popup-categories.ts` — descriptor там же где label, без него `renderToggles` не знает что отрисовать.
@@ -170,6 +190,21 @@ node --test .codex-tmp/test-build/tests/settings-contract.test.js
 - DO NOT добавлять ретраи в HttpClient — ошибка = мгновенный failed провайдера.
 - DO NOT заменять весь `premium-free-feed-reader` при подгрузке следующей Premium Free главы — добавлять недостающие главы вниз.
 - DO NOT переключать Premium Free sync на новый нижний `BuyChapterActions`, если на странице уже есть `premium-free-root`.
+- DO NOT брать номер главы первым совпадением `том N глава M` из текста баннера покупки — строка «В том входят N глав (том 1 глава 6 - том 1 глава 50)» описывает состав тома, а у нижнего `BuyChapterActions` заголовка главы нет вовсе. Отрезать хвост про состав тома, при неоднозначности возвращать `null`.
+- DO NOT собирать `RemangaChapterReference` из разных источников (номер главы из баннера + `chapterId` из href нативной стрелки) без сверки — противоречивая запись ломает и стрелки, и отметку прочитанного.
+- DO NOT класть провайдерские `chapterId`/`chapterUrl` из `nextChapter` в remanga-поля reference — у wamanga/Senkuro это UUID, а не remanga id и не URL.
+- DO NOT искать цель нативной стрелки по `chapterId` из href — шагать по потоку относительно главы, видимой в вьюпорте, и гасить событие только если действительно перешли.
+- DO NOT обрывать резолв `chapterId` следующей главы из-за отсутствия `chapterId` у предыдущей — поиск по label от него не зависит, а запись без id не отмечается прочитанной.
+- DO NOT прогонять `titleDir` через `encodeURIComponent` без предварительного `decodeURIComponent` — из URL страницы он приходит уже закодированным (`%3C29.04.2026%3E...`), двойное кодирование даёт 404 на `api/v2/titles/`, и главы потока молча остаются без remanga id.
+- DO NOT полагаться на `stream.status` как на защиту от параллельной подгрузки главы — он поднимается уже после резолва ссылки, а скролл, viewport-sync и стрелки зовут загрузку одновременно. Нужен синхронный замок, иначе в `entries` копятся дубликаты одной главы и переход «вперёд» попадает в текущую.
+- DO NOT читать номер текущей главы из лейбла в шапке читалки — его переписывает сам поток, и на следующем цикле обнаружения PF ключ root меняется, поток пересоздаётся и теряет загруженные главы.
+- DO NOT оставлять уже отрисованные секции в контейнере при пересоздании потока — новый поток стартует с одной главы, старые секции продублируются по мере роста.
+- DO NOT считать одиночный `scrollIntoView` достаточным для перехода к только что загруженной главе — её изображения набирают высоту следующие кадры, и переход промахивается в конец предыдущей главы.
+- DO NOT считать провайдера-победителя «лучшим»: `resolveExternalChapter` отдаёт первого ответившего, а качество сканов у источников различается в разы (для проверенной главы wamanga 494px против teletype 690px). Более приоритетные провайдеры продолжают работать и отдают результат через `onUpgrade`.
+- DO NOT подменять страницы улучшенным источником, не дождавшись `decode()` всех картинок и не проставив `img.width/height` — нарезка у источников разная (14 страниц против 35), секция схлопнется и утащит скролл.
+- DO NOT исключать `cache` по имени в `.dockerignore` или в `tar --exclude` при упаковке parser-server — паттерн без якоря вырезает и `src/cache/`, сборка падает на `Cannot find module './cache/file-cache.js'`. Только `/cache`.
+- DO NOT перезапускать контейнер `caddy` на VPS ради своего сайта — он общий для всех проектов. Конфиг применять через `docker exec caddy caddy reload --config /etc/caddy/Caddyfile`.
+- DO NOT оставлять parser-server на публичном адресе без `ACCESS_TOKEN` — иначе это открытый прокси картинок для всего интернета.
 - DO NOT забывать `npm run native:build` после правок `native-host/*.ts` — Chrome исполняет `dist/host.js`, не source.
 - DO NOT использовать `native:build` для локального Chrome'а — он оставляет `#!/usr/bin/env node`, nvm-node не в Chrome'овском PATH. Используй `native:install`, он переписывает shebang на абсолютный путь.
 

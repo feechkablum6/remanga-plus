@@ -22,6 +22,11 @@ export type PremiumFreeBranch = {
 
 export type PremiumFreeResolveSuccess = {
   status: "success";
+  /**
+   * Resolve session this result came from. Used to ask the server whether a
+   * better-ranked source finished afterwards. Absent for cached results.
+   */
+  sessionId?: string;
   provider: string;
   matchedTitle: {
     titleId: string;
@@ -492,7 +497,13 @@ const extractPremiumFreeBannerChapterLabel = (
   bannerText: string | null | undefined,
 ): { tome?: number; chapter: string } | null => {
   const normalized = normalizeWhitespace(bannerText).toLowerCase();
-  const match = normalized.match(/том\s+(\d+)\s+глава\s+([0-9.]+)/i);
+  // "В том входят N глав (том 1 глава 6 - том 1 глава 50)" describes the volume,
+  // not the chapter being read. Drop that fragment only — anything around it may
+  // still carry the real chapter header.
+  const withoutVolumeRange = normalized
+    .replace(/в том вход[а-я]*\s+\d+\s+глав[а-я]*/gi, " ")
+    .replace(/\(\s*том\s+\d+\s+глава\s+[0-9.]+\s*-\s*том\s+\d+\s+глава\s+[0-9.]+\s*\)/gi, " ");
+  const match = withoutVolumeRange.match(/том\s+(\d+)\s+глава\s+([0-9.]+)/i);
   if (!match) {
     return null;
   }
@@ -542,6 +553,8 @@ export const createPremiumFreeStreamReference = (
   aliases: currentReference.aliases,
   tome: nextChapter.volume,
   chapter: nextChapter.chapter,
+  // nextChapter carries provider-side ids (uuid/slug), never remanga ones, so the
+  // remanga chapterId/chapterUrl stay unset until resolved by label.
   chapterUrl: currentReference.chapterUrl,
 });
 

@@ -1,8 +1,16 @@
 export type ServerStatusState =
   | { kind: "checking" }
-  | { kind: "ok"; port: number }
+  /** `port` for the local server, `host` for a self-hosted one. */
+  | { kind: "ok"; port?: number; host?: string }
   | { kind: "down" }
   | { kind: "busy" };
+
+const describeReady = (state: { port?: number; host?: string }): string => {
+  if (state.host) {
+    return `Свой сервер · ${state.host}`;
+  }
+  return state.port ? `Parser-server :${state.port}` : "Parser-server работает";
+};
 
 export function renderServerStatus(doc: Document, state: ServerStatusState): void {
   const row = doc.querySelector<HTMLElement>("[data-server-status]");
@@ -19,7 +27,7 @@ export function renderServerStatus(doc: Document, state: ServerStatusState): voi
       break;
     case "ok":
       row.dataset.state = "ok";
-      label.textContent = `Parser-server :${state.port}`;
+      label.textContent = describeReady(state);
       btn.setAttribute("hidden", "");
       delete btn.dataset.state;
       break;

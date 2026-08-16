@@ -10,6 +10,7 @@ import {
   PREMIUM_FREE_BANNER_ATTRIBUTE,
   PREMIUM_FREE_KEY_ATTRIBUTE,
   PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE,
+  PREMIUM_FREE_OWN_LABEL_ATTRIBUTE,
   PREMIUM_FREE_ROOT_KEY,
   PREMIUM_FREE_STATE_ATTRIBUTE,
   findBuyChapterBanner,
@@ -52,7 +53,9 @@ import {
 import {
   PARSER_SERVER_DEFAULT_PORT,
   PROGRESS_PATH_PREFIX,
-  buildParserServerBaseUrl,
+  buildLocalEndpoint,
+  buildParserServerHeaders,
+  type ParserServerEndpoint,
 } from "./parser-server";
 import {
   SETTINGS_MENU_ITEM_KEYS,
@@ -107,8 +110,14 @@ import {
   clampPremiumFreePageIndex,
   collectPremiumFreeViewportPages,
   renderPremiumFreeFeedPages,
+  renderPremiumFreeFeedPagesPreloaded,
   renderPremiumFreePagerPages as renderPremiumFreePagerViewPages,
+  type PreloadedPageImage,
 } from "./premium-free-reader-view";
+import {
+  computeScrollAfterSwap,
+  pollPremiumFreeUpgrade,
+} from "./premium-free-upgrade";
 import {
   createStatusBlock,
   updateStatusBlock,
@@ -239,10 +248,14 @@ let settingsMenuOptionsExpanded = false;
 let settingsMenuOptionsExpansionTouched = false;
 const motionFinalizeHandles = new Map<HTMLElement, number>();
 const collapseFinalizeHandles = new Map<HTMLElement, number>();
-let activeParserServerPort = PARSER_SERVER_DEFAULT_PORT;
+let activeParserServerEndpoint: ParserServerEndpoint = buildLocalEndpoint(
+  PARSER_SERVER_DEFAULT_PORT,
+);
 
-const getParserServerBaseUrl = (): string =>
-  buildParserServerBaseUrl(activeParserServerPort);
+const getParserServerBaseUrl = (): string => activeParserServerEndpoint.baseUrl;
+
+const getParserServerHeaders = (): Record<string, string> =>
+  buildParserServerHeaders(activeParserServerEndpoint);
 
 const premiumFreeResultCache = new Map<string, PremiumFreeCacheEntry>();
 const premiumFreePageIndex = new Map<string, number>();
@@ -332,6 +345,9 @@ let premiumFreeStreamLoadObserver: IntersectionObserver | null = null;
 let premiumFreeViewportSyncHandle = 0;
 let premiumFreeViewportListenersAttached = false;
 let premiumFreeNativeNavigationListenerAttached = false;
+let premiumFreeScrollAlignCancel: (() => void) | null = null;
+let premiumFreeNextLoadInFlight = false;
+const PREMIUM_FREE_SCROLL_ALIGN_MS = 2000;
 const premiumFreeMarkedViewedChapterIds = new Set<number>();
 
 const syncPremiumFreeChapterAsViewed = (chapterId: number | undefined): void => {
@@ -1382,10 +1398,13 @@ const collectPremiumFreeReaderState = (): PremiumFreeReaderState => {
 const getPremiumFreeViewportHeight = (): number =>
   window.innerHeight || document.documentElement.clientHeight || 0;
 
-const syncPremiumFreeVisibleStreamPage = (): void => {
+const resolvePremiumFreeActiveViewportPage = (): {
+  key: string;
+  pageIndex: number;
+} | null => {
   const stream = premiumFreeChapterStream;
   if (!stream) {
-    return;
+    return null;
   }
 
   let activeKey: string | null = null;
@@ -1416,12 +1435,70 @@ const syncPremiumFreeVisibleStreamPage = (): void => {
   }
 
   if (!activeKey || activePageIndex < 0) {
+    return null;
+  }
+
+  return { key: activeKey, pageIndex: activePageIndex };
+};
+
+// Past the last page of the stream the viewport shows the purchase banner and the
+// loader instead of chapter pages, so page-based detection yields nothing. Falling
+// back to section geometry keeps the chapter arrows working there: without it the
+// click escapes to remanga's own navigation and throws the reader onto an
+// unrelated chapter.
+const resolvePremiumFreeStreamEntryByScroll = (): PremiumFreeStreamEntry | null => {
+  const stream = premiumFreeChapterStream;
+  if (!stream?.container.isConnected) {
+    return null;
+  }
+
+  const sections = Array.from(
+    stream.container.querySelectorAll<HTMLElement>(
+      `[${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"]`,
+    ),
+  );
+
+  const reached = sections.filter(
+    (section) => section.getBoundingClientRect().top <= 1,
+  );
+  const section = reached.at(-1) ?? sections[0] ?? null;
+  const key = section?.dataset.rrePremiumFreeStreamKey ?? null;
+  if (!key) {
+    return null;
+  }
+
+  return stream.entries.find((entry) => entry.key === key) ?? null;
+};
+
+const resolvePremiumFreeActiveStreamEntry = (): PremiumFreeStreamEntry | null => {
+  const stream = premiumFreeChapterStream;
+  if (!stream) {
+    return null;
+  }
+
+  const active = resolvePremiumFreeActiveViewportPage();
+  const byPage = active
+    ? stream.entries.find((entry) => entry.key === active.key) ?? null
+    : null;
+
+  return byPage ?? resolvePremiumFreeStreamEntryByScroll();
+};
+
+const syncPremiumFreeVisibleStreamPage = (): void => {
+  const stream = premiumFreeChapterStream;
+  if (!stream) {
+    return;
+  }
+
+  const active = resolvePremiumFreeActiveViewportPage();
+  if (!active) {
     syncPremiumFreeReaderIndicators(null, null);
     return;
   }
 
+  const activePageIndex = active.pageIndex;
   const activeEntry =
-    stream.entries.find((entry) => entry.key === activeKey) ?? null;
+    stream.entries.find((entry) => entry.key === active.key) ?? null;
 
   syncPremiumFreeReaderIndicators(activeEntry, activePageIndex);
   if (activeEntry) {
@@ -1736,6 +1813,107 @@ const createPremiumFreeBranchSelector = (
   return wrapper;
 };
 
+/** Decodes an image up front so the swap knows its final height. */
+const preloadPremiumFreePageImage = async (
+  proxyUrl: string,
+): Promise<PreloadedPageImage | null> => {
+  const blobUrl = await fetchPremiumFreeImageBlobUrl(proxyUrl);
+  if (!blobUrl) return null;
+
+  const probe = new Image();
+  probe.src = blobUrl;
+  try {
+    await probe.decode();
+  } catch {
+    return null;
+  }
+
+  if (!probe.naturalWidth || !probe.naturalHeight) return null;
+  return {
+    blobUrl,
+    naturalWidth: probe.naturalWidth,
+    naturalHeight: probe.naturalHeight,
+  };
+};
+
+/**
+ * Replaces a rendered chapter with a better-quality source without moving the
+ * reader: every page is decoded first, then swapped in one frame, then the
+ * scroll offset is corrected for the new chapter height.
+ */
+const swapPremiumFreeChapterPages = async (
+  section: HTMLElement,
+  result: PremiumFreeSuccessResult,
+  state: PremiumFreeReaderState,
+  chapterKey: string,
+): Promise<void> => {
+  const assets = await Promise.all(
+    result.pages.map(async (page) => ({
+      index: page.index,
+      asset: await preloadPremiumFreePageImage(page.proxyUrl),
+    })),
+  );
+
+  // A partial swap would leave the chapter mixing two sources; skip instead.
+  if (assets.some((entry) => entry.asset === null)) return;
+  if (!section.isConnected) return;
+
+  const preloaded = new Map<number, PreloadedPageImage>();
+  assets.forEach((entry) => {
+    if (entry.asset) preloaded.set(entry.index, entry.asset);
+  });
+
+  const beforeRect = section.getBoundingClientRect();
+  const scrollY = window.scrollY;
+  const oldTop = beforeRect.top + scrollY;
+  const oldHeight = beforeRect.height;
+
+  renderPremiumFreeFeedPagesPreloaded(section, result, state, chapterKey, preloaded);
+
+  const afterRect = section.getBoundingClientRect();
+  const nextScroll = computeScrollAfterSwap({
+    scrollY,
+    oldTop,
+    oldHeight,
+    newTop: afterRect.top + window.scrollY,
+    newHeight: afterRect.height,
+  });
+
+  if (nextScroll !== null) {
+    window.scrollTo({ top: nextScroll, behavior: "instant" });
+  }
+};
+
+/**
+ * The server answers with the fastest source, then keeps looking at better-ranked
+ * ones. This waits for that verdict in the background and upgrades in place.
+ */
+const watchPremiumFreeChapterUpgrade = (
+  section: HTMLElement,
+  entry: PremiumFreeStreamEntry,
+  state: PremiumFreeReaderState,
+): void => {
+  const sessionId =
+    entry.result.status === "success" ? entry.result.sessionId : undefined;
+  if (!sessionId || section.dataset.rrePremiumFreeUpgradeWatched === "true") return;
+  section.dataset.rrePremiumFreeUpgradeWatched = "true";
+
+  void (async () => {
+    const upgraded = await pollPremiumFreeUpgrade({
+      baseUrl: getParserServerBaseUrl(),
+      headers: getParserServerHeaders(),
+      sessionId,
+    });
+
+    if (!upgraded || !section.isConnected) return;
+
+    const result = upgraded as PremiumFreeSuccessResult;
+    if (!Array.isArray(result?.pages) || result.pages.length === 0) return;
+
+    await swapPremiumFreeChapterPages(section, result, state, entry.key);
+  })();
+};
+
 const renderPremiumFreeStreamChapter = (
   entry: PremiumFreeStreamEntry,
   state: PremiumFreeReaderState,
@@ -1744,6 +1922,7 @@ const renderPremiumFreeStreamChapter = (
   chapterSection.setAttribute(CONTROL_ATTRIBUTE, "premium-free-stream-chapter");
   chapterSection.dataset.rrePremiumFreeStreamKey = entry.key;
   renderPremiumFreeFeedPages(chapterSection, entry.result, state, entry.key);
+  watchPremiumFreeChapterUpgrade(chapterSection, entry, state);
   return chapterSection;
 };
 
@@ -4108,34 +4287,133 @@ const extractPremiumFreeRemangaChapterId = (
   return Number.isInteger(chapterId) && chapterId > 0 ? chapterId : null;
 };
 
-const scrollPremiumFreeStreamToChapterHref = (href: string): boolean => {
+// Chapter images settle their height over the following frames, so a single
+// scroll lands short and leaves the reader at the tail of the previous chapter.
+// Keep re-aligning until the section top matches, and back off the moment the
+// reader scrolls on their own.
+const alignPremiumFreeStreamSection = (section: HTMLElement): void => {
+  premiumFreeScrollAlignCancel?.();
+
+  let cancelled = false;
+  const stop = (): void => {
+    if (cancelled) {
+      return;
+    }
+
+    cancelled = true;
+    window.removeEventListener("wheel", stop);
+    window.removeEventListener("touchstart", stop);
+    window.removeEventListener("keydown", stop);
+    if (premiumFreeScrollAlignCancel === stop) {
+      premiumFreeScrollAlignCancel = null;
+    }
+  };
+
+  premiumFreeScrollAlignCancel = stop;
+  window.addEventListener("wheel", stop, { passive: true });
+  window.addEventListener("touchstart", stop, { passive: true });
+  window.addEventListener("keydown", stop);
+
+  const startedAt = performance.now();
+  const step = (): void => {
+    if (cancelled || !section.isConnected) {
+      stop();
+      return;
+    }
+
+    const targetTop = section.getBoundingClientRect().top + window.scrollY;
+    if (Math.abs(window.scrollY - targetTop) > 1) {
+      window.scrollTo({ top: targetTop, behavior: "auto" });
+    }
+
+    if (performance.now() - startedAt >= PREMIUM_FREE_SCROLL_ALIGN_MS) {
+      stop();
+      return;
+    }
+
+    window.requestAnimationFrame(step);
+  };
+
+  window.requestAnimationFrame(step);
+};
+
+const scrollPremiumFreeStreamToEntry = (entry: PremiumFreeStreamEntry): boolean => {
   const stream = premiumFreeChapterStream;
   if (!stream?.container.isConnected) {
     return false;
   }
 
-  const targetChapterId = extractPremiumFreeRemangaChapterId(href);
-  if (targetChapterId === null) {
-    return false;
-  }
-
-  const targetEntry =
-    stream.entries.find((entry) => entry.reference.chapterId === targetChapterId) ??
-    null;
-  if (!targetEntry) {
-    return false;
-  }
-
   const targetSection = stream.container.querySelector<HTMLElement>(
-    `[${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"][data-rre-premium-free-stream-key="${CSS.escape(targetEntry.key)}"]`,
+    `[${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"][data-rre-premium-free-stream-key="${CSS.escape(entry.key)}"]`,
   );
   if (!targetSection) {
     return false;
   }
 
-  syncPremiumFreeReaderIndicators(targetEntry, 0);
+  syncPremiumFreeReaderIndicators(entry, 0);
   targetSection.scrollIntoView({ block: "start", behavior: "auto" });
+  alignPremiumFreeStreamSection(targetSection);
   requestPremiumFreeViewportSync();
+  return true;
+};
+
+// Native chapter arrows must step through the stream relative to the chapter the
+// reader is actually looking at. Matching by href chapter id sent the reader back
+// to whichever entry happened to carry that id, which is not always the neighbour.
+const stepPremiumFreeStreamChapter = (direction: 1 | -1): boolean => {
+  const stream = premiumFreeChapterStream;
+  if (!stream?.container.isConnected) {
+    return false;
+  }
+
+  const activeEntry = resolvePremiumFreeActiveStreamEntry();
+  if (!activeEntry) {
+    return false;
+  }
+
+  const activeIndex = stream.entries.indexOf(activeEntry);
+  if (activeIndex < 0) {
+    return false;
+  }
+
+  const neighbour = stream.entries[activeIndex + direction];
+  if (neighbour) {
+    return scrollPremiumFreeStreamToEntry(neighbour);
+  }
+
+  if (direction === -1) {
+    return false;
+  }
+
+  if (
+    stream.status === "exhausted" ||
+    !hasPremiumFreeFollowUpCandidate(stream.entries.at(-1))
+  ) {
+    return false;
+  }
+
+  // Resolving a chapter takes seconds, so move to the end of the current one
+  // first: the reader sees the search status instead of a click that did nothing.
+  const activeSection = stream.container.querySelector<HTMLElement>(
+    `[${CONTROL_ATTRIBUTE}="premium-free-stream-chapter"][data-rre-premium-free-stream-key="${CSS.escape(activeEntry.key)}"]`,
+  );
+  activeSection?.scrollIntoView({ block: "end", behavior: "auto" });
+
+  void loadPremiumFreeNextChapter().then(() => {
+    // The stream may have grown from another trigger while loading, so the
+    // neighbour is looked up by the active entry's current position.
+    const currentStream = premiumFreeChapterStream;
+    if (!currentStream) {
+      return;
+    }
+
+    const currentIndex = currentStream.entries.indexOf(activeEntry);
+    const loaded =
+      currentIndex < 0 ? null : currentStream.entries[currentIndex + 1] ?? null;
+    if (loaded) {
+      scrollPremiumFreeStreamToEntry(loaded);
+    }
+  });
   return true;
 };
 
@@ -4155,7 +4433,7 @@ const handlePremiumFreeNativeNavigationClick = (event: MouseEvent): void => {
     return;
   }
 
-  if (!scrollPremiumFreeStreamToChapterHref(link.href)) {
+  if (!stepPremiumFreeStreamChapter(link === nativeLinks.next ? 1 : -1)) {
     return;
   }
 
@@ -4194,8 +4472,13 @@ const collectPremiumFreeReference = (): RemangaChapterReference | null =>
       Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/main"]'))
         .map((node) => node.textContent?.trim() ?? "")
         .find(Boolean) ?? null,
+    // The header label is rewritten by the stream itself while scrolling. Reading
+    // it back would make the current chapter follow the label, rebuild the stream
+    // under a new key and drop every chapter loaded so far, which is what made the
+    // chapter arrows work only every other time.
     headerChapterLabel:
       Array.from(document.querySelectorAll<HTMLElement>("button, a"))
+        .filter((node) => !node.hasAttribute(PREMIUM_FREE_OWN_LABEL_ATTRIBUTE))
         .map((node) => node.textContent?.trim() ?? "")
         .find((text) => /^\d+\s*-\s*[\d.]+$/.test(text)) ?? null,
   });
@@ -4239,6 +4522,7 @@ const restorePremiumFreeReaderIndicators = (): void => {
   const chapterLabelControl = findPremiumFreeChapterLabelControl();
   if (chapterLabelControl && stream.indicatorSnapshot.chapterLabelText) {
     chapterLabelControl.textContent = stream.indicatorSnapshot.chapterLabelText;
+    chapterLabelControl.removeAttribute(PREMIUM_FREE_OWN_LABEL_ATTRIBUTE);
   }
 
   const pageCounterButton = getReaderDom().pageCounterButton;
@@ -4280,6 +4564,7 @@ const syncPremiumFreeReaderIndicators = (
   const chapterLabelControl = findPremiumFreeChapterLabelControl();
   if (chapterLabelControl) {
     chapterLabelControl.textContent = entry.chapterLabel;
+    chapterLabelControl.setAttribute(PREMIUM_FREE_OWN_LABEL_ATTRIBUTE, "true");
   }
 
   const pageCounterButton = getReaderDom().pageCounterButton;
@@ -4380,6 +4665,9 @@ const ensurePremiumFreeChapterStream = (
 ): PremiumFreeChapterStream => {
   if (!premiumFreeChapterStream || premiumFreeChapterStream.rootKey !== key) {
     resetPremiumFreeChapterStream();
+    // A fresh stream starts from a single chapter, so leaving the previously
+    // rendered sections in place would duplicate them as the stream grows again.
+    container.replaceChildren();
     premiumFreeChapterStream = {
       rootKey: key,
       container,
@@ -4769,6 +5057,7 @@ const pollForProviderProgress = (
       const baseUrl = getParserServerBaseUrl();
       const response = await fetch(`${baseUrl}${PROGRESS_PATH_PREFIX}${sessionId}`, {
         signal: controller.signal,
+        headers: getParserServerHeaders(),
       });
       if (response.ok && !stopped) {
         const data = await response.json() as {
@@ -4801,6 +5090,7 @@ const pollForResolveResult = async (
   while (!controller.signal.aborted) {
     const response = await fetch(`${baseUrl}/api/chapters/result/${sessionId}`, {
       signal: controller.signal,
+      headers: getParserServerHeaders(),
     });
     if (response.status === 200) {
       return response.json();
@@ -4821,8 +5111,10 @@ const resolvePremiumFreeChapterResult = async (
     onProgress?.({ phase: "connecting", providers: [], complete: false });
 
     const parserServerStatus = await ensureParserServerReady();
-    if (parserServerStatus.status === "ready" && typeof parserServerStatus.port === "number") {
-      activeParserServerPort = parserServerStatus.port;
+    if (parserServerStatus.status === "ready") {
+      activeParserServerEndpoint =
+        parserServerStatus.endpoint ??
+        buildLocalEndpoint(parserServerStatus.port ?? PARSER_SERVER_DEFAULT_PORT);
     }
     const parserServerFailure = mapParserServerFailure(parserServerStatus);
     if (parserServerFailure) {
@@ -4842,6 +5134,7 @@ const resolvePremiumFreeChapterResult = async (
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...getParserServerHeaders(),
         },
         body: JSON.stringify({
           remanga: reference,
@@ -4879,6 +5172,11 @@ const resolvePremiumFreeChapterResult = async (
       }
 
       result = payload as PremiumFreeClientResolveResult;
+      if (result.status === "success") {
+        // Kept so the rendered chapter can later ask whether a better-ranked
+        // source finished after this answer was served.
+        result.sessionId = sessionId;
+      }
       purgeStaleBranchPrefIfNeeded(reference.titleDir, requestedBranchId, result);
     }
   } catch (error) {
@@ -4957,6 +5255,17 @@ const prefetchNextChapterWithFallback = (
   });
 };
 
+// "7" and "7.0" are the same chapter for remanga and for providers alike.
+const isSamePremiumFreeChapterLabel = (left: string, right: string): boolean => {
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+    return leftNumber === rightNumber;
+  }
+
+  return left.trim() === right.trim();
+};
+
 const resolvePremiumFreeNextRemangaReference = async (
   currentReference: RemangaChapterReference,
   nextChapter: NonNullable<PremiumFreeSuccessResult["nextChapter"]>,
@@ -4965,22 +5274,34 @@ const resolvePremiumFreeNextRemangaReference = async (
     currentReference,
     nextChapter,
   );
-  if (typeof currentReference.chapterId !== "number") {
-    return fallbackReference;
-  }
+  // Looking the chapter up by its label does not depend on the previous entry
+  // having a remanga id, so a single unresolved entry no longer breaks the id
+  // chain for every chapter after it (an entry without an id is never marked as
+  // read and cannot answer the native chapter arrows).
+  const labelMeta = await resolveRemangaChapterMetaByLabel(
+    currentReference.titleDir,
+    nextChapter.volume,
+    nextChapter.chapter,
+    { authToken: readRemangaAuthToken(document.cookie) },
+  );
 
+  const indexMeta =
+    labelMeta || typeof currentReference.chapterId !== "number"
+      ? null
+      : await resolveNextRemangaChapterMeta(
+          currentReference.titleDir,
+          currentReference.chapterId,
+          { authToken: readRemangaAuthToken(document.cookie) },
+        );
+
+  // The index-based fallback walks remanga's own order, which may point at a
+  // different chapter than the provider asked for. Accepting a mismatch is what
+  // pulled an already read chapter back into the stream.
   const nextMeta =
-    (await resolveRemangaChapterMetaByLabel(
-      currentReference.titleDir,
-      nextChapter.volume,
-      nextChapter.chapter,
-      { authToken: readRemangaAuthToken(document.cookie) },
-    )) ??
-    (await resolveNextRemangaChapterMeta(
-      currentReference.titleDir,
-      currentReference.chapterId,
-      { authToken: readRemangaAuthToken(document.cookie) },
-    ));
+    labelMeta ??
+    (indexMeta && isSamePremiumFreeChapterLabel(indexMeta.chapter, nextChapter.chapter)
+      ? indexMeta
+      : null);
   if (!nextMeta) {
     return fallbackReference;
   }
@@ -5022,6 +5343,26 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
     return;
   }
 
+  // Scroll, viewport sync and the chapter arrows all ask for the next chapter.
+  // The stream status is only raised after the reference is resolved, so without
+  // a synchronous lock those callers each append the same chapter and the stream
+  // fills up with duplicates — stepping forward then lands on the chapter the
+  // reader is already on.
+  if (premiumFreeNextLoadInFlight) {
+    return;
+  }
+
+  premiumFreeNextLoadInFlight = true;
+  try {
+    await loadPremiumFreeNextChapterUnlocked(stream);
+  } finally {
+    premiumFreeNextLoadInFlight = false;
+  }
+};
+
+const loadPremiumFreeNextChapterUnlocked = async (
+  stream: PremiumFreeChapterStream,
+): Promise<void> => {
   const lastEntry = stream.entries.at(-1);
   if (!lastEntry) {
     stream.status = "exhausted";
@@ -5160,6 +5501,10 @@ const loadPremiumFreeNextChapter = async (): Promise<void> => {
     stream.errorResult = null;
     stream.exhaustedResult = createPremiumFreeTerminalFailure(resolvedNextReference);
     renderPremiumFreeFeedStream(stream.container, stream, collectPremiumFreeReaderState());
+    return;
+  }
+
+  if (stream.entries.some((entry) => entry.key === nextKey)) {
     return;
   }
 

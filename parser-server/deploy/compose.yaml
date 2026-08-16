@@ -1,0 +1,36 @@
+name: remanga-parser
+
+services:
+  parser:
+    build:
+      context: ./source
+      dockerfile: Dockerfile
+    image: remanga-parser:local
+    container_name: remanga-parser
+    restart: unless-stopped
+    environment:
+      PORT: 7845
+      HOST: 0.0.0.0
+      CACHE_DIR: /app/cache
+      # Set in /srv/apps/remanga-parser/.env — never commit the value
+      ACCESS_TOKEN: ${ACCESS_TOKEN:?ACCESS_TOKEN must be set in .env}
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - parser-cache:/app/cache
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7845/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  parser-cache:
+    driver: local
+
+networks:
+  proxy:
+    external: true

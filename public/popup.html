@@ -176,6 +176,69 @@
         font-size: 12px;
         color: var(--text-muted);
       }
+      .server-config {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        padding-top: 2px;
+      }
+      .server-config__field {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .server-config__paste {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 31px;
+        height: 31px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-elevated);
+        color: var(--text-muted);
+        cursor: pointer;
+      }
+      .server-config__paste:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      .server-config__paste[data-state="done"] {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .server-config__paste[data-state="failed"] {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+      .server-config__paste-icon {
+        width: 15px;
+        height: 15px;
+      }
+      .server-config__input {
+        flex: 1;
+        min-width: 0;
+        box-sizing: border-box;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 7px 10px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 12px;
+      }
+      .server-config__input::placeholder {
+        color: var(--text-muted);
+      }
+      .server-config__input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .server-config__input[data-state="invalid"] {
+        border-color: var(--danger);
+      }
       .service__resume[hidden] {
         display: none;
       }
@@ -549,6 +612,57 @@
               </svg>
             </button>
           </div>
+
+          <div class="service__row server-config">
+            <div class="server-config__field">
+              <input
+                class="server-config__input"
+                data-server-url
+                type="url"
+                inputmode="url"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="Свой сервер: https://…"
+                aria-label="Адрес своего сервера поиска глав"
+              />
+              <button
+                class="server-config__paste"
+                data-server-paste="url"
+                type="button"
+                title="Вставить из буфера обмена"
+                aria-label="Вставить адрес из буфера обмена"
+              >
+                <svg class="server-config__paste-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 4h6v3H9zM8 5H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="server-config__field">
+              <input
+                class="server-config__input"
+                data-server-token
+                type="password"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="Ключ доступа"
+                aria-label="Ключ доступа к своему серверу"
+              />
+              <button
+                class="server-config__paste"
+                data-server-paste="token"
+                type="button"
+                title="Вставить из буфера обмена"
+                aria-label="Вставить ключ из буфера обмена"
+              >
+                <svg class="server-config__paste-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 4h6v3H9zM8 5H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p class="service__hint">
+            Пусто — поиск глав работает на этом компьютере. С адресом — на вашем сервере, тогда включать компьютер не нужно.
+          </p>
 
           <div class="service__row auth-row" data-auth-row>
             <span class="auth-row__site" data-auth-mangalib>

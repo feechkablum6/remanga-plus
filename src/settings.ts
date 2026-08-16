@@ -78,6 +78,13 @@ export type ReaderEnhancerSettings = {
   filterBookmarkCategories: Record<BookmarkFilterCategoryKey, boolean>;
   disabledProviders: Record<ProviderKey, boolean>;
   recommendationTypePreferences: Record<RecommendationTypeKey, RecommendationTypeState>;
+  /**
+   * Remote parser-server origin (e.g. "https://parser.example.com"). Empty means
+   * the local server started through Native Messaging — the default setup.
+   */
+  parserServerUrl: string;
+  /** Sent as X-Parser-Token when the remote server requires it. */
+  parserServerToken: string;
 };
 
 type PartialSettings = Partial<
@@ -169,6 +176,8 @@ export const DEFAULT_SETTINGS: ReaderEnhancerSettings = {
     manhwa: "neutral",
     manhua: "neutral",
   },
+  parserServerUrl: "",
+  parserServerToken: "",
 };
 
 export const cloneSettings = (
@@ -196,7 +205,31 @@ export const cloneSettings = (
   filterBookmarkCategories: { ...settings.filterBookmarkCategories },
   disabledProviders: { ...settings.disabledProviders },
   recommendationTypePreferences: { ...settings.recommendationTypePreferences },
+  parserServerUrl: settings.parserServerUrl,
+  parserServerToken: settings.parserServerToken,
 });
+
+/**
+ * Keeps only a bare http(s) origin: trailing slashes and paths are dropped so
+ * callers can concatenate "/api/..." without producing a double slash. Anything
+ * unparseable collapses to "" — meaning "use the local server".
+ */
+export const normalizeOrigin = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "";
+    }
+    return parsed.origin;
+  } catch {
+    return "";
+  }
+};
 
 export const mergeSettings = (
   partialSettings?: PartialSettings,
@@ -261,6 +294,12 @@ export const mergeSettings = (
     ...DEFAULT_SETTINGS.recommendationTypePreferences,
     ...partialSettings?.recommendationTypePreferences,
   },
+  parserServerUrl: normalizeOrigin(
+    partialSettings?.parserServerUrl ?? DEFAULT_SETTINGS.parserServerUrl,
+  ),
+  parserServerToken: (
+    partialSettings?.parserServerToken ?? DEFAULT_SETTINGS.parserServerToken
+  ).trim(),
 });
 
 const getStorageArea = (): chrome.storage.SyncStorageArea | null =>

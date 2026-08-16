@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import {
   DEFAULT_PROVIDER_PRIORITY,
   DEFAULT_TITLE_OVERRIDES,
@@ -18,6 +19,19 @@ import { ResolveSessionStore } from "./resolve-session.js";
 import { registerChapterResolveRoute } from "./routes/chapters.js";
 import { registerImagesRoute } from "./routes/images.js";
 
+export const ACCESS_TOKEN_HEADER = "x-parser-token";
+
+const ALLOWED_HEADERS = `Content-Type, ${ACCESS_TOKEN_HEADER}`;
+
+const isSameToken = (provided: string, expected: string): boolean => {
+  const providedBytes = Buffer.from(provided);
+  const expectedBytes = Buffer.from(expected);
+  if (providedBytes.length !== expectedBytes.length) {
+    return false;
+  }
+  return timingSafeEqual(providedBytes, expectedBytes);
+};
+
 export interface AppConfig {
   cacheDir: string;
   port?: number;
@@ -25,15 +39,34 @@ export interface AppConfig {
   fetchImpl?: typeof fetch;
   providerPriority?: string[];
   titleOverrides?: Record<string, TitleOverride>;
+  /** When set, every /api request must carry it in the X-Parser-Token header. */
+  accessToken?: string;
 }
 
 export function buildApp(config: AppConfig) {
   const app = Fastify({ logger: false });
 
+  const accessToken = config.accessToken;
+
+  if (accessToken) {
+    app.addHook("onRequest", async (request, reply) => {
+      if (!request.url.startsWith("/api/") || request.method === "OPTIONS") {
+        return;
+      }
+
+      const provided = request.headers[ACCESS_TOKEN_HEADER];
+      if (typeof provided !== "string" || !isSameToken(provided, accessToken)) {
+        reply.header("Access-Control-Allow-Origin", "*");
+        reply.header("Access-Control-Allow-Headers", ALLOWED_HEADERS);
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+    });
+  }
+
   app.addHook("onSend", async (request, reply, payload) => {
     if (request.url.startsWith("/api/")) {
       reply.header("Access-Control-Allow-Origin", "*");
-      reply.header("Access-Control-Allow-Headers", "Content-Type");
+      reply.header("Access-Control-Allow-Headers", ALLOWED_HEADERS);
       reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
       reply.header("Access-Control-Allow-Private-Network", "true");
     }
@@ -43,7 +76,7 @@ export function buildApp(config: AppConfig) {
 
   app.options("/api/*", async (_request, reply) => {
     reply.header("Access-Control-Allow-Origin", "*");
-    reply.header("Access-Control-Allow-Headers", "Content-Type");
+    reply.header("Access-Control-Allow-Headers", ALLOWED_HEADERS);
     reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     reply.header("Access-Control-Allow-Private-Network", "true");
     return reply.code(204).send();

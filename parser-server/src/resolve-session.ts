@@ -17,6 +17,10 @@ export type ResolveSession = {
   sessionId: string;
   providers: Record<string, ProviderProgress>;
   finalResult: unknown;
+  /** Better-ranked result that landed after finalResult was already served. */
+  upgradeResult: unknown;
+  /** No further upgrade can arrive — every provider has finished. */
+  searchComplete: boolean;
   createdAt: number;
 };
 
@@ -50,6 +54,8 @@ export class ResolveSessionStore {
       sessionId,
       providers,
       finalResult: null,
+      upgradeResult: null,
+      searchComplete: false,
       createdAt: Date.now(),
     };
     this.sessions.set(sessionId, session);
@@ -79,6 +85,18 @@ export class ResolveSessionStore {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     session.finalResult = result;
+  }
+
+  setUpgradeResult(sessionId: string, result: unknown): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.upgradeResult = result;
+  }
+
+  markSearchComplete(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.searchComplete = true;
   }
 
   prune(now?: number): void {

@@ -32,8 +32,13 @@ import {
   RESTART_PARSER_SERVER_MESSAGE_TYPE,
   STATUS_PARSER_SERVER_MESSAGE_TYPE,
   isParserServerStatus,
+  type ParserServerEndpoint,
 } from "./parser-server.js";
 import { renderAuthRow, type AuthState } from "./popup-auth-row.js";
+import {
+  renderServerConfig,
+  wireServerConfig,
+} from "./popup-server-config.js";
 import {
   CHECK_AUTH_MESSAGE_TYPE,
   type CheckAuthRequest,
@@ -61,7 +66,32 @@ async function main(): Promise<void> {
     await saveSettings(next);
   };
   renderToggles(document, settings, commit);
-  watchSettings((next) => renderToggles(document, next, commit));
+  renderServerConfig(document, {
+    url: settings.parserServerUrl,
+    token: settings.parserServerToken,
+  });
+  watchSettings((next) => {
+    renderToggles(document, next, commit);
+    renderServerConfig(document, {
+      url: next.parserServerUrl,
+      token: next.parserServerToken,
+    });
+  });
+  wireServerConfig(document, (next) => {
+    // Written key-by-key, without reading settings first: the popup can be torn
+    // down mid-callback, and an awaited read would drop the write with it.
+    chrome.storage?.sync?.set(
+      {
+        parserServerUrl: next.url,
+        parserServerToken: next.token,
+      },
+      () => {
+        void chrome.runtime?.lastError;
+      },
+    );
+    renderServerStatus(document, { kind: "checking" });
+    void refreshServerStatus();
+  });
 
   renderServerStatus(document, { kind: "checking" });
   wireRestart();
@@ -91,11 +121,24 @@ function refreshServerStatus(): Promise<void> {
   });
 }
 
+/** Hostname of a self-hosted parser, or undefined for the local one. */
+function describeEndpointHost(endpoint?: ParserServerEndpoint): string | undefined {
+  if (!endpoint) return undefined;
+  try {
+    return new URL(endpoint.baseUrl).host;
+  } catch {
+    return undefined;
+  }
+}
+
 function mapStatus(response: unknown): ServerStatusState {
   if (!isParserServerStatus(response)) return { kind: "down" };
-  return response.status === "ok"
-    ? { kind: "ok", port: response.port }
-    : { kind: "down" };
+  if (response.status !== "ok") return { kind: "down" };
+  return {
+    kind: "ok",
+    port: response.port,
+    host: describeEndpointHost(response.endpoint),
+  };
 }
 
 function wireRestart(): void {
@@ -106,7 +149,11 @@ function wireRestart(): void {
       (response: unknown) => {
         void chrome.runtime?.lastError;
         if (isParserServerStatus(response) && response.status === "ok") {
-          renderServerStatus(document, { kind: "ok", port: response.port });
+          renderServerStatus(document, {
+            kind: "ok",
+            port: response.port,
+            host: describeEndpointHost(response.endpoint),
+          });
         } else {
           renderServerStatus(document, { kind: "down" });
         }

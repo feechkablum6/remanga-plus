@@ -120,6 +120,7 @@ test("ensureParserServer trusts the native host ready response after launch", as
     assert.deepEqual(result, {
       status: "ready",
       port: 3001,
+      endpoint: { baseUrl: "http://127.0.0.1:3001", token: "" },
     });
     assert.equal(requestedUrls[0], "http://127.0.0.1:7845/health");
     assert.deepEqual(requestedUrls, ["http://127.0.0.1:7845/health"]);
@@ -206,8 +207,89 @@ test("ensureParserServer falls back to default port when restored port is stale"
   try {
     await ensureParserServer();
     const result = await ensureParserServer();
-    assert.deepEqual(result, { status: "ready", port: 7845 });
+    assert.deepEqual(result, {
+      status: "ready",
+      port: 7845,
+      endpoint: { baseUrl: "http://127.0.0.1:7845", token: "" },
+    });
     assert.ok(requestedUrls.includes("http://127.0.0.1:7845/health"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
+test("ensureParserServer uses the configured remote server and never calls the native host", async () => {
+  const originalChrome = globalThis.chrome;
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  let nativeCalls = 0;
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    requestedUrls.push(String(input));
+    return new Response(JSON.stringify({ status: "ok" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  globalThis.chrome = {
+    runtime: {
+      onMessage: { addListener: () => {} },
+      sendNativeMessage: () => {
+        nativeCalls += 1;
+      },
+    },
+    storage: {
+      sync: {
+        get: (_defaults: unknown, callback: (items: unknown) => void) => {
+          callback({
+            parserServerUrl: "https://parser.example.com",
+            parserServerToken: "secret",
+          });
+        },
+      },
+    },
+  } as unknown as typeof chrome;
+
+  try {
+    const result = await ensureParserServer();
+
+    assert.deepEqual(result, {
+      status: "ready",
+      endpoint: { baseUrl: "https://parser.example.com", token: "secret" },
+    });
+    assert.deepEqual(requestedUrls, ["https://parser.example.com/health"]);
+    assert.equal(nativeCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+  }
+});
+
+test("ensureParserServer reports failure when the remote server is unreachable", async () => {
+  const originalChrome = globalThis.chrome;
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => {
+    throw new TypeError("offline");
+  }) as typeof fetch;
+
+  globalThis.chrome = {
+    runtime: { onMessage: { addListener: () => {} } },
+    storage: {
+      sync: {
+        get: (_defaults: unknown, callback: (items: unknown) => void) => {
+          callback({ parserServerUrl: "https://parser.example.com" });
+        },
+      },
+    },
+  } as unknown as typeof chrome;
+
+  try {
+    const result = await ensureParserServer();
+
+    assert.equal(result.status, "failed");
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.chrome = originalChrome;

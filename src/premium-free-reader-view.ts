@@ -108,6 +108,55 @@ export const renderPremiumFreeFeedPages = (
   container.replaceChildren(reader);
 };
 
+export type PreloadedPageImage = {
+  blobUrl: string;
+  naturalWidth: number;
+  naturalHeight: number;
+};
+
+/**
+ * Same markup as renderPremiumFreeFeedPages, but every image is already decoded
+ * and carries its intrinsic size, so the section reaches its final height in the
+ * same frame it is inserted. Used when swapping in a better-quality source: a
+ * lazily-sizing image would collapse the section and throw off the scroll.
+ */
+export const renderPremiumFreeFeedPagesPreloaded = (
+  container: HTMLElement,
+  result: PremiumFreeSuccessResult,
+  state: PremiumFreeReaderState,
+  chapterKey: string,
+  preloaded: ReadonlyMap<number, PreloadedPageImage>,
+): void => {
+  const reader = document.createElement("div");
+  reader.setAttribute(CONTROL_ATTRIBUTE, "premium-free-feed-reader");
+
+  result.pages.forEach((page) => {
+    const asset = preloaded.get(page.index);
+    if (!asset) return;
+
+    const pageShell = document.createElement("div");
+    pageShell.setAttribute(CONTROL_ATTRIBUTE, "premium-free-page-shell");
+    pageShell.dataset.rrePremiumFreeStreamKey = chapterKey;
+    pageShell.dataset.rrePremiumFreePageIndex = String(page.index);
+
+    const image = document.createElement("img");
+    image.setAttribute(CONTROL_ATTRIBUTE, "premium-free-image");
+    image.decoding = "sync";
+    image.alt = `Страница ${page.index + 1}`;
+    // Intrinsic attributes give the element its aspect ratio before layout.
+    image.width = asset.naturalWidth;
+    image.height = asset.naturalHeight;
+    image.src = asset.blobUrl;
+
+    const pageFrame = createPremiumFreePageFrame(state);
+    pageFrame.append(image);
+    pageShell.append(pageFrame);
+    reader.append(pageShell);
+  });
+
+  container.replaceChildren(reader);
+};
+
 export const renderPremiumFreePagerPages = ({
   container,
   result,

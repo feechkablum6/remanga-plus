@@ -1,0 +1,4 @@
+remanga.178.253.39.105.sslip.io {
+	encode zstd gzip
+	reverse_proxy remanga-parser:7845
+}

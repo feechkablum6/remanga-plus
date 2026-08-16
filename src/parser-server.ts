@@ -9,14 +9,46 @@ export const buildParserServerBaseUrl = (port: number): string =>
 export const buildParserServerHealthcheckUrl = (port: number): string =>
   `${buildParserServerBaseUrl(port)}${PARSER_SERVER_HEALTHCHECK_PATH}`;
 
+export const PARSER_SERVER_TOKEN_HEADER = "X-Parser-Token";
+
+/**
+ * Where the extension talks to the parser: either the locally launched server
+ * or a self-hosted one. `token` is empty when the server needs no auth.
+ */
+export type ParserServerEndpoint = {
+  baseUrl: string;
+  token: string;
+};
+
+export const buildLocalEndpoint = (port: number): ParserServerEndpoint => ({
+  baseUrl: buildParserServerBaseUrl(port),
+  token: "",
+});
+
+export const buildParserServerHeaders = (
+  endpoint: Pick<ParserServerEndpoint, "token">,
+): Record<string, string> =>
+  endpoint.token ? { [PARSER_SERVER_TOKEN_HEADER]: endpoint.token } : {};
+
+export const isParserServerEndpoint = (
+  value: unknown,
+): value is ParserServerEndpoint => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as { baseUrl?: unknown; token?: unknown };
+  return typeof candidate.baseUrl === "string" && typeof candidate.token === "string";
+};
+
 export const ENSURE_PARSER_SERVER_MESSAGE_TYPE = "rre:ensure-parser-server";
 export const RESTART_PARSER_SERVER_MESSAGE_TYPE = "rre:restart-parser-server";
 export const STATUS_PARSER_SERVER_MESSAGE_TYPE = "rre:status-parser-server";
 export const PROXY_IMAGE_MESSAGE_TYPE = "rre:proxy-image";
+export const READER_IMAGE_DATA_URL_MESSAGE_TYPE = "rre:reader-image-data-url";
 export const NATIVE_HOST_NAME = "org.remanga.parser_host";
 
 export type ParserServerStatus =
-  | { status: "ok"; port: number }
+  | { status: "ok"; port?: number; endpoint?: ParserServerEndpoint }
   | { status: "down" };
 
 export const isParserServerStatus = (
@@ -33,6 +65,8 @@ export type ParserServerEnsureResult =
   | {
       status: "ready";
       port?: number;
+      /** Absent for old cached responses; callers fall back to the local port. */
+      endpoint?: ParserServerEndpoint;
     }
   | {
       status: "install_required" | "failed";

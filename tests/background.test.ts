@@ -26,7 +26,10 @@ test("background worker owns parser startup coordination", () => {
 
   assert.match(backgroundSource, /ensureParserServer/);
   assert.match(backgroundSource, /connectNative|sendNativeMessage/);
-  assert.match(backgroundSource, /buildParserServerHealthcheckUrl|PARSER_SERVER_HEALTHCHECK_URL/);
+  assert.match(
+    backgroundSource,
+    /buildParserServerHealthcheckUrl|PARSER_SERVER_HEALTHCHECK_URL|PARSER_SERVER_HEALTHCHECK_PATH/,
+  );
 });
 
 test("home bookmark pagination follows Remanga next URLs", () => {

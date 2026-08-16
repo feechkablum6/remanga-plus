@@ -11,6 +11,44 @@ interface ResolveBody {
   disabledProviders?: string[];
 }
 
+type ResolvedSuccess = Extract<
+  Awaited<ReturnType<typeof resolveExternalChapter>>,
+  { status: "success" }
+>;
+
+/**
+ * Registers every page in the proxy map and shapes the client-facing payload.
+ * Shared by the first answer and by later quality upgrades.
+ */
+function publishSuccess(
+  result: ResolvedSuccess,
+  imageMap: Map<string, { provider: string; imageRef: string }>,
+): unknown {
+  result.pages.forEach((page) => {
+    const proxyId = `${result.provider}:${result.matchedChapter.chapterId}:${page.index}`;
+    imageMap.set(proxyId, {
+      provider: result.provider,
+      imageRef: page.imageRef,
+    });
+  });
+
+  return {
+    status: "success",
+    provider: result.provider,
+    matchedTitle: result.matchedTitle,
+    matchedChapter: result.matchedChapter,
+    manualUrl: result.manualUrl,
+    nextChapter: result.nextChapter,
+    totalPages: result.totalPages,
+    pages: result.pages.map((page) => ({
+      index: page.index,
+      proxyUrl: `/api/images/${result.provider}:${result.matchedChapter.chapterId}:${page.index}`,
+    })),
+    ...(result.branches ? { branches: result.branches } : {}),
+    ...(result.selectedBranchId ? { selectedBranchId: result.selectedBranchId } : {}),
+  };
+}
+
 export function registerChapterResolveRoute(
   app: FastifyInstance,
   registry: ProviderRegistry,
@@ -62,34 +100,17 @@ export function registerChapterResolveRoute(
       onProgress: (providerName, status, extra) => {
         sessionStore.updateProviderStatus(session.sessionId, providerName, status, extra);
       },
+      onUpgrade: (result) => {
+        sessionStore.setUpgradeResult(session.sessionId, publishSuccess(result, imageMap));
+      },
+      onSearchComplete: () => {
+        sessionStore.markSearchComplete(session.sessionId);
+      },
     }).then((result) => {
-      if (result.status === "success") {
-        result.pages.forEach((page) => {
-          const proxyId = `${result.provider}:${result.matchedChapter.chapterId}:${page.index}`;
-          imageMap.set(proxyId, {
-            provider: result.provider,
-            imageRef: page.imageRef,
-          });
-        });
-
-        sessionStore.setFinalResult(session.sessionId, {
-          status: "success",
-          provider: result.provider,
-          matchedTitle: result.matchedTitle,
-          matchedChapter: result.matchedChapter,
-          manualUrl: result.manualUrl,
-          nextChapter: result.nextChapter,
-          totalPages: result.totalPages,
-          pages: result.pages.map((page) => ({
-            index: page.index,
-            proxyUrl: `/api/images/${result.provider}:${result.matchedChapter.chapterId}:${page.index}`,
-          })),
-          ...(result.branches ? { branches: result.branches } : {}),
-          ...(result.selectedBranchId ? { selectedBranchId: result.selectedBranchId } : {}),
-        });
-      } else {
-        sessionStore.setFinalResult(session.sessionId, result);
-      }
+      sessionStore.setFinalResult(
+        session.sessionId,
+        result.status === "success" ? publishSuccess(result, imageMap) : result,
+      );
     });
 
     return reply.code(202).send({ sessionId: session.sessionId });
@@ -107,6 +128,26 @@ export function registerChapterResolveRoute(
         providers: session.providers,
         complete: session.finalResult !== null,
       });
+    },
+  );
+
+  // Polled after the chapter is already on screen: tells the reader whether a
+  // better-ranked source arrived, so it can swap the pages in place.
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/chapters/upgrade/:sessionId",
+    async (request, reply) => {
+      const session = sessionStore.get(request.params.sessionId);
+      if (!session) {
+        // Sessions are pruned by TTL; a gone session simply has nothing better.
+        return reply.code(200).send({ status: "none" });
+      }
+      if (session.upgradeResult !== null) {
+        return reply.code(200).send({ status: "ready", result: session.upgradeResult });
+      }
+      if (session.searchComplete) {
+        return reply.code(200).send({ status: "none" });
+      }
+      return reply.code(200).send({ status: "pending" });
     },
   );
 

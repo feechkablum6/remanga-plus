@@ -22,6 +22,10 @@ export interface ResolveExternalChapterArgs {
     status: ProviderResolveStatus,
     extra?: { reason?: ProviderProgress["reason"]; detail?: string },
   ) => void;
+  /** A better-ranked source finished after the first answer was already sent. */
+  onUpgrade?: (result: ExternalResolveSuccess) => void;
+  /** Every provider has finished — no further upgrade can arrive. */
+  onSearchComplete?: () => void;
 }
 
 const normalize = (value: string): string =>
@@ -293,13 +297,21 @@ async function resolveWithProvider(
 export async function resolveExternalChapter(
   args: ResolveExternalChapterArgs,
 ): Promise<ExternalResolveResult> {
-  const { providers, providerPriority, onProgress } = args;
+  const { providers, providerPriority, onProgress, onUpgrade, onSearchComplete } = args;
 
-  const abortController = new AbortController();
-  const { signal } = abortController;
+  // The first success is returned immediately so the reader opens fast, but
+  // providers higher in providerPriority keep running: sources differ a lot in
+  // scan quality and the fastest is regularly the worst. When a better-ranked
+  // one lands, it is handed over through onUpgrade instead of replacing the
+  // already-delivered answer.
+  const controllers = providerPriority.map(() => new AbortController());
 
-  let settled = false;
-  let successResult: ExternalResolveSuccess | null = null;
+  let bestSuccessIndex = Number.POSITIVE_INFINITY;
+  let delivered = false;
+  let deliverFirst: ((result: ExternalResolveResult) => void) | null = null;
+  const firstAnswer = new Promise<ExternalResolveResult>((resolve) => {
+    deliverFirst = resolve;
+  });
   let bestFailure: ExternalResolveFailure | null = null;
 
   const recordFailure = (failure: ExternalResolveFailure): void => {
@@ -308,41 +320,64 @@ export async function resolveExternalChapter(
     }
   };
 
-  const tasks = providerPriority.map(async (providerName) => {
+  /** Nothing below the winner can improve on it, so stop paying for it. */
+  const cancelBelow = (winnerIndex: number): void => {
+    for (let lower = winnerIndex + 1; lower < controllers.length; lower += 1) {
+      controllers[lower].abort();
+    }
+  };
+
+  const tasks = providerPriority.map(async (providerName, index) => {
     const provider = providers.find((c) => c.name === providerName);
     if (!provider) return;
+
+    const { signal } = controllers[index];
 
     try {
       const result = await resolveWithProvider(provider, args, signal);
 
-      if (settled) return;
+      // Cancelled by a higher-priority success: not a real provider outcome.
+      if (signal.aborted) return;
 
       if (result.status === "success") {
-        settled = true;
-        successResult = result;
-        abortController.abort();
+        if (index < bestSuccessIndex) {
+          bestSuccessIndex = index;
+          cancelBelow(index);
+          if (delivered) {
+            onUpgrade?.(result);
+          } else {
+            delivered = true;
+            deliverFirst?.(result);
+          }
+        }
         onProgress?.(providerName, "success");
       } else {
         onProgress?.(providerName, "failed", { reason: result.reason });
         recordFailure(result);
       }
     } catch {
-      if (!settled) {
-        const failure = createFailureResult(
-          "provider_error",
-          providerName,
-          resolveManualSearchUrl(provider, args.remanga.titleName),
-        );
-        onProgress?.(providerName, "failed", { reason: "provider_error" });
-        recordFailure(failure);
-      }
+      if (signal.aborted) return;
+
+      const failure = createFailureResult(
+        "provider_error",
+        providerName,
+        resolveManualSearchUrl(provider, args.remanga.titleName),
+      );
+      onProgress?.(providerName, "failed", { reason: "provider_error" });
+      recordFailure(failure);
     }
   });
 
-  await Promise.all(tasks);
+  void Promise.all(tasks).then(() => {
+    if (!delivered) {
+      delivered = true;
+      deliverFirst?.(
+        bestFailure ??
+          createFailureResult("provider_error", "unknown", buildSearchUrl(args.remanga.titleName)),
+      );
+    }
+    onSearchComplete?.();
+  });
 
-  if (successResult) return successResult;
-  if (bestFailure) return bestFailure;
-
-  return createFailureResult("provider_error", "unknown", buildSearchUrl(args.remanga.titleName));
+  return firstAnswer;
 }

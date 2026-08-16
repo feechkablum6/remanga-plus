@@ -209,3 +209,60 @@ describe('resolveExternalChapter parallel', () => {
     assert.ok(statuses.includes('success'), `expected 'success' in ${JSON.stringify(statuses)}`);
   });
 });
+
+describe('resolveExternalChapter quality upgrade', () => {
+  it('answers with the fastest source, then upgrades to the higher-ranked one', async () => {
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (module as Record<string, unknown>).resolveExternalChapter as (
+      args: unknown,
+    ) => Promise<ExternalResolveResult>;
+
+    const upgrades: string[] = [];
+    let searchComplete = false;
+
+    const result = await resolveExternalChapter({
+      remanga,
+      providers: [makeSuccessProvider('fast', 0), makeSuccessProvider('slow', 150)],
+      providerPriority: ['slow', 'fast'],
+      titleOverrides: {},
+      onUpgrade: (upgraded: ExternalResolveResult) => {
+        if (upgraded.status === 'success') upgrades.push(upgraded.provider);
+      },
+      onSearchComplete: () => {
+        searchComplete = true;
+      },
+    });
+
+    assert.equal(result.status, 'success');
+    if (result.status === 'success') {
+      assert.equal(result.provider, 'fast');
+    }
+
+    await new Promise((r) => setTimeout(r, 500));
+    assert.deepEqual(upgrades, ['slow']);
+    assert.equal(searchComplete, true);
+  });
+
+  it('does not upgrade when the fastest source is already the highest-ranked', async () => {
+    const module = await import('../src/resolve-chapter.js');
+    const resolveExternalChapter = (module as Record<string, unknown>).resolveExternalChapter as (
+      args: unknown,
+    ) => Promise<ExternalResolveResult>;
+
+    const upgrades: string[] = [];
+
+    const result = await resolveExternalChapter({
+      remanga,
+      providers: [makeSuccessProvider('fast', 0), makeSuccessProvider('slow', 150)],
+      providerPriority: ['fast', 'slow'],
+      titleOverrides: {},
+      onUpgrade: (upgraded: ExternalResolveResult) => {
+        if (upgraded.status === 'success') upgrades.push(upgraded.provider);
+      },
+    });
+
+    assert.equal(result.status, 'success');
+    await new Promise((r) => setTimeout(r, 500));
+    assert.deepEqual(upgrades, []);
+  });
+});
