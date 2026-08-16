@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   ReaderEnhancerSettings,
   HeaderButtonKey,
   BookmarkFilterCategoryKey,
@@ -140,7 +140,7 @@ const siteToggles: ReadonlyArray<ToggleDescriptor> = [
     }),
   ),
   {
-    label: "Скрыть баннер игры",
+    label: "Скрыть «Карточные бои»",
     accessor: { kind: "scalar", key: "hideHomeGameBanner" },
     subsection: "ГЛАВНАЯ СТРАНИЦА",
     collapsibleGroup: "homeHiding",
@@ -244,10 +244,21 @@ export const CATEGORIES: Record<CategoryKey, CategoryMeta> = {
 export const countCategoryToggles = (key: CategoryKey): number =>
   CATEGORIES[key].toggles.length;
 
+const isReaderPremiumFreeToggle = (toggle: ToggleDescriptor): boolean =>
+  toggle.accessor.kind === "scalar" &&
+  ["premiumFree", "prefetchNextChapter", "showPremiumFreeProgress"].includes(
+    toggle.accessor.key,
+  );
+
 export const getReaderDrawerToggles = (): ReadonlyArray<ToggleDescriptor> => [
   ...CATEGORIES.reader.toggles,
-  ...CATEGORIES["premium-free"].toggles,
+  ...CATEGORIES["premium-free"].toggles.filter(isReaderPremiumFreeToggle),
 ];
+
+export const getReaderDrawerParserProviderToggles = (): ReadonlyArray<ToggleDescriptor> =>
+  CATEGORIES["premium-free"].toggles.filter(
+    (toggle) => toggle.accessor.kind === "provider",
+  );
 
 export const readToggleValue = (
   settings: ReaderEnhancerSettings,

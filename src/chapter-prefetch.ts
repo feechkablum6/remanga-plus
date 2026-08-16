@@ -66,8 +66,20 @@ const addImagePreload = (href: string): void => {
 // 30 falls off the first page and the lookup fails.
 const REMANGA_BRANCH_LIST_URL = (branchId: number, page: number = 1): string =>
   `https://api.remanga.org/api/v2/titles/chapters/?branch_id=${branchId}&ordering=index&page=${page}&count=100&user_data=1`;
+// titleDir is taken straight from the page URL, so it already arrives percent
+// encoded ("%3C29.04.2026%3E..."). Encoding it again produced "%253C" and a 404,
+// which silently left every streamed chapter without a remanga id — no read
+// marking, no working chapter links.
+export const decodeRemangaTitleDir = (titleDir: string): string => {
+  try {
+    return decodeURIComponent(titleDir);
+  } catch {
+    return titleDir;
+  }
+};
+
 const REMANGA_TITLE_DETAIL_URL = (titleDir: string): string =>
-  `https://api.remanga.org/api/v2/titles/${encodeURIComponent(titleDir)}/`;
+  `https://api.remanga.org/api/v2/titles/${encodeURIComponent(decodeRemangaTitleDir(titleDir))}/`;
 
 let prewarmedChapterIds = new Set<number>();
 let activeTitleDir: string | null = null;

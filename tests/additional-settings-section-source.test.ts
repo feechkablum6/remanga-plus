@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -34,5 +34,20 @@ test("animates additional settings collapse through a dedicated helper after ini
   assert.match(
     readerEnhancerSource,
     /syncSettingsRowsCollapse\(rows,\s*expanded\)/,
+  );
+});
+
+test("places parser sources in a closed native accordion", () => {
+  assert.match(readerEnhancerSource, /const ensureParserProviderAccordion = \(/);
+  assert.match(readerEnhancerSource, /document\.createElement\("details"\)/);
+  assert.match(readerEnhancerSource, /summary\.textContent = "Источники парсера"/);
+  assert.match(
+    readerEnhancerSource,
+    /syncToggleRows\(\s*providerRows,\s*parserProviderToggleDefinitions,/,
+  );
+  assert.doesNotMatch(
+    readerEnhancerSource,
+    /accordion\.setAttribute\("open"/,
+    "the accordion must be closed when it is first inserted",
   );
 });

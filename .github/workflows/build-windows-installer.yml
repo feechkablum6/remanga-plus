@@ -26,11 +26,12 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Install NSIS
+      - name: Install NSIS and MinGW-w64
         run: |
           sudo apt-get update
-          sudo apt-get install -y nsis
+          sudo apt-get install -y nsis gcc-mingw-w64-x86-64
           makensis -VERSION
+          x86_64-w64-mingw32-gcc --version
 
       - name: Install dependencies
         run: |

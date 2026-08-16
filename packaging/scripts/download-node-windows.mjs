@@ -1,5 +1,14 @@
 #!/usr/bin/env node
-import { mkdirSync, existsSync, createWriteStream, copyFileSync, statSync } from "node:fs";
+import {
+  closeSync,
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync,
+} from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,11 +28,38 @@ const archiveName = `node-${NODE_VERSION}-${NODE_PLATFORM}.zip`;
 const downloadUrl = `https://nodejs.org/dist/${NODE_VERSION}/${archiveName}`;
 const cachedArchive = path.join(cacheDir, archiveName);
 const extractedDir = path.join(cacheDir, `node-${NODE_VERSION}-${NODE_PLATFORM}`);
+const explicitNodeBinary = process.env.REMANGA_WINDOWS_NODE_BIN;
 
 mkdirSync(buildDir, { recursive: true });
 mkdirSync(cacheDir, { recursive: true });
 
 const ensureMinSize = (file, minBytes) => existsSync(file) && statSync(file).size >= minBytes;
+
+const hasPeHeader = (file) => {
+  if (!existsSync(file)) {
+    return false;
+  }
+  const descriptor = openSync(file, "r");
+  try {
+    const header = Buffer.alloc(2);
+    return readSync(descriptor, header, 0, 2, 0) === 2 &&
+      header.toString("ascii") === "MZ";
+  } finally {
+    closeSync(descriptor);
+  }
+};
+
+if (explicitNodeBinary) {
+  const explicitPath = path.resolve(explicitNodeBinary);
+  if (!ensureMinSize(explicitPath, 30_000_000) || !hasPeHeader(explicitPath)) {
+    throw new Error(
+      `REMANGA_WINDOWS_NODE_BIN must point to a Windows node.exe larger than 30 MB: ${explicitPath}`,
+    );
+  }
+  copyFileSync(explicitPath, outputBinary);
+  console.log(`Node binary override → ${path.relative(repoRoot, outputBinary)}`);
+  process.exit(0);
+}
 
 if (!ensureMinSize(cachedArchive, 10_000_000)) {
   console.log(`Downloading ${downloadUrl}`);

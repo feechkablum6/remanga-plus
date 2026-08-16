@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   BookmarkFilterCategoryKey,
   HeaderButtonKey,
   ReaderEnhancerSettings,
@@ -41,6 +41,20 @@ const HEADER_LOCATORS: Record<HeaderButtonKey, Locator> = {
 };
 
 const GAME_BANNER_SELECTOR = "div.fixed.bottom-8.right-8.z-100";
+const CARD_BATTLES_DIALOG_SELECTOR = [
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+  '[aria-modal="true"]',
+].join(", ");
+const CARD_BATTLES_TITLE = "пик карточных искусств";
+const CARD_BATTLES_CLOSE_SELECTOR = [
+  'button[aria-label="Закрыть"]',
+  'button[aria-label="Close"]',
+  "button[data-radix-dialog-close]",
+  "[data-radix-dialog-close] button",
+  "button[data-dialog-close]",
+  "[data-dialog-close] button",
+].join(", ");
 
 const VISIBLE_BOOKMARK_BADGES: ReadonlyArray<{
   label: string;
@@ -67,6 +81,7 @@ export function applyHomeEnhancements(
     ) ?? (root as Element).querySelector?.("header") ?? root;
   applyHeaderButtons(header as ParentNode, settings);
   applyGameBanner(root, settings);
+  dismissCardBattlesDialog(root, settings);
   applyPromoBanner(root, settings);
   applyBookmarkFilter(root, settings, bookmarkDirs);
 }
@@ -105,6 +120,56 @@ function applyGameBanner(
   candidates.forEach((el) => {
     setHidden(el, "game-banner", settings.hideHomeGameBanner);
   });
+}
+
+function dismissCardBattlesDialog(
+  root: ParentNode,
+  settings: ReaderEnhancerSettings,
+): void {
+  if (!settings.hideHomeGameBanner) return;
+
+  const dialogs = (root as Element).querySelectorAll?.(CARD_BATTLES_DIALOG_SELECTOR) ?? [];
+  dialogs.forEach((dialog) => {
+    if (!(dialog instanceof HTMLElement)) return;
+    if (!dialog.textContent?.toLowerCase().includes(CARD_BATTLES_TITLE)) return;
+
+    const closeButton = findCardBattlesCloseButton(dialog);
+    closeButton?.click();
+  });
+}
+
+function findCardBattlesCloseButton(
+  dialog: HTMLElement,
+): HTMLButtonElement | null {
+  const directCloseButton = dialog.querySelector<HTMLButtonElement>(
+    CARD_BATTLES_CLOSE_SELECTOR,
+  );
+  if (directCloseButton) return directCloseButton;
+
+  const dialogRect = dialog.getBoundingClientRect();
+  if (dialogRect.width <= 0 || dialogRect.height <= 0) return null;
+
+  return Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find(
+    (button) => {
+      if (button.textContent?.trim().length || !button.querySelector("svg")) {
+        return false;
+      }
+
+      const buttonRect = button.getBoundingClientRect();
+      if (buttonRect.width <= 0 || buttonRect.height <= 0) return false;
+
+      const relativeTop = (buttonRect.top - dialogRect.top) / dialogRect.height;
+      const relativeRight = (dialogRect.right - buttonRect.right) / dialogRect.width;
+      const widthRatio = buttonRect.width / dialogRect.width;
+      const heightRatio = buttonRect.height / dialogRect.height;
+      return (
+        relativeTop <= 0.18 &&
+        relativeRight <= 0.18 &&
+        widthRatio <= 0.18 &&
+        heightRatio <= 0.18
+      );
+    },
+  ) ?? null;
 }
 
 function applyPromoBanner(

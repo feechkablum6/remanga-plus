@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build && vite build --config vite.background.config.ts && vite build --config vite.popup.config.ts && vite build --config vite.import.config.ts && vite build --config vite.bridge.config.ts && vite build --config vite.remanga-bridge.config.ts && vite build --config vite.fullscreen-bridge.config.ts",
+    "build": "vite build && vite build --config vite.background.config.ts && vite build --config vite.popup.config.ts && vite build --config vite.import.config.ts && vite build --config vite.bridge.config.ts && vite build --config vite.remanga-bridge.config.ts && vite build --config vite.fullscreen-bridge.config.ts && node scripts/sync-installed-extension.mjs",
     "check": "tsc --noEmit && tsc -p native-host/tsconfig.json --noEmit",
     "dev": "vite build --watch",
     "native:build": "tsc -p native-host/tsconfig.json",
@@ -12,7 +12,7 @@
     "pkg:build": "node packaging/scripts/build-pkg.mjs",
     "pkg:test": "node --test packaging/tests/build-pkg.test.mjs packaging/tests/bundle-parser.test.mjs packaging/tests/download-node.test.mjs packaging/tests/postinstall.test.mjs",
     "pkg:windows": "node packaging/scripts/build-installer-windows.mjs",
-    "pkg:windows:test": "node --test packaging/tests/host-bat.test.mjs packaging/tests/installer-nsi.test.mjs packaging/tests/download-node-windows.test.mjs packaging/tests/build-installer-windows.test.mjs",
+    "pkg:windows:test": "node --test --test-concurrency=1 packaging/tests/host-bat.test.mjs packaging/tests/windows-launcher.test.mjs packaging/tests/installer-nsi.test.mjs packaging/tests/download-node-windows.test.mjs packaging/tests/build-installer-windows.test.mjs",
     "version": "node scripts/sync-manifest-version.mjs && git add public/manifest.json",
     "postversion": "npm run build"
   },

@@ -42,6 +42,9 @@ export const PREMIUM_FREE_KEY_ATTRIBUTE = "data-rre-premium-free-key";
 export const PREMIUM_FREE_BANNER_ATTRIBUTE = "data-rre-premium-free-banner";
 export const PREMIUM_FREE_STATE_ATTRIBUTE = "data-rre-premium-free-state";
 export const PREMIUM_FREE_NATIVE_PAID_ATTRIBUTE = "data-rre-premium-free-native-paid";
+// Marks the native chapter label once the stream has written its own text into it,
+// so the label is never read back as the page's own chapter.
+export const PREMIUM_FREE_OWN_LABEL_ATTRIBUTE = "data-rre-premium-free-own-label";
 
 const isVisiblePremiumFreeBannerCandidate = (node: HTMLElement | null): node is HTMLElement => {
   if (!node) {

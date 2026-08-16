@@ -19,11 +19,43 @@ test("mounts the custom fullscreen rail button outside the shared settings butto
   );
 });
 
-test("handles fullscreen clicks without a page-injected blob bridge", () => {
+test("delegates fullscreen to the MAIN bridge and keeps a native fallback", () => {
+  assert.match(readerEnhancerSource, /from ["']\.\/fullscreen-controller["']/);
   assert.match(readerEnhancerSource, /button\.onclick = handleFullscreenButtonClick;/);
   assert.match(readerEnhancerSource, /button\.onpointerup = handleFullscreenButtonClick;/);
-  assert.match(readerEnhancerSource, /document\.documentElement\.requestFullscreen\(\)/);
-  assert.match(readerEnhancerSource, /PSEUDO_FULLSCREEN_ATTRIBUTE/);
+  assert.match(
+    readerEnhancerSource,
+    /FULLSCREEN_BRIDGE_ATTRIBUTE\s*=\s*["']data-rre-fullscreen-bridge["']/,
+  );
+  const bridgeGuardIndex = readerEnhancerSource.indexOf(
+    'getAttribute(FULLSCREEN_BRIDGE_ATTRIBUTE) === "1"',
+  );
+  const fallbackRequestIndex = readerEnhancerSource.indexOf(
+    "document.documentElement.requestFullscreen()",
+    bridgeGuardIndex,
+  );
+  assert.ok(bridgeGuardIndex >= 0);
+  assert.ok(fallbackRequestIndex > bridgeGuardIndex);
+  assert.match(readerEnhancerSource, /document\.exitFullscreen\(\)/);
+  assert.match(readerEnhancerSource, /new MutationObserver\(/);
+  assert.match(
+    readerEnhancerSource,
+    /FULLSCREEN_DENIED_ATTRIBUTE\s*=\s*["']data-rre-fullscreen-denied["']/,
+  );
+  assert.match(
+    readerEnhancerSource,
+    /attributeFilter:\s*\[FULLSCREEN_DENIED_ATTRIBUTE\]/,
+  );
+  assert.match(readerEnhancerSource, /data-rre-fullscreen-denied-reason/);
+  assert.match(readerEnhancerSource, /data-rre-fullscreen-denied-attempt/);
+  assert.match(readerEnhancerSource, /resolvePseudoFullscreenAfterNativeDenial\(/);
+  assert.match(readerEnhancerSource, /document\.addEventListener\(["']fullscreenchange["']/);
+  assert.match(
+    readerEnhancerSource,
+    /fullscreenchange[\s\S]*?setPseudoFullscreen\(false\)/,
+  );
+  assert.match(readerEnhancerSource, /resolvePseudoFullscreenAfterNativeSuccess\(/);
+  assert.match(readerEnhancerSource, /handleFullscreenDeniedSignal\(\)/);
+  assert.doesNotMatch(readerEnhancerSource, /rreFullscreenHandledAt/);
   assert.doesNotMatch(readerEnhancerSource, /createObjectURL\(blob\)/);
-  assert.doesNotMatch(readerEnhancerSource, /data-rre-fullscreen-bridge/);
 });

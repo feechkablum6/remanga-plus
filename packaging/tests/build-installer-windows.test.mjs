@@ -57,7 +57,7 @@ test("build-installer-windows produces payload + Setup.exe", { timeout: 360_000 
     "node.exe",
     "parser-server.js",
     "host.js",
-    "host.bat",
+    "host.exe",
     "open-extension-setup.bat",
     "README-Windows.txt",
     "extension/manifest.json",

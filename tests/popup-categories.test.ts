@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CATEGORY_KEYS,
@@ -49,9 +49,9 @@ test("Сайт toggles include all 10 header button keys with Russian labels", (
   }
 });
 
-test("Сайт includes 'Скрыть баннер игры' as a separate toggle", () => {
+test("Сайт includes a Card Battles toggle", () => {
   const labels = CATEGORIES.site.toggles.map((t) => t.label);
-  assert.ok(labels.includes("Скрыть баннер игры"));
+  assert.ok(labels.includes("Скрыть «Карточные бои»"));
 });
 
 test("Сайт includes 'Скрыть промо-плашку Telegram' as a separate toggle", () => {

@@ -1,33 +1,33 @@
-Remanga Plus for Windows
+﻿Remanga Plus для Windows
 ========================
 
-Installed files are in this folder:
+Установленные файлы находятся в папке:
 
   %LOCALAPPDATA%\Programs\Remanga Plus
 
-What the installer already did:
+Установщик уже выполнил следующие действия:
 
-  1. Installed the extension files into the extension folder.
-  2. Installed bundled node.exe, parser-server.js, host.js, and host.bat.
-  3. Registered the Native Messaging host for Chrome, Edge, Brave, Vivaldi,
-     Chromium, Yandex, and Opera under the current Windows user.
+  1. Установил файлы расширения в папку extension.
+  2. Установил встроенные node.exe, parser-server.js, host.js и host.exe.
+  3. Зарегистрировал Native Messaging host для Chrome, Edge, Brave, Vivaldi,
+     Chromium, Яндекс Браузера и Opera в профиле текущего пользователя Windows.
 
-One browser step is still required:
+Остался один ручной шаг в браузере:
 
-  1. Open chrome://extensions or edge://extensions.
-  2. Enable Developer mode.
-  3. Click Load unpacked.
-  4. Select this folder:
+  1. Откройте chrome://extensions или edge://extensions.
+  2. Включите режим разработчика.
+  3. Нажмите «Загрузить распакованное расширение».
+  4. Выберите папку:
 
      %LOCALAPPDATA%\Programs\Remanga Plus\extension
 
-After the extension is loaded, open remanga.org. When Premium Free needs the
-parser, the extension starts parser-server automatically through Native
-Messaging. You do not need to run parser-server manually.
+После подключения расширения откройте remanga.org. Когда функции Premium Free
+потребуется парсер, расширение автоматически запустит parser-server через
+Native Messaging. Вручную запускать parser-server не нужно.
 
-If Premium Free does not work:
+Если Premium Free не работает:
 
-  1. Open the extension popup.
-  2. Check the Service status.
-  3. Press the restart button if parser-server is down.
-  4. Reload the remanga.org tab after reinstalling or reloading the extension.
+  1. Откройте окно расширения.
+  2. Проверьте статус сервиса.
+  3. Если parser-server остановлен, нажмите кнопку перезапуска.
+  4. После переустановки или перезагрузки расширения обновите вкладку remanga.org.

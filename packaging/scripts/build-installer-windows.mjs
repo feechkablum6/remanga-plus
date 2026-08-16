@@ -56,6 +56,9 @@ run(process.execPath, [path.join(repoRoot, "packaging/scripts/bundle-parser.mjs"
 log("Bundling native host…");
 run(process.execPath, [path.join(repoRoot, "packaging/scripts/bundle-host.mjs")]);
 
+log("Building Windows native launcher…");
+run(process.execPath, [path.join(repoRoot, "packaging/scripts/build-windows-launcher.mjs")]);
+
 // 3. Download Windows Node binary into packaging/build-windows/.
 log("Ensuring Windows Node binary…");
 run(process.execPath, [path.join(repoRoot, "packaging/scripts/download-node-windows.mjs")]);
@@ -68,7 +71,7 @@ mkdirSync(buildDir, { recursive: true });
 const sharedBuildDir = path.join(repoRoot, "packaging/build");
 copyFileSync(path.join(sharedBuildDir, "parser-server.js"), path.join(buildDir, "parser-server.js"));
 copyFileSync(path.join(sharedBuildDir, "host.js"), path.join(buildDir, "host.js"));
-copyFileSync(path.join(templatesDir, "host.bat"), path.join(buildDir, "host.bat"));
+copyFileSync(path.join(sharedBuildDir, "host.exe"), path.join(buildDir, "host.exe"));
 copyFileSync(
   path.join(templatesDir, "open-extension-setup.bat"),
   path.join(buildDir, "open-extension-setup.bat"),

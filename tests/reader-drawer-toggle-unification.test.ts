@@ -1,10 +1,11 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CATEGORIES,
   readToggleValue,
   applyToggleChange,
   getReaderDrawerToggles,
+  getReaderDrawerParserProviderToggles,
   type ToggleDescriptor,
 } from "../src/popup-categories.js";
 import { DEFAULT_SETTINGS, cloneSettings } from "../src/settings.js";
@@ -74,16 +75,33 @@ test("applyToggleChange sets header-button nested key without mutating input", (
   assert.equal(s.hideHeaderButtons.search, false);
 });
 
-test("getReaderDrawerToggles concatenates reader + premium-free in display order", () => {
+test("getReaderDrawerToggles includes only settings relevant to reading", () => {
   const drawer = getReaderDrawerToggles();
   const expected = [
     ...CATEGORIES.reader.toggles,
-    ...CATEGORIES["premium-free"].toggles,
+    ...CATEGORIES["premium-free"].toggles.filter((toggle) =>
+      ["premiumFree", "prefetchNextChapter", "showPremiumFreeProgress"].some(
+        (key) => toggle.accessor.kind === "scalar" && toggle.accessor.key === key,
+      ),
+    ),
   ];
   assert.deepEqual(
     drawer.map((t) => t.label),
     expected.map((t) => t.label),
   );
+  assert.ok(!drawer.some((toggle) => toggle.label === "Персональные рекомендации"));
+  assert.ok(!drawer.some((toggle) => toggle.accessor.kind === "rec-type"));
+  assert.ok(!drawer.some((toggle) => toggle.accessor.kind === "provider"));
+});
+
+test("getReaderDrawerParserProviderToggles keeps parser sources separate", () => {
+  const providers = getReaderDrawerParserProviderToggles();
+
+  assert.deepEqual(
+    providers.map((toggle) => toggle.label),
+    ["Mangabuff", "Senkuro", "InkStory", "Telemanga", "Teletype", "Usagi", "WaManga"],
+  );
+  assert.ok(providers.every((toggle) => toggle.accessor.kind === "provider"));
 });
 
 test("getReaderDrawerToggles covers all reader-related settings keys", () => {

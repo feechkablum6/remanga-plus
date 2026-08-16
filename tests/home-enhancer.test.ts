@@ -1,4 +1,4 @@
-import "./setup-dom.js";
+﻿import "./setup-dom.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -85,6 +85,68 @@ test("applyHomeEnhancements hides game banner when hideHomeGameBanner = true", (
     assert.equal(banner.style.display, "none");
   } finally {
     cleanup();
+  }
+});
+
+test("applyHomeEnhancements closes the Card Battles event dialog when its banner is hidden", () => {
+  const { root, cleanup } = buildHeader();
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  dialog.innerHTML = `
+    <h2>Пик карточных искусств</h2>
+    <button aria-label="Закрыть"><svg></svg></button>
+    <button>Вступить</button>
+  `;
+  document.body.appendChild(dialog);
+
+  try {
+    let closeClicks = 0;
+    (dialog.querySelector('button[aria-label="Закрыть"]') as HTMLButtonElement)
+      .addEventListener("click", () => { closeClicks += 1; });
+
+    applyHomeEnhancements(document, mergeSettings({ hideHomeGameBanner: true }));
+
+    assert.equal(closeClicks, 1);
+  } finally {
+    dialog.remove();
+    cleanup();
+  }
+});
+
+test("applyHomeEnhancements closes an icon-only Card Battles dialog control", () => {
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  dialog.innerHTML = `
+    <h2>Пик карточных искусств</h2>
+    <button data-close-icon><svg></svg></button>
+    <button>Вступить</button>
+  `;
+  document.body.appendChild(dialog);
+
+  const rect = (left: number, top: number, width: number, height: number): DOMRect => ({
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  });
+  dialog.getBoundingClientRect = () => rect(100, 100, 400, 240);
+  const closeButton = dialog.querySelector("[data-close-icon]") as HTMLButtonElement;
+  closeButton.getBoundingClientRect = () => rect(450, 108, 32, 32);
+
+  try {
+    let closeClicks = 0;
+    closeButton.addEventListener("click", () => { closeClicks += 1; });
+
+    applyHomeEnhancements(document, mergeSettings({ hideHomeGameBanner: true }));
+
+    assert.equal(closeClicks, 1);
+  } finally {
+    dialog.remove();
   }
 });
 

@@ -56,19 +56,19 @@ Section "Install"
     File "node.exe"
     File "parser-server.js"
     File "host.js"
-    File "host.bat"
+    File "host.exe"
     File "open-extension-setup.bat"
     File "README-Windows.txt"
     File /r "extension"
 
     ; Generate Native Messaging manifest with extension id. On Windows, Chrome
-    ; supports paths relative to the manifest file directory. Keeping host.bat
+    ; supports paths relative to the manifest file directory. Keeping host.exe
     ; relative avoids writing raw $INSTDIR backslashes into JSON.
     FileOpen $0 "$INSTDIR\nm-manifest.json" w
     FileWrite $0 '{$\n'
     FileWrite $0 '  "name": "${HOSTNAME}",$\n'
     FileWrite $0 '  "description": "Autostarts the local parser-server for ReManga Premium Free",$\n'
-    FileWrite $0 '  "path": "host.bat",$\n'
+    FileWrite $0 '  "path": "host.exe",$\n'
     FileWrite $0 '  "type": "stdio",$\n'
     FileWrite $0 '  "allowed_origins": ["chrome-extension://${EXTENSION_ID}/"]$\n'
     FileWrite $0 '}$\n'
@@ -106,7 +106,7 @@ Section "Uninstall"
     Delete "$INSTDIR\node.exe"
     Delete "$INSTDIR\parser-server.js"
     Delete "$INSTDIR\host.js"
-    Delete "$INSTDIR\host.bat"
+    Delete "$INSTDIR\host.exe"
     Delete "$INSTDIR\open-extension-setup.bat"
     Delete "$INSTDIR\README-Windows.txt"
     Delete "$INSTDIR\nm-manifest.json"

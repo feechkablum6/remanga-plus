@@ -38,20 +38,21 @@ test("installer.nsi install section copies all payload files", () => {
   const nsi = readFileSync(nsiPath, "utf8");
 
   // The install section must File-include each artefact.
-  for (const f of ["node.exe", "parser-server.js", "host.js", "host.bat", "open-extension-setup.bat", "README-Windows.txt"]) {
+  for (const f of ["node.exe", "parser-server.js", "host.js", "host.exe", "open-extension-setup.bat", "README-Windows.txt"]) {
     assert.match(nsi, new RegExp(`File\\s+"${f}"`), `install section must File "${f}"`);
   }
   assert.match(nsi, /File\s+\/r\s+"extension"/, "install section must File /r extension");
 });
 
-test("installer.nsi generates nm-manifest.json with EXTENSION_ID and relative host path", () => {
+test("installer.nsi generates nm-manifest.json with EXTENSION_ID and native executable path", () => {
   const nsi = readFileSync(nsiPath, "utf8");
 
   // Manifest write block.
   assert.match(nsi, /FileOpen\s+\$0\s+"\$INSTDIR\\nm-manifest\.json"\s+w/, "must open nm-manifest.json for writing");
   assert.match(nsi, /\$\{HOSTNAME\}/, "manifest body must reference HOSTNAME");
-  assert.match(nsi, /"path": "host\.bat"/, "manifest path must be relative to avoid invalid JSON backslashes");
-  assert.doesNotMatch(nsi, /\$INSTDIR\\\\host\.bat/, "manifest path must not write raw $INSTDIR backslashes into JSON");
+  assert.match(nsi, /"path": "host\.exe"/, "manifest path must point to the native Windows launcher");
+  assert.doesNotMatch(nsi, /"path": "host\.bat"/, "manifest must not ask Chrome to execute a batch file");
+  assert.doesNotMatch(nsi, /\$INSTDIR\\\\host\.exe/, "manifest path must not write raw $INSTDIR backslashes into JSON");
   assert.match(nsi, /chrome-extension:\/\/\$\{EXTENSION_ID\}\//, "manifest body must reference EXTENSION_ID");
   assert.match(nsi, /FileClose\s+\$0/, "must close manifest file");
 });
@@ -111,7 +112,7 @@ test("installer.nsi uninstall section is symmetric — removes everything instal
   const nsi = readFileSync(nsiPath, "utf8");
 
   // Files removed.
-  for (const f of ["node.exe", "parser-server.js", "host.js", "host.bat", "open-extension-setup.bat", "README-Windows.txt", "nm-manifest.json", "Uninstall.exe"]) {
+  for (const f of ["node.exe", "parser-server.js", "host.js", "host.exe", "open-extension-setup.bat", "README-Windows.txt", "nm-manifest.json", "Uninstall.exe"]) {
     assert.match(nsi, new RegExp(`Delete\\s+"\\$INSTDIR\\\\${f.replace(/\./g, "\\.")}"`), `uninstall must Delete ${f}`);
   }
   // Extension dir + install dir + cache dir removed.
