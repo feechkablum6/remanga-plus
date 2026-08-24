@@ -101,5 +101,11 @@ ssh firstbyte 'docker exec remanga-parser node -e "fetch(\"https://mangabuff.ru/
 ```
 
 Признак именно DNS-поломки: `ping` до IP проходит, TCP 443 открыт, `curl --resolve` отдаёт
-200, а обычный `curl` возвращает `000` с «Resolving timed out». Хостовой resolv.conf не
-править — он общий для всех проектов сервера.
+200, а обычный `curl` возвращает `000` с «Resolving timed out».
+
+24.08.2026 с разрешения владельца хостовой `/etc/resolv.conf` тоже переведён на
+`1.1.1.1` / `9.9.9.9` (8.8.8.8 оставлен третьим): без этого демон Docker не резолвит
+`registry-1.docker.io` и `docker compose build` падает на скачивании `node:22-alpine`.
+Бэкап прежнего файла — `/root/resolv.conf.backup-2026-08-24`. Файл общий для всех проектов
+сервера, поэтому менять его только осознанно и с ведома владельца; `dns:` в compose оставлен
+как страховка на случай, если хостовой resolv.conf снова перепишут.
