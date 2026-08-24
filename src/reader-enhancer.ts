@@ -5,6 +5,12 @@ import {
   type ToolbarButtonKey,
 } from "./settings";
 import {
+  READER_LINK_SELECTOR,
+  buildRemangaTitleUrl,
+  isReaderPathname,
+  matchReaderChapterId,
+} from "./remanga-routes";
+import {
   CONTROL_ATTRIBUTE,
   HIDDEN_ATTRIBUTE,
   PREMIUM_FREE_BANNER_ATTRIBUTE,
@@ -552,7 +558,7 @@ const settingsMenuToggleDefinitions: ToggleDefinition[] = SETTINGS_MENU_ITEM_KEY
 }));
 
 export const isReaderPage = (pathname = window.location.pathname): boolean =>
-  /^\/manga\/[^/]+\/\d+/.test(pathname);
+  isReaderPathname(pathname);
 
 export const clearEnhancerArtifacts = (): void => {
   resetTransientSubsectionState();
@@ -1695,9 +1701,9 @@ const createPremiumFreeStreamExhausted = (
   failure: PremiumFreeFailureResult,
   titleName: string,
 ): HTMLElement => {
-  const remangaTitleUrl = `https://remanga.org/manga/${encodeURIComponent(
+  const remangaTitleUrl = buildRemangaTitleUrl(
     premiumFreeChapterStream?.entries.at(-1)?.reference.titleDir ?? "",
-  )}/main`;
+  );
   return createPremiumFreeStatusCard(
     "Дальше главы нет",
     `Даже наше расширение и Premium Free не смогли найти следующую главу для «${titleName}».`,
@@ -4245,8 +4251,9 @@ const findPremiumFreeNextChapterHref = (): string | null => {
     return null;
   }
 
-  const chapterLinks = Array.from(navigationRow.querySelectorAll<HTMLAnchorElement>('a[href*="/manga/"]'))
-    .filter((link) => !link.href.includes("/main"));
+  const chapterLinks = Array.from(
+    navigationRow.querySelectorAll<HTMLAnchorElement>(READER_LINK_SELECTOR),
+  ).filter((link) => !link.href.includes("/main"));
 
   return chapterLinks.at(-1)?.href ?? null;
 };
@@ -4262,7 +4269,7 @@ const getPremiumFreeNativeChapterLinks = (): {
   }
 
   const chapterLinks = Array.from(
-    navigationRow.querySelectorAll<HTMLAnchorElement>('a[href*="/manga/"]'),
+    navigationRow.querySelectorAll<HTMLAnchorElement>(READER_LINK_SELECTOR),
   ).filter((link) => !link.href.includes("/main"));
 
   return {
@@ -4273,19 +4280,7 @@ const getPremiumFreeNativeChapterLinks = (): {
 
 const extractPremiumFreeRemangaChapterId = (
   href: string | null | undefined,
-): number | null => {
-  if (!href) {
-    return null;
-  }
-
-  const match = href.match(/\/manga\/[^/]+\/(\d+)(?:[/?#]|$)/);
-  if (!match) {
-    return null;
-  }
-
-  const chapterId = Number(match[1]);
-  return Number.isInteger(chapterId) && chapterId > 0 ? chapterId : null;
-};
+): number | null => matchReaderChapterId(href);
 
 // Chapter images settle their height over the following frames, so a single
 // scroll lands short and leaves the reader at the tail of the previous chapter.
@@ -4423,7 +4418,7 @@ const handlePremiumFreeNativeNavigationClick = (event: MouseEvent): void => {
     return;
   }
 
-  const link = target.closest<HTMLAnchorElement>('a[href*="/manga/"]');
+  const link = target.closest<HTMLAnchorElement>(READER_LINK_SELECTOR);
   if (!link) {
     return;
   }
@@ -5334,7 +5329,7 @@ const createPremiumFreeTerminalFailure = (
   status: "failure",
   reason: "chapter_not_found",
   provider: "unknown",
-  manualUrl: `https://remanga.org/manga/${encodeURIComponent(reference.titleDir)}/main`,
+  manualUrl: buildRemangaTitleUrl(reference.titleDir),
 });
 
 const loadPremiumFreeNextChapter = async (): Promise<void> => {

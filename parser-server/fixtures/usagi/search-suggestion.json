@@ -1,0 +1,128 @@
+{
+  "query": "Перерождение ублюдка",
+  "suggestions": [
+    {
+      "value": "Перерождение ублюдка из клана Меча",
+      "elementId": {
+        "filled": true,
+        "type": "MANGA",
+        "siteId": 12,
+        "federationUID": "1:M:30904",
+        "typeId": 0,
+        "typeName": "Манхва",
+        "topicId": 553660,
+        "linkName": "pererojdenie_ubliudka_iz_klana_mecha",
+        "externalId": 30904
+      },
+      "link": "/pererojdenie_ubliudka_iz_klana_mecha",
+      "thumbnail": "https://rm.one-way.work/uploads/pics/02/49/241_p.webp",
+      "additional": null,
+      "score": null,
+      "names": [
+        "Regressing as the Reincarnated Bastard of the Sword Clan",
+        "Ублюдская жизнь вернувшегося мечника"
+      ],
+      "pessimization": false
+    },
+    {
+      "value": "Перерождение на перерождение и перерождением погоняет",
+      "elementId": {
+        "filled": true,
+        "type": "COLLECTION",
+        "siteId": 12,
+        "federationUID": "1:C:10357",
+        "typeId": 0,
+        "typeName": null,
+        "topicId": 526054,
+        "linkName": "pererojdenie_na_pererojdenie_i_pererojdeniem_pogoniaet_",
+        "externalId": 10357
+      },
+      "link": "/collection/pererojdenie_na_pererojdenie_i_pererojdeniem_pogoniaet_",
+      "thumbnail": "https://rm.one-way.work/uploads/pics/02/44/713_p.webp",
+      "additional": "коллекция",
+      "score": null,
+      "names": null,
+      "pessimization": false
+    },
+    {
+      "value": "Перерождение",
+      "elementId": {
+        "filled": true,
+        "type": "MANGA",
+        "siteId": 12,
+        "federationUID": "1:M:2901",
+        "typeId": 0,
+        "typeName": "Манга",
+        "topicId": 8358,
+        "linkName": "re_live",
+        "externalId": 2901
+      },
+      "link": "/re_live",
+      "thumbnail": "https://rm.one-way.work/uploads/pics/00/06/808_p.webp",
+      "additional": "Хибару Сюнсукэ",
+      "score": null,
+      "names": ["Re:live", "Re-live"],
+      "pessimization": false
+    },
+    {
+      "value": "Я единственный новичок максимального уровня",
+      "elementId": {
+        "filled": true,
+        "type": "MANGA",
+        "siteId": 12,
+        "federationUID": "1:M:22904",
+        "typeId": 0,
+        "typeName": "Манхва",
+        "topicId": 362953,
+        "linkName": "solo_max_level_newbie",
+        "externalId": 22904
+      },
+      "link": "/solo_max_level_newbie",
+      "thumbnail": "https://rm.one-way.work/uploads/pics/02/60/566_p.webp",
+      "additional": null,
+      "score": null,
+      "names": ["Solo Max-Level Newbie", "Na honja manrep nyubi"],
+      "pessimization": false
+    },
+    {
+      "value": "Кан Хёну́",
+      "elementId": {
+        "filled": true,
+        "type": "PERSON",
+        "siteId": 12,
+        "federationUID": "1:P:157310",
+        "typeId": 20,
+        "typeName": "character",
+        "topicId": 0,
+        "linkName": "kang_hyunwoo",
+        "externalId": 157310
+      },
+      "link": "/list/person/kang_hyunwoo",
+      "thumbnail": "https://rm.one-way.work/uploads/pics/02/55/702_p.webp",
+      "additional": "Персонаж",
+      "score": null,
+      "names": ["Kang Hyunwoo", "Kang Hyeon-U"],
+      "pessimization": false
+    },
+    {
+      "value": "Нубы",
+      "elementId": {
+        "filled": true,
+        "type": "MANGA",
+        "siteId": 9,
+        "federationUID": "9:M:324644",
+        "typeId": 0,
+        "typeName": null,
+        "topicId": 0,
+        "linkName": "noobz",
+        "externalId": 324644
+      },
+      "link": "https://mose.live/noobz",
+      "thumbnail": "https://staticmose.aaa200.one/uploads/pics/08/14/362_p.webp",
+      "additional": "Сериал",
+      "score": null,
+      "names": ["Noobz"],
+      "pessimization": false
+    }
+  ]
+}

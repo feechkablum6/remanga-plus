@@ -11,7 +11,6 @@ import { InkstoryProvider } from "./providers/inkstory.js";
 import { MangabuffProvider } from "./providers/mangabuff.js";
 import { SenkuroProvider } from "./providers/senkuro.js";
 import { TelemangaProvider } from "./providers/telemanga.js";
-import { TeletypeProvider } from "./providers/teletype.js";
 import { UsagiProvider } from "./providers/usagi.js";
 import { WamangaProvider } from "./providers/wamanga.js";
 import { ProviderRegistry } from "./providers/registry.js";
@@ -92,7 +91,8 @@ export function buildApp(config: AppConfig) {
   registry.register(new SenkuroProvider(httpClient));
   registry.register(new InkstoryProvider(httpClient));
   registry.register(new TelemangaProvider(httpClient));
-  registry.register(new TeletypeProvider(httpClient));
+  // TeletypeProvider is intentionally not registered — teletype.in is dead
+  // (see the note at the top of providers/teletype.ts).
   registry.register(new UsagiProvider(httpClient));
   registry.register(new WamangaProvider(httpClient));
 

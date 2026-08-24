@@ -3,6 +3,7 @@ import {
   isParserServerEnsureResult,
   type ParserServerEnsureResult,
 } from "./parser-server.js";
+import { matchReaderLocation } from "./remanga-routes.js";
 
 export type RemangaChapterReference = {
   titleDir: string;
@@ -134,7 +135,13 @@ export const mapServerProgressToChips = (
         chipStatus = "success";
         break;
       case "failed":
-        chipStatus = progress.reason === "no_match" ? "not_found" : "provider_error";
+        // `chapter_not_found` means the source simply doesn't carry this chapter —
+        // that is "не найдено", not a malfunction. Only real failures get "ошибка",
+        // otherwise a healthy source reads as broken.
+        chipStatus =
+          progress.reason === "no_match" || progress.reason === "chapter_not_found"
+            ? "not_found"
+            : "provider_error";
         break;
       default:
         chipStatus = "pending";
@@ -198,16 +205,7 @@ const extractPathMetadata = (
   href: string,
   canonicalHref: string | null,
 ): { titleDir: string; chapterId: number } | null => {
-  const target = canonicalHref || href;
-  const match = target.match(/\/manga\/([^/]+)\/(\d+)/);
-  if (!match) {
-    return null;
-  }
-
-  return {
-    titleDir: match[1],
-    chapterId: Number(match[2]),
-  };
+  return matchReaderLocation(canonicalHref || href);
 };
 
 const extractChapterIdFromHref = (href: string | null | undefined): number | undefined => {

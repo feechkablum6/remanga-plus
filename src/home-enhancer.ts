@@ -23,7 +23,10 @@ type Locator = (root: ParentNode) => Element | null;
 
 const HEADER_LOCATORS: Record<HeaderButtonKey, Locator> = {
   logo: (root) => root.querySelector('a[data-sentry-component="LogoButton"]'),
-  catalog: (root) => root.querySelector('a[href="/manga"]'),
+  // The catalog link moved from /manga to /catalog; keep both so the toggle
+  // survives either wording of the header.
+  catalog: (root) =>
+    root.querySelector('a[href="/catalog"]') ?? root.querySelector('a[href="/manga"]'),
   tops: (root) => root.querySelector('a[href="/manga/top"]'),
   forum: (root) => root.querySelector('a[href*="/forum"]'),
   ellipsis: (root) => {

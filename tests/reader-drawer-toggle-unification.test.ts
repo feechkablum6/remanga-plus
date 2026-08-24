@@ -97,9 +97,11 @@ test("getReaderDrawerToggles includes only settings relevant to reading", () => 
 test("getReaderDrawerParserProviderToggles keeps parser sources separate", () => {
   const providers = getReaderDrawerParserProviderToggles();
 
+  // Teletype is gone from the UI: teletype.in is dead and the provider is no
+  // longer wired into resolve, so a toggle for it would control nothing.
   assert.deepEqual(
     providers.map((toggle) => toggle.label),
-    ["Mangabuff", "Senkuro", "InkStory", "Telemanga", "Teletype", "Usagi", "WaManga"],
+    ["Mangabuff", "Senkuro", "InkStory", "Telemanga", "Usagi", "WaManga"],
   );
   assert.ok(providers.every((toggle) => toggle.accessor.kind === "provider"));
 });

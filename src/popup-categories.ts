@@ -89,7 +89,9 @@ const PROVIDER_KEYS: ReadonlyArray<[ProviderKey, string]> = [
   ["senkuro", "Senkuro"],
   ["inkstory", "InkStory"],
   ["telemanga", "Telemanga"],
-  ["teletype", "Teletype"],
+  // No "teletype" entry on purpose: teletype.in is dead and the provider is not
+  // registered in parser-server, so the toggle would control nothing. The
+  // settings key itself stays in settings.ts so stored settings keep merging.
   ["usagi", "Usagi"],
   ["wamanga", "WaManga"],
 ];

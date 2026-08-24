@@ -1,3 +1,9 @@
+/**
+ * Disabled 2026-08-24: teletype.in is dead.
+ * Live checks from this machine: HTTPS curl 000 (SSL_ERROR_SYSCALL / unexpected eof
+ * while reading), HTTP 451 body "Legal reason", DNS 185.53.179.136.
+ * Removed from DEFAULT_PROVIDER_PRIORITY and ProviderRegistry.register; file kept on disk.
+ */
 import { HttpClient } from "../http/client.js";
 import type {
   ExternalChapterParseResult,

@@ -12,6 +12,7 @@ const TELEMANGA_API_BASE = `${TELEMANGA_BASE_URL}/api`;
 const TELEMANGA_IMAGE_HOST =
   "https://storage.yandexcloud.net/telemangacnd";
 const CHAPTERS_PAGE_SIZE = 100;
+const CHAPTERS_MAX_PAGES = 20; // hard cap at 2000 chapters to avoid runaway paging
 
 const isHttpClient = (value: unknown): value is HttpClient =>
   value instanceof HttpClient;
@@ -28,6 +29,7 @@ type TelemangaMangaCard = {
   id: string;
   titleRu?: string;
   titleEn?: string;
+  totalChapters?: number;
 };
 
 type TelemangaChapterEntry = {
@@ -119,18 +121,7 @@ export class TelemangaProvider implements ExternalSourceProvider {
     }
     const card = (await titleResponse.json()) as TelemangaMangaCard;
 
-    const chaptersResponse = await this.http.request(
-      `${TELEMANGA_API_BASE}/manga/${encodeURIComponent(slug)}/chapters` +
-        `?sortOrder=ASC&offset=0&limit=${CHAPTERS_PAGE_SIZE}`,
-      { headers: { Accept: "application/json" } },
-    );
-    if (!chaptersResponse.ok) {
-      throw new Error(
-        `Telemanga chapters fetch failed: ${chaptersResponse.status}`,
-      );
-    }
-    const chapterList =
-      (await chaptersResponse.json()) as TelemangaChapterEntry[];
+    const chapterList = await this.fetchAllChapters(slug, card.totalChapters);
 
     return {
       titleId: slug,
@@ -146,6 +137,49 @@ export class TelemangaProvider implements ExternalSourceProvider {
         chapterUrl: buildChapterUrl(slug, entry.numeration),
       })),
     };
+  }
+
+  private async fetchAllChapters(
+    slug: string,
+    totalChapters?: number,
+  ): Promise<TelemangaChapterEntry[]> {
+    const chapters: TelemangaChapterEntry[] = [];
+    const expectedTotal =
+      typeof totalChapters === "number" &&
+      Number.isFinite(totalChapters) &&
+      totalChapters > 0
+        ? totalChapters
+        : undefined;
+
+    for (let page = 0; page < CHAPTERS_MAX_PAGES; page += 1) {
+      if (expectedTotal !== undefined && chapters.length >= expectedTotal) {
+        break;
+      }
+
+      const offset = page * CHAPTERS_PAGE_SIZE;
+      const chaptersResponse = await this.http.request(
+        `${TELEMANGA_API_BASE}/manga/${encodeURIComponent(slug)}/chapters` +
+          `?sortOrder=ASC&offset=${offset}&limit=${CHAPTERS_PAGE_SIZE}`,
+        { headers: { Accept: "application/json" } },
+      );
+      if (!chaptersResponse.ok) {
+        throw new Error(
+          `Telemanga chapters fetch failed: ${chaptersResponse.status}`,
+        );
+      }
+      const pageEntries =
+        (await chaptersResponse.json()) as TelemangaChapterEntry[];
+      if (!Array.isArray(pageEntries) || pageEntries.length === 0) {
+        break;
+      }
+
+      chapters.push(...pageEntries);
+      if (pageEntries.length < CHAPTERS_PAGE_SIZE) {
+        break;
+      }
+    }
+
+    return chapters;
   }
 
   async parseChapter(chapterRef: string): Promise<ExternalChapterParseResult> {

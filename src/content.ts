@@ -13,6 +13,7 @@ import {
   type ReaderEnhancerSettings,
 } from "./settings";
 import { ENSURE_PARSER_SERVER_MESSAGE_TYPE } from "./parser-server";
+import { matchReaderLocation } from "./remanga-routes";
 import { readRemangaAuthToken } from "./premium-free";
 import { shouldScheduleSettledRefresh } from "./settings-panel-transition";
 import {
@@ -62,12 +63,9 @@ async function bootstrap(): Promise<void> {
   const triggerPrefetchForCurrentUrl = () => {
     if (!currentSettings.prefetchNextChapter) return;
     if (!isReaderPage()) return;
-    const url = window.location.href;
-    const match = url.match(/\/manga\/([^/]+)\/(\d+)(?:[/?#]|$)/);
-    if (!match) return;
-    const titleDir = match[1];
-    const chapterId = Number(match[2]);
-    if (!Number.isInteger(chapterId) || chapterId <= 0) return;
+    const location = matchReaderLocation(window.location.href);
+    if (!location) return;
+    const { titleDir, chapterId } = location;
     if (lastTitleDir !== null && lastTitleDir !== titleDir) {
       resetPrefetchDedup();
     }

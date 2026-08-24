@@ -16,14 +16,32 @@ const chaptersFixture = JSON.parse(
 const chapterFixture = JSON.parse(
   fs.readFileSync(path.join(fixturesDir, "chapter-1.json"), "utf8"),
 );
+const nubTitleFixture = JSON.parse(
+  fs.readFileSync(path.join(fixturesDir, "title-nub.json"), "utf8"),
+);
+const nubChaptersPage0 = JSON.parse(
+  fs.readFileSync(path.join(fixturesDir, "chapters-nub-offset-0.json"), "utf8"),
+);
+const nubChaptersPage100 = JSON.parse(
+  fs.readFileSync(path.join(fixturesDir, "chapters-nub-offset-100.json"), "utf8"),
+);
+const nubChaptersPage200 = JSON.parse(
+  fs.readFileSync(path.join(fixturesDir, "chapters-nub-offset-200.json"), "utf8"),
+);
 
 const SEARCH_URL =
   "https://telemanga.me/api/manga/search?query=helmut&offset=0&limit=100";
 const TITLE_URL = "https://telemanga.me/api/manga/gelmut-otvergnutoye-ditya";
 const CHAPTERS_URL =
   "https://telemanga.me/api/manga/gelmut-otvergnutoye-ditya/chapters?sortOrder=ASC&offset=0&limit=100";
+const CHAPTERS_URL_PAGE2 =
+  "https://telemanga.me/api/manga/gelmut-otvergnutoye-ditya/chapters?sortOrder=ASC&offset=100&limit=100";
 const CHAPTER_1_URL =
   "https://telemanga.me/api/manga/gelmut-otvergnutoye-ditya/chapter/1";
+const NUB_SLUG = "nub-maksimalnogo-urovnya";
+const NUB_TITLE_URL = `https://telemanga.me/api/manga/${NUB_SLUG}`;
+const nubChaptersUrl = (offset: number): string =>
+  `https://telemanga.me/api/manga/${NUB_SLUG}/chapters?sortOrder=ASC&offset=${offset}&limit=100`;
 
 const loadModule = async () => {
   const module = await import("../src/providers/telemanga.js");
@@ -105,6 +123,7 @@ describe("TelemangaProvider.getTitleDetails", () => {
     const fetchImpl = mockJsonFetch({
       [TITLE_URL]: titleFixture,
       [CHAPTERS_URL]: chaptersFixture,
+      [CHAPTERS_URL_PAGE2]: [],
     });
     const provider = new TelemangaProvider(fetchImpl);
 
@@ -118,9 +137,7 @@ describe("TelemangaProvider.getTitleDetails", () => {
       "https://telemanga.me/manga/gelmut-otvergnutoye-ditya/",
     );
 
-    // Live fixture has 117 chapters but we capped at 100; assert sane bounds
     assert.ok(details.chapters.length > 0);
-    assert.ok(details.chapters.length <= 100);
 
     // Chapter ordering: API returns ASC by numeration; we should expose all entries
     const firstChapter = details.chapters.find((c) => c.chapter === "1");
@@ -132,6 +149,133 @@ describe("TelemangaProvider.getTitleDetails", () => {
       "https://telemanga.me/manga/gelmut-otvergnutoye-ditya/1",
     );
     assert.equal(firstChapter!.chapterId, "1");
+  });
+
+  it("paginates chapter list past the first 100 entries using offset", async () => {
+    const { TelemangaProvider } = await loadModule();
+    const chapterUrls: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === NUB_TITLE_URL) {
+        return new Response(JSON.stringify(nubTitleFixture), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes(`/${NUB_SLUG}/chapters?`)) {
+        chapterUrls.push(url);
+        const responses: Record<string, unknown> = {
+          [nubChaptersUrl(0)]: nubChaptersPage0,
+          [nubChaptersUrl(100)]: nubChaptersPage100,
+          [nubChaptersUrl(200)]: nubChaptersPage200,
+        };
+        if (!(url in responses)) {
+          throw new Error(`Unexpected chapters URL: ${url}`);
+        }
+        const limitMatch = /[?&]limit=(\d+)/.exec(url);
+        const limit = limitMatch ? Number(limitMatch[1]) : NaN;
+        assert.equal(limit, 100, `page size must stay at 100, got ${limit}`);
+        return new Response(JSON.stringify(responses[url]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof fetch;
+
+    const provider = new TelemangaProvider(fetchImpl);
+    const details = await provider.getTitleDetails(NUB_SLUG);
+
+    assert.equal(details.chapters.length, 258);
+    const chapter200 = details.chapters.find((c) => c.chapter === "200");
+    assert.ok(chapter200, "chapter 200 must be visible after pagination");
+    assert.equal(
+      chapter200!.chapterUrl,
+      `https://telemanga.me/manga/${NUB_SLUG}/200`,
+    );
+    const chapter257 = details.chapters.find((c) => c.chapter === "257");
+    assert.ok(chapter257, "chapter 257 must be visible after pagination");
+    assert.deepEqual(chapterUrls, [
+      nubChaptersUrl(0),
+      nubChaptersUrl(100),
+      nubChaptersUrl(200),
+    ]);
+  });
+
+  it("stops paging on an empty chapter page", async () => {
+    const { TelemangaProvider } = await loadModule();
+    const chapterUrls: string[] = [];
+    const page0 = Array.from({ length: 100 }, (_, i) => ({
+      id: `c${i}`,
+      mangaId: NUB_SLUG,
+      numeration: i + 1,
+      totalPages: 1,
+    }));
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === NUB_TITLE_URL) {
+        return new Response(
+          JSON.stringify({ id: NUB_SLUG, titleRu: "Нуб" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url === nubChaptersUrl(0)) {
+        chapterUrls.push(url);
+        return new Response(JSON.stringify(page0), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url === nubChaptersUrl(100)) {
+        chapterUrls.push(url);
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof fetch;
+
+    const provider = new TelemangaProvider(fetchImpl);
+    const details = await provider.getTitleDetails(NUB_SLUG);
+    assert.equal(details.chapters.length, 100);
+    assert.deepEqual(chapterUrls, [nubChaptersUrl(0), nubChaptersUrl(100)]);
+  });
+
+  it("caps chapter pages so a stuck source cannot loop forever", async () => {
+    const { TelemangaProvider } = await loadModule();
+    let chapterRequests = 0;
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === NUB_TITLE_URL) {
+        return new Response(
+          JSON.stringify({ id: NUB_SLUG, titleRu: "Нуб" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      const offsetMatch = /[?&]offset=(\d+)/.exec(url);
+      if (!url.includes(`/${NUB_SLUG}/chapters?`) || !offsetMatch) {
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      }
+      chapterRequests += 1;
+      const offset = Number(offsetMatch[1]);
+      const page = Array.from({ length: 100 }, (_, i) => ({
+        id: `c${offset + i}`,
+        mangaId: NUB_SLUG,
+        numeration: offset + i + 1,
+        totalPages: 1,
+      }));
+      return new Response(JSON.stringify(page), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const provider = new TelemangaProvider(fetchImpl);
+    const details = await provider.getTitleDetails(NUB_SLUG);
+    assert.ok(chapterRequests > 1, "must page at least twice for a long title");
+    assert.ok(chapterRequests <= 20, `runaway paging: ${chapterRequests} requests`);
+    assert.equal(details.chapters.length, chapterRequests * 100);
   });
 });
 

@@ -15,7 +15,7 @@ const buildHeader = (): { root: HTMLElement; cleanup: () => void } => {
     <header data-sentry-component="HeaderBase">
       <a data-sentry-component="LogoButton" href="/">Logo</a>
       <div class="hidden md:flex">
-        <a href="/manga">Каталог</a>
+        <a href="/catalog">Каталог</a>
         <a href="/manga/top">Топы</a>
         <a href="/forum?ordering=last">Форум</a>
         <nav><div><ul><li><button data-state="closed"></button></li></ul></div></nav>
@@ -53,13 +53,32 @@ test("applyHomeEnhancements hides each header button when its toggle is true", (
 
     const forum = root.querySelector('a[href*="/forum"]') as HTMLElement;
     const chat = root.querySelector('a[href="/chat"]') as HTMLElement;
-    const catalog = root.querySelector('a[href="/manga"]') as HTMLElement;
+    const catalog = root.querySelector('a[href="/catalog"]') as HTMLElement;
 
     assert.equal(forum.style.display, "none");
     assert.equal(chat.style.display, "none");
     assert.notEqual(catalog.style.display, "none");
   } finally {
     cleanup();
+  }
+});
+
+test("applyHomeEnhancements hides the catalog link under either href", () => {
+  for (const href of ["/catalog", "/manga"]) {
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <header data-sentry-component="HeaderBase">
+        <a href="${href}">Каталог</a>
+      </header>
+    `;
+    document.body.appendChild(root);
+    try {
+      applyHomeEnhancements(root, mergeSettings({ hideHeaderButtons: { catalog: true } }));
+      const catalog = root.querySelector(`a[href="${href}"]`) as HTMLElement;
+      assert.equal(catalog.style.display, "none", `catalog link ${href} stayed visible`);
+    } finally {
+      root.remove();
+    }
   }
 });
 

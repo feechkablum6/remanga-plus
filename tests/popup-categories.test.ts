@@ -38,8 +38,8 @@ test("Читалка has 8 toggles (5 visual + 3 popup auto-dismiss)", () => {
   assert.equal(countCategoryToggles("reader"), 8);
 });
 
-test("Premium Free has 14 toggles (4 core + 3 rec-type + 7 providers)", () => {
-  assert.equal(countCategoryToggles("premium-free"), 14);
+test("Premium Free has 13 toggles (4 core + 3 rec-type + 6 providers)", () => {
+  assert.equal(countCategoryToggles("premium-free"), 13);
 });
 
 test("Сайт toggles include all 10 header button keys with Russian labels", () => {

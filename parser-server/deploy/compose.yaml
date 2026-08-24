@@ -8,6 +8,12 @@ services:
     image: remanga-parser:local
     container_name: remanga-parser
     restart: unless-stopped
+    # The host resolver points at 8.8.8.8, which this VPS cannot reach (queries
+    # time out), so every provider lookup died on DNS while the network itself
+    # was fine. Resolve inside the container instead of inheriting the host.
+    dns:
+      - 1.1.1.1
+      - 9.9.9.9
     environment:
       PORT: 7845
       HOST: 0.0.0.0

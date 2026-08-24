@@ -81,3 +81,25 @@ curl https://remanga.178.253.39.105.sslip.io/health
 Конфиг Caddy применяется через `docker exec caddy caddy reload --config
 /etc/caddy/Caddyfile` — контейнер `caddy` общий для всех сайтов сервера,
 перезапускать его нельзя.
+
+### «Ни один источник не содержит эту главу» по всем провайдерам разом
+
+Сначала проверяй DNS, а не провайдеров. Хостовой `/etc/resolv.conf` на VPS указывает на
+Google DNS, который с этой машины не отвечает (проверено 24.08.2026), поэтому контейнеру
+в `compose.yaml` задан собственный resolver:
+
+```yaml
+dns:
+  - 1.1.1.1
+  - 9.9.9.9
+```
+
+Проверка, что контейнер видит внешний мир:
+
+```bash
+ssh firstbyte 'docker exec remanga-parser node -e "fetch(\"https://mangabuff.ru/\",{headers:{\"User-Agent\":\"Mozilla/5.0\"}}).then(r=>console.log(r.status)).catch(e=>console.log(\"FAIL\",e.message))"'
+```
+
+Признак именно DNS-поломки: `ping` до IP проходит, TCP 443 открыт, `curl --resolve` отдаёт
+200, а обычный `curl` возвращает `000` с «Resolving timed out». Хостовой resolv.conf не
+править — он общий для всех проектов сервера.

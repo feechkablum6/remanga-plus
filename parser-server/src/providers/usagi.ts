@@ -8,6 +8,16 @@ import type {
 
 const USAGI_BASE_URLS = ["https://web.usagi.one", "https://a.zazaza.me"] as const;
 
+const SKIP_TITLE_PATH_PREFIXES = [
+  "/search",
+  "/list",
+  "/internal",
+  "/page",
+  "/logoff",
+  "/about",
+  "/collection",
+] as const;
+
 const isHttpClient = (value: unknown): value is HttpClient =>
   value instanceof HttpClient;
 
@@ -33,6 +43,29 @@ const stripTags = (value: string): string =>
 
 const getAbsoluteUrl = (href: string, baseUrl: string): string =>
   new URL(href, baseUrl).toString();
+
+const isSkippedTitlePath = (pathname: string): boolean =>
+  pathname === "/" ||
+  SKIP_TITLE_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+
+const resolveLocalTitlePath = (link: string, baseUrl: string): string | null => {
+  if (link.startsWith("/")) return link.split("?")[0] || null;
+  try {
+    const absolute = new URL(link);
+    if (absolute.origin !== new URL(baseUrl).origin) return null;
+    return absolute.pathname;
+  } catch {
+    return null;
+  }
+};
+
+const splitAliasText = (value: string): string[] =>
+  value
+    .split(/\s*\/\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 
 export function extractUsagiSearchResults(html: string, baseUrl: string): SourceTitleSearchResult[] {
   const results: SourceTitleSearchResult[] = [];
@@ -64,6 +97,51 @@ export function extractUsagiSearchResults(html: string, baseUrl: string): Source
   return results;
 }
 
+export function extractUsagiSuggestionResults(
+  payload: unknown,
+  baseUrl: string,
+): SourceTitleSearchResult[] {
+  const data =
+    typeof payload === "string" ? (JSON.parse(payload) as unknown) : payload;
+  if (!data || typeof data !== "object") return [];
+  const suggestions = (data as { suggestions?: unknown }).suggestions;
+  if (!Array.isArray(suggestions)) return [];
+
+  const results: SourceTitleSearchResult[] = [];
+  const seen = new Set<string>();
+
+  for (const item of suggestions) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as {
+      value?: unknown;
+      link?: unknown;
+      elementId?: { type?: unknown };
+    };
+    const type = record.elementId?.type;
+    if (type !== undefined && type !== "MANGA") continue;
+
+    const titleName = typeof record.value === "string" ? record.value.trim() : "";
+    const link = typeof record.link === "string" ? record.link : "";
+    if (!titleName || !link) continue;
+
+    const pathname = resolveLocalTitlePath(link, baseUrl);
+    if (!pathname || isSkippedTitlePath(pathname)) continue;
+
+    const slug = pathname.replace(/^\//, "").replace(/\/$/, "");
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+
+    results.push({
+      titleId: slug,
+      slug,
+      titleName,
+      titleUrl: getAbsoluteUrl(pathname, baseUrl),
+    });
+  }
+
+  return results;
+}
+
 export function extractUsagiTitleDetails(
   html: string,
   titleUrl: string,
@@ -75,11 +153,24 @@ export function extractUsagiTitleDetails(
     stripTags(html.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "");
 
   const aliases: string[] = [];
-  const aliasBlock = html.match(/<h3[^>]*class="[^"]*english[^"]*"[^>]*>([\s\S]*?)<\/h3>/)?.[1] ?? "";
+  const aliasBlock =
+    html.match(/<h3[^>]*class="[^"]*english[^"]*"[^>]*>([\s\S]*?)<\/h3>/)?.[1] ??
+    html.match(/<h3[^>]*class="[^"]*cr-hero-names__alt[^"]*"[^>]*>([\s\S]*?)<\/h3>/)?.[1] ??
+    "";
   if (aliasBlock) {
+    const rawParts: string[] = [];
     for (const m of aliasBlock.matchAll(/<span>([\s\S]*?)<\/span>/g)) {
       const alias = stripTags(m[1]);
-      if (alias) aliases.push(alias);
+      if (alias) rawParts.push(alias);
+    }
+    if (rawParts.length === 0) {
+      const fallback = stripTags(aliasBlock);
+      if (fallback) rawParts.push(fallback);
+    }
+    for (const raw of rawParts) {
+      for (const alias of splitAliasText(raw)) {
+        if (!aliases.includes(alias)) aliases.push(alias);
+      }
     }
   }
 
@@ -138,7 +229,8 @@ export function extractUsagiChapterPages(
   const chapter = urlPathMatch[2];
 
   const pages: ExternalChapterParseResult["pages"] = [];
-  const pageRegex = /\['(https?:\/\/[^']*)'\s*,\s*''\s*,\s*"([^"]+)"\s*,\s*\d+\s*,\s*\d+\]/g;
+  const pageRegex =
+    /\['(https?:\/\/[^']*)'\s*,\s*''\s*,\s*"([^"]+)"\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[^,\]]+)*\s*\]/g;
 
   let pageMatch: RegExpExecArray | null;
   let index = 0;
@@ -180,12 +272,19 @@ export class UsagiProvider implements ExternalSourceProvider {
   }
 
   manualSearchUrl(query: string): string {
-    return `${this.activeBaseUrl}/search?q=${encodeURIComponent(query)}`;
+    return `${this.activeBaseUrl}/search/advanced?q=${encodeURIComponent(query)}`;
   }
 
   async searchTitles(query: string): Promise<SourceTitleSearchResult[]> {
-    const { html, baseUrl } = await this.fetchHtmlWithFallback(this.manualSearchUrl(query));
-    return extractUsagiSearchResults(html, baseUrl);
+    const suggestionUrl = `${this.activeBaseUrl}/search/suggestion?query=${encodeURIComponent(query)}`;
+    const { html, baseUrl } = await this.fetchHtmlWithFallback(suggestionUrl);
+    let payload: unknown;
+    try {
+      payload = JSON.parse(html);
+    } catch {
+      throw new Error("Usagi search suggestion is not JSON");
+    }
+    return extractUsagiSuggestionResults(payload, baseUrl);
   }
 
   async getTitleDetails(titleRef: string): Promise<SourceTitleDetails> {
